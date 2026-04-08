@@ -1,0 +1,90 @@
+[
+  {
+    "sku": "IP15PRO-NAT",
+    "category": "iPhone",
+    "model": "iPhone 15 Pro",
+    "price": 1800000,
+    "storage": "256",
+    "color": "Titanio Natural"
+  },
+  {
+    "sku": "IP15PRO-BLK",
+    "category": "iPhone",
+    "model": "iPhone 15 Pro",
+    "price": 1800000,
+    "storage": "256",
+    "color": "Titanio Negro"
+  },
+  {
+    "sku": "IP15-BLU",
+    "category": "iPhone",
+    "model": "iPhone 15",
+    "price": 1400000,
+    "storage": "128",
+    "color": "Azul"
+  },
+  {
+    "sku": "MBA13-MID",
+    "category": "MacBook",
+    "model": "MacBook Air M2",
+    "price": 1900000,
+    "storage": "256",
+    "color": "Medianoche"
+  },
+  {
+    "sku": "MBP14-SIL",
+    "category": "MacBook",
+    "model": "MacBook Pro 14",
+    "price": 3200000,
+    "storage": "512",
+    "color": "Plata"
+  },
+  {
+    "sku": "IPAD-AIR-BLU",
+    "category": "iPad",
+    "model": "iPad Air 5",
+    "price": 950000,
+    "storage": "64",
+    "color": "Azul"
+  },
+  {
+    "sku": "IPAD-PRO-GRY",
+    "category": "iPad",
+    "model": "iPad Pro 11",
+    "price": 1500000,
+    "storage": "128",
+    "color": "Gris Espacial"
+  },
+  {
+    "sku": "APP2",
+    "category": "AirPods",
+    "model": "AirPods Pro 2",
+    "price": 450000,
+    "storage": "",
+    "color": "Blanco"
+  },
+  {
+    "sku": "AP3",
+    "category": "AirPods",
+    "model": "AirPods 3",
+    "price": 320000,
+    "storage": "",
+    "color": "Blanco"
+  },
+  {
+     "sku": "PS5-STD",
+     "category": "PlayStation",
+     "model": "PlayStation 5",
+     "price": 1100000,
+     "storage": "825",
+     "color": "Blanco"
+  },
+  {
+     "sku": "PS5-DIG",
+     "category": "PlayStation",
+     "model": "PS5 Digital",
+     "price": 950000,
+     "storage": "825",
+     "color": "Blanco"
+  }
+]

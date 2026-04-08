@@ -1,0 +1,2 @@
+# Archivo de configuración para Railway deployment
+web: python dashboard/app.py

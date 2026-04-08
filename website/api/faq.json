@@ -1,0 +1,37 @@
+{
+  "faq": [
+    {
+      "keywords": ["hola", "buen dia", "buenas", "inicio", "comenzar"],
+      "answer": "Hola. Estoy en modo de respaldo. Puedo ayudarte con envios, pagos, garantia, stock y contacto con asesor."
+    },
+    {
+      "keywords": ["envio", "entrega", "retiro", "interior", "caba"],
+      "answer": "Hacemos envios y retiros segun zona. El plazo y costo se confirma al cerrar la compra."
+    },
+    {
+      "keywords": ["pago", "cuotas", "transferencia", "tarjeta", "mercadopago"],
+      "answer": "Aceptamos transferencia, efectivo y pasarelas de pago. Las cuotas dependen del medio elegido."
+    },
+    {
+      "keywords": ["garantia", "devolucion", "cambio", "falla"],
+      "answer": "La garantia depende del producto y proveedor. Para cambios o devoluciones te derivamos con asesor."
+    },
+    {
+      "keywords": ["stock", "disponible", "hay", "tienen"],
+      "answer": "El stock cambia constantemente. Para confirmar disponibilidad exacta consulto catalogo o te paso con asesor."
+    },
+    {
+      "keywords": ["factura", "afip", "iva", "factura a", "factura b"],
+      "answer": "Se puede emitir factura. El detalle fiscal se confirma al momento de compra."
+    },
+    {
+      "keywords": ["asesor", "humano", "persona", "contacto", "whatsapp"],
+      "answer": "Perfecto. Te derivamos con un asesor humano para continuar por el canal directo."
+    },
+    {
+      "keywords": ["ayuda", "help", "soporte", "menu"],
+      "answer": "Podés consultar por productos, precios, stock, envios, pagos, garantia o pedir asesor humano."
+    }
+  ],
+  "default_response": "No pude entender esa consulta en modo respaldo. Si querés, pedí un asesor humano y te derivamos."
+}

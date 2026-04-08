@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <title>Demo de entrenamiento Ferretería</title>
+    <style>
+      :root {
+        --bg: #f5f1e8;
+        --paper: #fffdf9;
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --line: #d6cfc1;
+        --accent: #9a3412;
+        --accent-soft: #f97316;
+        --shadow: 0 18px 40px rgba(31, 41, 55, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        background: radial-gradient(circle at top left, #fff7ed, var(--bg) 45%);
+        color: var(--ink);
+      }
+      .shell { max-width: 1120px; margin: 0 auto; padding: 32px 24px 48px; }
+      .hero {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        padding: 28px;
+        box-shadow: var(--shadow);
+        margin-bottom: 24px;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 700;
+      }
+      h1 { margin: 10px 0 8px; font-size: 40px; }
+      p { margin: 0; line-height: 1.55; color: var(--muted); }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        display: grid;
+        gap: 10px;
+        text-decoration: none;
+        color: inherit;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 18px;
+        box-shadow: var(--shadow);
+      }
+      .card:hover {
+        border-color: var(--accent-soft);
+        transform: translateY(-1px);
+      }
+      .card h3 { margin: 0; font-size: 18px; line-height: 1.35; }
+      .meta {
+        font-size: 12px;
+        color: var(--muted);
+        word-break: break-all;
+      }
+      .notes {
+        margin-top: 22px;
+        background: rgba(154, 52, 18, 0.06);
+        border: 1px solid rgba(154, 52, 18, 0.18);
+        border-radius: 20px;
+        padding: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="hero">
+        <div class="eyebrow">Mini demo local</div>
+        <h1>Interfaz de entrenamiento Ferretería</h1>
+        <p>Esta exportación usa las plantillas y rutas reales del entrenamiento, cargadas con datos demo aislados de ferretería para que puedas revisar primero el flujo principal y después las pantallas de apoyo, sin depender de una operación en vivo.</p>
+      </div>
+      <div class="grid">
+        
+            <a class="card" href="01_workflow_home.html">
+              <div class="eyebrow">Bandeja de trabajo</div>
+              <h3>Punto de entrada con contadores, próximos pasos y seguimiento de casos futuros.</h3>
+              <div class="meta">/ops/ferreteria/training</div>
+            </a>
+            
+            <a class="card" href="02_sandbox_review.html">
+              <div class="eyebrow">Sandbox con revisión</div>
+              <h3>Conversación con revisión sobre cualquier respuesta, guía estructurada y una respuesta incorrecta seleccionada.</h3>
+              <div class="meta">/ops/ferreteria/training/sandbox?session_id=training:5e27eb867d4a422a86af8e2bb594932c&review_message_id=2bb61c688d654bc4a8110895fff8f44a</div>
+            </a>
+            
+            <a class="card" href="03_case_clarification.html">
+              <div class="eyebrow">Caso con aclaración pendiente</div>
+              <h3>Caso guardado con resumen estructurado, estado de cobertura y creación guiada de correcciones.</h3>
+              <div class="meta">/ops/ferreteria/training/cases/af6786ea953c4971942a1db56f25982f</div>
+            </a>
+            
+            <a class="card" href="04_case_regression.html">
+              <div class="eyebrow">Caso enfocado en cobertura futura</div>
+              <h3>Caso que ya tiene un ejemplo futuro y todavía necesita decidir si conviene tocar el conocimiento activo.</h3>
+              <div class="meta">/ops/ferreteria/training/cases/df575253c868454ab34d904c5944009d</div>
+            </a>
+            
+            <a class="card" href="05_suggestion_draft.html">
+              <div class="eyebrow">Detalle de borrador</div>
+              <h3>Borrador de corrección con contexto semántico de revisión y vista antes/después.</h3>
+              <div class="meta">/ops/ferreteria/training/suggestions/7148c0e43fc1485eb9a55c61ee631401</div>
+            </a>
+            
+            <a class="card" href="06_suggestion_approved.html">
+              <div class="eyebrow">Corrección aprobada por activar</div>
+              <h3>Corrección aprobada que muestra qué está listo para activarse a continuación.</h3>
+              <div class="meta">/ops/ferreteria/training/suggestions/9b33a90a37ab45e0917d5b9c86ca5940</div>
+            </a>
+            
+            <a class="card" href="07_cases_queue.html">
+              <div class="eyebrow">Cola de casos</div>
+              <h3>Lista de casos orientada al trabajo, con próximos pasos y señales de cobertura futura.</h3>
+              <div class="meta">/ops/ferreteria/training/cases</div>
+            </a>
+            
+            <a class="card" href="08_suggestions_queue.html">
+              <div class="eyebrow">Cola de correcciones</div>
+              <h3>Borradores, aprobadas y activas en una sola cola con resúmenes claros del cambio.</h3>
+              <div class="meta">/ops/ferreteria/training/suggestions</div>
+            </a>
+            
+            <a class="card" href="09_usage.html">
+              <div class="eyebrow">Uso</div>
+              <h3>Visibilidad de tokens y costo en un demo con datos cargados.</h3>
+              <div class="meta">/ops/ferreteria/training/usage</div>
+            </a>
+            
+      </div>
+      <div class="notes">
+        <div class="eyebrow">Qué conviene mirar</div>
+        <p>Empezá por la bandeja de trabajo, seguí con el sandbox, abrí el caso y terminá en la corrección. Después usá impacto y uso como pantallas secundarias. Todos los datos de esta exportación viven en un entorno demo aislado.</p>
+      </div>
+    </div>
+  </body>
+</html>

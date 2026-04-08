@@ -1,0 +1,396 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+
+<div class="page-hero">
+  <div>
+    <div class="caption">Seguimiento secundario</div>
+    <h2>Impacto de correcciones activadas</h2>
+    <div class="lead">
+      Esta vista ayuda a mirar tendencia después de activar cambios. Sirve para detectar señales útiles, no para probar causalidad exacta por sí sola.
+    </div>
+  </div>
+  <div class="hero-actions">
+    <button class="accent-btn" id="btn-refresh" onclick="loadImpact()" style="width:auto;">
+      Actualizar datos
+    </button>
+    <a class="chip accent" href="/ops/ferreteria/training/suggestions?queue=applied">Ver correcciones aplicadas</a>
+    <a class="chip" href="/ops/ferreteria/training/tools">Volver a más herramientas</a>
+  </div>
+</div>
+
+<div id="error-banner" class="error" style="display:none; margin-bottom:16px;"></div>
+
+<div class="card card-pad" style="margin-bottom:18px;">
+  <div class="callout stack-sm">
+    <div><strong>Cómo leer esta pantalla</strong></div>
+    <div class="help">Primero mirá el resumen y las últimas mejoras activadas. Usá los gráficos como apoyo visual. Si algo llama la atención, volvé al caso o a la corrección original para entender el contexto.</div>
+  </div>
+</div>
+
+{# ── Summary metric cards ── #}
+<div class="summary-grid" id="metric-cards" style="margin-bottom:18px;">
+  <div class="metric" id="card-sessions">
+    <span>Sesiones totales</span>
+    <strong class="loading-val">…</strong>
+  </div>
+  <div class="metric" id="card-reviews">
+    <span>Revisiones totales</span>
+    <strong class="loading-val">…</strong>
+  </div>
+  <div class="metric" id="card-applied">
+    <span>Sugerencias aplicadas</span>
+    <strong class="loading-val" style="color:var(--good);">…</strong>
+  </div>
+  <div class="metric" id="card-pending">
+    <span>Sugerencias pendientes</span>
+    <strong class="loading-val" style="color:var(--warn);">…</strong>
+  </div>
+  <div class="metric" id="card-rate">
+    <span>Tasa de mejora</span>
+    <strong class="loading-val" style="color:var(--accent);">…</strong>
+  </div>
+</div>
+
+{# ── Charts + recent activity row ── #}
+<div class="grid-2" style="margin-bottom:18px; align-items:start;">
+  <div class="card card-pad">
+    <strong class="section-title">Correcciones por estado</strong>
+    <div style="margin-top:14px; position:relative; height:260px;">
+      <canvas id="chart-status"></canvas>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <strong class="section-title">Revisiones por resultado</strong>
+    <div style="margin-top:14px; position:relative; height:260px;">
+      <canvas id="chart-labels"></canvas>
+    </div>
+  </div>
+</div>
+
+{# ── Recent activity ── #}
+<div class="card card-pad" style="margin-bottom:18px;">
+  <div class="row" style="justify-content:space-between; margin-bottom:14px;">
+    <strong class="section-title" style="margin:0;">Últimas mejoras aplicadas</strong>
+  </div>
+  <div id="recent-activity-container">
+    <div class="empty">Cargando actividad reciente…</div>
+  </div>
+</div>
+
+{# ── Per-suggestion impact table ── #}
+<div class="card card-pad" style="margin-bottom:18px;">
+  <div class="row" style="justify-content:space-between; margin-bottom:14px;">
+    <strong class="section-title" style="margin:0;">Detalle de impacto por corrección</strong>
+    <input type="text" id="impact-filter" placeholder="Filtrar por corrección o dominio…"
+           style="max-width:280px; margin:0;"
+           oninput="filterImpact(this.value)">
+  </div>
+  <div id="impact-table-container">
+    <div class="empty">Cargando datos de impacto…</div>
+  </div>
+</div>
+
+{# ── Help section ── #}
+<div class="card card-pad" style="margin-top:18px;">
+  <h2 class="section-title">Cómo interpretar estos datos</h2>
+  <div class="grid-2" style="gap:14px; margin-top:10px;">
+    <div class="panel-soft stack-sm">
+      <strong>Ventana de comparación</strong>
+      <div class="help">
+        Se consideran las revisiones de los 14 días previos y los 14 días posteriores
+        a la fecha en que se activó la corrección. Si no hay revisiones en alguna
+        de las ventanas, la columna muestra "—".
+      </div>
+    </div>
+    <div class="panel-soft stack-sm">
+      <strong>Tasa de mejora</strong>
+      <div class="help">
+        Porcentaje de sugerencias que pasaron al estado "applied" sobre el total de sugerencias
+        creadas. Refleja qué proporción del trabajo de entrenamiento se convirtió en mejora activa.
+      </div>
+    </div>
+    <div class="panel-soft stack-sm">
+      <strong>Delta positivo</strong>
+      <div class="help">
+        Un delta verde indica que el porcentaje de respuestas correctas aumentó
+        después de aplicar la corrección. Es una señal de que la mejora funcionó.
+      </div>
+    </div>
+    <div class="panel-soft stack-sm">
+      <strong>Delta negativo (regresión)</strong>
+      <div class="help">
+        Un delta rojo puede indicar una regresión. Revisá el caso original para
+        entender si corresponde revertir o ajustar la corrección.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+  const PALETTE = {
+    draft:    { bg: "rgba(156,163,175,0.2)", border: "#9CA3AF" },
+    approved: { bg: "rgba(146,64,14,0.12)",  border: "#D97706" },
+    applied:  { bg: "rgba(10,124,82,0.12)",  border: "#0A7C52" },
+    rejected: { bg: "rgba(153,27,27,0.12)",  border: "#991B1B" },
+  };
+
+  const LABEL_COLORS = [
+    "rgba(214,68,13,0.75)",  "rgba(10,124,82,0.75)",  "rgba(146,64,14,0.75)",
+    "rgba(153,27,27,0.75)",  "rgba(156,163,175,0.75)", "rgba(79,70,229,0.75)",
+    "rgba(6,182,212,0.75)",  "rgba(249,115,22,0.75)",
+  ];
+
+  let chartStatus = null;
+  let chartLabels = null;
+
+  function setCard(id, value) {
+    const el = document.querySelector(`#${id} strong`);
+    if (el) el.textContent = value;
+  }
+
+  function renderMetrics(data) {
+    setCard("card-sessions", data.total_sessions ?? "—");
+    setCard("card-reviews",  data.total_reviews  ?? "—");
+    setCard("card-applied",  data.applied_suggestions ?? "—");
+    setCard("card-pending",  data.pending_suggestions ?? "—");
+    setCard("card-rate",     (data.improvement_rate != null ? data.improvement_rate + "%" : "—"));
+  }
+
+  function renderStatusChart(byStatus) {
+    const labels  = Object.keys(byStatus);
+    const values  = Object.values(byStatus);
+    const bgs     = labels.map(l => (PALETTE[l] || { bg: "rgba(107,114,128,0.18)" }).bg);
+    const borders = labels.map(l => (PALETTE[l] || { border: "#6b7280" }).border);
+
+    const ctx = document.getElementById("chart-status").getContext("2d");
+    if (chartStatus) chartStatus.destroy();
+    chartStatus = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+        datasets: [{
+          label: "Sugerencias",
+          data: values,
+          backgroundColor: bgs,
+          borderColor: borders,
+          borderWidth: 1.5,
+          borderRadius: 6,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: "rgba(228,230,234,0.6)" } },
+          x: { grid: { display: false } },
+        },
+      },
+    });
+  }
+
+  function renderLabelsChart(byLabel) {
+    const labels = Object.keys(byLabel);
+    const values = Object.values(byLabel);
+    const colors = labels.map((_, i) => LABEL_COLORS[i % LABEL_COLORS.length]);
+
+    const ctx = document.getElementById("chart-labels").getContext("2d");
+    if (chartLabels) chartLabels.destroy();
+    chartLabels = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderWidth: 1,
+          borderColor: "#ffffff",
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "bottom", labels: { font: { size: 12 }, padding: 14 } },
+        },
+      },
+    });
+  }
+
+  function renderRecentActivity(activity) {
+    const container = document.getElementById("recent-activity-container");
+    if (!activity || activity.length === 0) {
+      container.innerHTML = `
+        <div class="empty">
+          Todavía no hay sugerencias aplicadas. El impacto aparecerá acá cuando la primera corrección
+          sea aprobada y activada.
+          <div style="margin-top:12px;">
+            <a href="/ops/ferreteria/training/suggestions?queue=approved" class="chip accent">
+              Ver correcciones aprobadas por activar
+            </a>
+          </div>
+        </div>`;
+      return;
+    }
+    const rows = activity.map(item => `
+      <div class="session-link" style="display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center;">
+        <div>
+          <div><strong>${escHtml(item.summary || "(sin descripción)")}</strong></div>
+          <div class="muted" style="font-size:12px;">${escHtml(item.domain || "—")} · ${escHtml((item.applied_at || "").slice(0, 10))}</div>
+        </div>
+        <a class="chip accent" href="/ops/ferreteria/training/suggestions/${escHtml(item.suggestion_id)}"
+           style="text-decoration:none;">Ver</a>
+      </div>`).join("");
+    container.innerHTML = rows;
+  }
+
+  function renderImpactTable(rows) {
+    const container = document.getElementById("impact-table-container");
+    if (!rows || rows.length === 0) {
+      container.innerHTML = `
+        <div class="empty">
+          No hay correcciones con datos de impacto todavía. Activá la primera sugerencia para
+          que aparezca la comparativa.
+        </div>`;
+      return;
+    }
+    const tbody = rows.map(row => {
+      const pctBefore = row.accuracy_before != null ? (row.accuracy_before * 100).toFixed(1) : null;
+      const pctAfter  = row.accuracy_after  != null ? (row.accuracy_after  * 100).toFixed(1) : null;
+      const deltaPct  = row.delta           != null ? (row.delta           * 100).toFixed(1) : null;
+      const deltaChip = deltaPct != null
+        ? (row.delta > 0
+            ? `<span class="chip good">+${deltaPct}%</span>`
+            : row.delta < 0
+              ? `<span class="chip bad">${deltaPct}%</span>`
+              : `<span class="chip">${deltaPct}%</span>`)
+        : `<span class="muted">—</span>`;
+
+      const barBefore = pctBefore != null
+        ? `<div class="row" style="gap:6px;align-items:center;">
+            <div class="progress" style="width:70px;flex-shrink:0;"><span style="width:${pctBefore}%;"></span></div>
+            <span>${pctBefore}%</span>
+            <span class="muted" style="font-size:11px;">(${row.correct_before}/${row.total_before})</span>
+           </div>`
+        : `<span class="muted">— sin datos</span>`;
+
+      const barAfter = pctAfter != null
+        ? `<div class="row" style="gap:6px;align-items:center;">
+            <div class="progress" style="width:70px;flex-shrink:0;"><span style="width:${pctAfter}%;"></span></div>
+            <span>${pctAfter}%</span>
+            <span class="muted" style="font-size:11px;">(${row.correct_after}/${row.total_after})</span>
+           </div>`
+        : `<span class="muted">— sin datos</span>`;
+
+      const filterVal = ((row.summary || "") + " " + (row.domain || "")).toLowerCase();
+
+      return `<tr class="impact-row" data-filter="${escAttr(filterVal)}">
+        <td>
+          <div>${escHtml(row.summary || "(sin descripción)")}</div>
+          <div class="muted" style="font-size:12px;">${escHtml((row.suggestion_id || "").slice(0, 8))}</div>
+        </td>
+        <td><span class="chip accent">${escHtml(row.domain || "—")}</span></td>
+        <td style="font-size:13px;color:var(--muted);">${escHtml((row.applied_at || "").slice(0, 10))}</td>
+        <td>${barBefore}</td>
+        <td>${barAfter}</td>
+        <td>${deltaChip}</td>
+        <td>${row.suggestion_id
+          ? `<a class="chip" href="/ops/ferreteria/training/suggestions/${escHtml(row.suggestion_id)}" style="text-decoration:none;">Ver corrección</a>`
+          : ""}</td>
+      </tr>`;
+    }).join("");
+
+    container.innerHTML = `
+      <div class="table-wrap">
+        <table id="impact-table">
+          <thead>
+            <tr>
+              <th>Corrección</th>
+              <th>Dominio</th>
+              <th>Aplicada</th>
+              <th>Antes (% correcto)</th>
+              <th>Después (% correcto)</th>
+              <th>Delta</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
+          <tbody>${tbody}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function filterImpact(query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll(".impact-row").forEach(row => {
+      row.style.display = row.dataset.filter.includes(q) ? "" : "none";
+    });
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function escAttr(str) {
+    return String(str).replace(/"/g, "&quot;");
+  }
+
+  function showError(msg) {
+    const banner = document.getElementById("error-banner");
+    banner.textContent = msg;
+    banner.style.display = "";
+  }
+
+  function hideError() {
+    document.getElementById("error-banner").style.display = "none";
+  }
+
+  async function loadImpact() {
+    hideError();
+    document.getElementById("btn-refresh").disabled = true;
+    document.getElementById("btn-refresh").textContent = "Actualizando…";
+    try {
+      const res = await fetch("/api/admin/ferreteria/training/impact", {
+        headers: { "Accept": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      const data = json.impact || {};
+
+      renderMetrics(data);
+
+      if (data.suggestions_by_status && Object.keys(data.suggestions_by_status).length > 0) {
+        renderStatusChart(data.suggestions_by_status);
+      } else {
+        document.getElementById("chart-status").parentElement.innerHTML =
+          `<div class="empty" style="height:260px;display:flex;align-items:center;justify-content:center;">Sin sugerencias todavía</div>`;
+      }
+
+      if (data.reviews_by_label && Object.keys(data.reviews_by_label).length > 0) {
+        renderLabelsChart(data.reviews_by_label);
+      } else {
+        document.getElementById("chart-labels").parentElement.innerHTML =
+          `<div class="empty" style="height:260px;display:flex;align-items:center;justify-content:center;">Sin revisiones todavía</div>`;
+      }
+
+      renderRecentActivity(data.recent_activity || []);
+      renderImpactTable(data.impact_rows || []);
+    } catch (err) {
+      showError("No se pudieron cargar los datos de impacto: " + err.message);
+    } finally {
+      document.getElementById("btn-refresh").disabled = false;
+      document.getElementById("btn-refresh").textContent = "Actualizar datos";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", loadImpact);
+</script>
+{% endblock %}

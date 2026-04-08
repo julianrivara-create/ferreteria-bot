@@ -1,0 +1,375 @@
+<div class="panel-soft stack-sm">
+  <div>
+    <strong>Detalles de la corrección</strong>
+    <div class="help">Solo se muestran los campos del tipo de corrección elegido. Empezá por los campos clave. Los campos opcionales pueden quedar vacíos si la corrección ya se entiende bien.</div>
+  </div>
+</div>
+
+<div class="domain-panel" data-domain="synonym unresolved_term_mapping">
+  <div class="panel-soft stack-sm">
+    <strong>Corregir cómo entiende un término</strong>
+    <div class="help">{{ domain_help.get('synonym') }}</div>
+    <div class="help">Acá alcanza con dejar claro cuál es el término correcto, a qué familia pertenece y cómo suele pedirlo el cliente.</div>
+  </div>
+  <div class="panel-soft stack-sm">
+    <strong>Campos clave</strong>
+    <div class="help">Completá primero estos datos. Si con esto ya se entiende bien, el resto puede quedar vacío.</div>
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Término correcto</label>
+      <input type="text" name="canonical" value="{{ authoring_defaults.canonical or case.suggested_canonical_product or '' }}" placeholder="caño pvc">
+      <div class="help">Es el nombre que el bot debería entender como referencia principal.</div>
+    </div>
+    <div class="field-block">
+      <label>Familia correcta</label>
+      <input type="text" name="family" value="{{ authoring_defaults.family or case.suggested_family or '' }}" placeholder="caño">
+      <div class="help">Usá la familia correcta para que el presupuesto siga por el camino indicado.</div>
+    </div>
+  </div>
+  <div class="field-block">
+    <label>Formas en que lo puede pedir el cliente (separadas por coma)</label>
+    <input type="text" name="aliases" value="{{ authoring_defaults.aliases or '' }}" placeholder="cano pvc, caño pvc">
+  </div>
+  <details class="subsection">
+    <summary>Ajustes opcionales</summary>
+    <div class="stack-sm" style="margin-top:12px;">
+      <div class="help">Usalos solo si importa distinguir un error de escritura, una forma regional o una confusión entre marca y genérico.</div>
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Errores de escritura comunes</label>
+          <input type="text" name="misspellings" placeholder="canio pvc">
+        </div>
+        <div class="field-block">
+          <label>Tipo de ajuste</label>
+          <input type="text" name="resolution_type" placeholder="dejalo vacío salvo que alguien del equipo te pida un ajuste específico">
+        </div>
+      </div>
+      <label class="inline-toggle"><input type="checkbox" name="brand_generic"> Marca usada como término genérico</label>
+    </div>
+  </details>
+</div>
+
+<div class="domain-panel" data-domain="faq">
+  <div class="panel-soft stack-sm">
+    <strong>Respuesta frecuente o política</strong>
+    <div class="help">{{ domain_help.get('faq') }}</div>
+    <div class="help">Empezá con la pregunta del cliente y la respuesta breve y estable que el bot debería usar.</div>
+  </div>
+  <div class="panel-soft stack-sm">
+    <strong>Campos clave</strong>
+    <div class="help">Si la pregunta y la respuesta están claras, después podés completar el resto para ordenar mejor la base.</div>
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Pregunta</label>
+      <input type="text" name="faq_question" value="{{ authoring_defaults.faq_question or '' }}" placeholder="¿Abren los domingos?">
+    </div>
+    <div class="field-block">
+      <label>Respuesta</label>
+      <textarea name="faq_answer" placeholder="Los domingos atendemos de 9 a 13 hs.">{{ authoring_defaults.faq_answer or '' }}</textarea>
+    </div>
+  </div>
+  <details class="subsection">
+    <summary>Datos opcionales para ordenar mejor la respuesta</summary>
+    <div class="stack-sm" style="margin-top:12px;">
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Identificador interno</label>
+          <input type="text" name="faq_id" placeholder="horarios_domingo">
+        </div>
+        <div class="field-block">
+          <label>Palabras clave</label>
+          <input type="text" name="faq_keywords" placeholder="domingos, domingo">
+        </div>
+      </div>
+      <div class="field-block">
+        <label>Etiquetas</label>
+        <input type="text" name="faq_tags" placeholder="horarios">
+      </div>
+    </div>
+  </details>
+</div>
+
+<div class="domain-panel" data-domain="clarification_rule">
+  <div class="panel-soft stack-sm">
+    <strong>Mejorar una aclaración</strong>
+    <div class="help">{{ domain_help.get('clarification_rule') }}</div>
+    <div class="help">Primero definí la familia y la pregunta que el bot debería hacer antes de avanzar.</div>
+  </div>
+  <div class="panel-soft stack-sm">
+    <strong>Campos clave</strong>
+    <div class="help">Con la familia, la pregunta corta y la pregunta principal ya queda armado el corazón de la corrección.</div>
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Familia del producto</label>
+      <input type="text" name="family" value="{{ authoring_defaults.family or case.suggested_family or '' }}" placeholder="mecha">
+    </div>
+    <div class="field-block">
+      <label>Pregunta corta</label>
+      <input type="text" name="clarification_short_prompt" value="{{ authoring_defaults.clarification_short_prompt or case.missing_clarification or '' }}" placeholder="¿Para madera o metal?">
+    </div>
+  </div>
+  <div class="field-block">
+    <label>Pregunta principal</label>
+    <textarea name="clarification_prompt" placeholder="¿La necesitás para madera, metal, hormigón o cerámica?">{{ authoring_defaults.clarification_prompt or '' }}</textarea>
+  </div>
+  <details class="subsection">
+    <summary>Ajustes opcionales</summary>
+    <div class="stack-sm" style="margin-top:12px;">
+      <div class="field-block">
+        <label>Ejemplos de respuestas esperadas del cliente (una por línea)</label>
+        <textarea name="clarification_examples" placeholder="madera&#10;metal"></textarea>
+      </div>
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Datos necesarios</label>
+          <input type="text" name="required_dimensions" value="{{ authoring_defaults.required_dimensions or '' }}" placeholder="material, medida">
+          <div class="help">Tomá como base el primer dato faltante que apareció en la revisión.</div>
+        </div>
+        <div class="field-block">
+          <label>Orden de preguntas</label>
+          <input type="text" name="question_order" value="{{ authoring_defaults.question_order or '' }}" placeholder="material, medida">
+        </div>
+      </div>
+      <div class="field-block">
+        <label>Seguir frenando si falta</label>
+        <input type="text" name="blocked_if_missing" value="{{ authoring_defaults.blocked_if_missing or '' }}" placeholder="material, medida">
+      </div>
+    </div>
+  </details>
+</div>
+
+<div class="domain-panel" data-domain="family_rule">
+  <div class="panel-soft stack-sm">
+    <strong>Corregir detección de producto o familia</strong>
+    <div class="help">{{ domain_help.get('family_rule') }}</div>
+    <div class="help">Separalo en tres decisiones simples: a qué familia tendría que ir, qué palabras la activan y qué datos hacen falta antes de avanzar solo.</div>
+  </div>
+  <div class="panel-soft stack-sm">
+    <strong>Campos clave</strong>
+    <div class="help">Si completás estos datos, el revisor ya puede entender la intención principal sin abrir nada más.</div>
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Familia correcta</label>
+      <input type="text" name="family" value="{{ authoring_defaults.family or case.suggested_family or '' }}" placeholder="mecha">
+    </div>
+    <div class="field-block">
+      <label>Categorías permitidas</label>
+      <input type="text" name="allowed_categories" placeholder="accesorios de perforación">
+      <div class="help">Usalas para acotar en qué parte del catálogo debería moverse el bot.</div>
+    </div>
+  </div>
+  <div class="field-block">
+    <label>Términos que deberían llevar a esta familia</label>
+    <input type="text" name="match_terms" value="{{ authoring_defaults.match_terms or '' }}" placeholder="mecha, broca">
+  </div>
+  <div class="field-block">
+    <label>Datos necesarios antes de elegir solo</label>
+    <input type="text" name="required_dimensions" value="{{ authoring_defaults.required_dimensions or '' }}" placeholder="material, medida">
+  </div>
+  <details class="subsection">
+    <summary>Ajustes opcionales</summary>
+    <div class="stack-sm" style="margin-top:12px;">
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Datos opcionales</label>
+          <input type="text" name="optional_dimensions" placeholder="presentación, marca">
+        </div>
+        <div class="field-block">
+          <label>Orden de prioridad</label>
+          <input type="text" name="dimension_priority" placeholder="material, medida, presentación">
+        </div>
+      </div>
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Datos mínimos antes de elegir solo</label>
+          <input type="text" name="autopick_min_dimensions" placeholder="material, medida">
+        </div>
+        <div class="field-block">
+          <label>Términos marca/genérico</label>
+          <input type="text" name="brand_generic_terms" placeholder="widia">
+        </div>
+      </div>
+    </div>
+  </details>
+  <details class="subsection">
+    <summary>Detalles avanzados</summary>
+    <div class="stack-sm" style="margin-top:12px;">
+      <div class="help">Abrilo solo si necesitás ajustar compatibilidad o grupos de alternativas.</div>
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Datos de compatibilidad</label>
+          <input type="text" name="compatibility_axes" placeholder="material, medida">
+        </div>
+        <div class="field-block">
+          <label>Grupos de alternativas permitidos</label>
+          <input type="text" name="allowed_substitute_groups" placeholder="accesorio_perforacion_metal_madera">
+        </div>
+      </div>
+      <div class="field-block">
+        <label>Grupos de alternativas bloqueados</label>
+        <input type="text" name="blocked_substitute_groups" placeholder="accesorio_perforacion_mamposteria">
+      </div>
+    </div>
+  </details>
+</div>
+
+<div class="domain-panel" data-domain="blocked_term">
+  <div class="panel-soft stack-sm">
+    <strong>No responder este término todavía</strong>
+    <div class="help">{{ domain_help.get('blocked_term') }}</div>
+    <div class="help">Usalo cuando el término es demasiado amplio y conviene frenarlo con una pregunta de seguimiento.</div>
+  </div>
+  <div class="field-block">
+    <label>Término a frenar</label>
+    <input type="text" name="blocked_term" value="{{ authoring_defaults.repeated_term or case.repeated_term or case.user_input or '' }}" placeholder="tornillo">
+  </div>
+  <div class="field-block">
+    <label>Por qué conviene frenarlo</label>
+    <input type="text" name="blocked_reason" value="{{ authoring_defaults.blocked_reason or case.what_was_wrong or '' }}" placeholder="Es demasiado amplio si no sabemos el uso y la medida">
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Pregunta de seguimiento más segura</label>
+      <input type="text" name="blocked_redirect_prompt" value="{{ authoring_defaults.clarification_prompt or case.missing_clarification or '' }}" placeholder="¿Es para chapa, madera o durlock?">
+    </div>
+    <div class="field-block">
+      <label>Pista de familia</label>
+      <input type="text" name="family" value="{{ authoring_defaults.family or case.suggested_family or '' }}" placeholder="tornillo">
+    </div>
+  </div>
+</div>
+
+<div class="domain-panel" data-domain="complementary_rule">
+  <div class="panel-soft stack-sm">
+    <strong>Regla de complementos</strong>
+    <div class="help">{{ domain_help.get('complementary_rule') }}</div>
+    <div class="help">Usala cuando querés sugerir algo extra solo si ya quedó claro el producto principal.</div>
+  </div>
+  <div class="panel-soft stack-sm">
+    <strong>Campos clave</strong>
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Familia de origen</label>
+      <input type="text" name="source" value="{{ authoring_defaults.family or case.suggested_family or '' }}" placeholder="pintura">
+    </div>
+    <div class="field-block">
+      <label>Complementos sugeridos</label>
+      <input type="text" name="targets" placeholder="rodillo, bandeja">
+    </div>
+  </div>
+  <details class="subsection">
+    <summary>Ajuste opcional</summary>
+    <div class="field-block" style="margin-top:12px;">
+      <label>Cantidad máxima de sugerencias</label>
+      <input type="number" name="max_suggestions" value="1" min="1" max="3">
+    </div>
+  </details>
+</div>
+
+<div class="domain-panel" data-domain="substitute_rule">
+  <div class="panel-soft stack-sm">
+    <strong>Regla de alternativas seguras</strong>
+    <div class="help">{{ domain_help.get('substitute_rule') }}</div>
+    <div class="help">Pensala como una regla de cuándo sí conviene sugerir una alternativa parecida sin arriesgar demasiado.</div>
+  </div>
+  <div class="panel-soft stack-sm">
+    <strong>Campos clave</strong>
+    <div class="help">Definí el grupo, de qué familias puede salir y qué datos sí o sí tienen que coincidir.</div>
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Identificador del grupo</label>
+      <input type="text" name="group_id" placeholder="accesorio_perforacion_metal_madera">
+    </div>
+    <div class="field-block">
+      <label>Familias de origen</label>
+      <input type="text" name="source_families" value="{{ authoring_defaults.family or case.suggested_family or '' }}" placeholder="mecha, broca">
+    </div>
+  </div>
+  <div class="field-block">
+    <label>Alternativas permitidas</label>
+    <input type="text" name="allowed_targets" placeholder="mecha">
+  </div>
+  <div class="field-block">
+    <label>Datos que deben coincidir</label>
+    <input type="text" name="required_matching_dimensions" placeholder="medida, material">
+  </div>
+  <details class="subsection">
+    <summary>Ajustes opcionales</summary>
+    <div class="stack-sm" style="margin-top:12px;">
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Diferencias aceptables</label>
+          <input type="text" name="allowed_dimension_drift" placeholder="presentación">
+        </div>
+        <div class="field-block">
+          <label>Motivo visible para el operador</label>
+          <input type="text" name="reason_template" placeholder="Mantener compatibilidad con la superficie pedida">
+        </div>
+      </div>
+    </div>
+  </details>
+  <details class="subsection">
+    <summary>Detalles avanzados</summary>
+    <div class="stack-sm" style="margin-top:12px;">
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Diferencias bloqueadas</label>
+          <input type="text" name="blocked_dimension_mismatches" placeholder="material, superficie">
+        </div>
+        <div class="field-block">
+          <label>Términos bloqueados</label>
+          <input type="text" name="substitute_blocked_terms" placeholder="widia">
+        </div>
+      </div>
+    </div>
+  </details>
+</div>
+
+<div class="domain-panel" data-domain="language_pattern">
+  <div class="panel-soft stack-sm">
+    <strong>Normalización de lenguaje</strong>
+    <div class="help">{{ domain_help.get('language_pattern') }}</div>
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Sección</label>
+      <input type="text" name="language_section" placeholder="errores / términos_regionales / marca_como_genérico / abreviaturas / alias_de_superficie">
+    </div>
+    <div class="field-block">
+      <label>Frase del cliente</label>
+      <input type="text" name="language_key" value="{{ authoring_defaults.language_key or case.repeated_term or '' }}" placeholder="canio">
+    </div>
+  </div>
+  <div class="field-block">
+    <label>Valor normalizado</label>
+    <input type="text" name="language_value" value="{{ authoring_defaults.language_value or case.suggested_canonical_product or case.suggested_family or '' }}" placeholder="cano">
+  </div>
+</div>
+
+<div class="domain-panel" data-domain="test_case_only">
+  <div class="panel-soft stack-sm">
+    <strong>Guardar solo como caso futuro</strong>
+    <div class="help">{{ domain_help.get('test_case_only') }}</div>
+  </div>
+  <div class="form-grid cols-2">
+    <div class="field-block">
+      <label>Mensaje del cliente</label>
+      <input type="text" name="user_input" value="{{ authoring_defaults.source_message or case.user_input or '' }}">
+    </div>
+    <div class="field-block">
+      <label>Cómo respondió el bot</label>
+      <input type="hidden" name="route_source" value="{{ case.route_source or '' }}">
+      <input type="text" value="{{ case.route_source_label or 'Sin dato' }}" readonly>
+    </div>
+  </div>
+  <div class="field-block">
+    <label>Respuesta esperada del bot</label>
+    <textarea name="expected_answer">{{ authoring_defaults.faq_answer or case.expected_answer or case.bot_response or '' }}</textarea>
+  </div>
+</div>

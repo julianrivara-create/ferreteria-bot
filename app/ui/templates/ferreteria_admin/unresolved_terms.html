@@ -1,0 +1,40 @@
+{% extends "ferreteria_admin/base.html" %}
+{% block content %}
+<h1>Unresolved term review</h1>
+<table>
+  <thead>
+    <tr>
+      <th>Created</th>
+      <th>Raw text</th>
+      <th>Status</th>
+      <th>Reason</th>
+      <th>Review</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.created_at }}</td>
+      <td>{{ item.raw_text }}</td>
+      <td>{{ item.status }}</td>
+      <td>{{ item.reason }}</td>
+      <td>
+        <form method="post">
+          <input type="hidden" name="unresolved_id" value="{{ item.id }}">
+          <select name="review_status">
+            <option value="acknowledged">acknowledged</option>
+            <option value="mapped_to_synonym">mapped_to_synonym</option>
+            <option value="catalog_gap_confirmed">catalog_gap_confirmed</option>
+            <option value="ignored">ignored</option>
+          </select>
+          <input type="text" name="resolution_note" placeholder="note">
+          <button type="submit">Save</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No unresolved terms.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CRM Login</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        background: linear-gradient(145deg, #0f172a, #1e293b);
+      }
+      .card {
+        width: min(420px, 92vw);
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 22px;
+        box-shadow: 0 20px 50px rgba(2, 6, 23, 0.45);
+      }
+      h1 {
+        margin: 0 0 4px 0;
+        font-size: 24px;
+      }
+      p {
+        margin: 0 0 16px 0;
+        color: #64748b;
+      }
+      form {
+        display: grid;
+        gap: 10px;
+      }
+      input {
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 10px;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px;
+        background: #0f766e;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .msg {
+        margin-top: 10px;
+        font-size: 13px;
+      }
+      .err {
+        color: #b91c1c;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Mega CRM</h1>
+      <p>Sign in to open the admin panel.</p>
+      <form id="login-form">
+        <input type="text" id="tenant_id" placeholder="tenant_id" required />
+        <input type="email" id="email" placeholder="email" required />
+        <input type="password" id="password" placeholder="password" required />
+        <button type="submit">Login</button>
+      </form>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <script>
+      const form = document.getElementById("login-form");
+      const msg = document.getElementById("msg");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        msg.className = "msg";
+        msg.textContent = "Signing in...";
+
+        const payload = {
+          tenant_id: document.getElementById("tenant_id").value.trim(),
+          email: document.getElementById("email").value.trim(),
+          password: document.getElementById("password").value,
+        };
+
+        const res = await fetch("/api/crm/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          msg.className = "msg err";
+          msg.textContent = data.error || "Login failed";
+          return;
+        }
+
+        localStorage.setItem("crm_token", data.access_token);
+        localStorage.setItem("crm_user", JSON.stringify(data.user));
+        localStorage.setItem("crm_tenant_id", payload.tenant_id);
+        location.href = "/crm/dashboard";
+      });
+    </script>
+  </body>
+</html>

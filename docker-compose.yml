@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Sales Bot Application
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - ENVIRONMENT=development
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_PATH=/app/data/iphone_store.db
+    env_file:
+      - .env.development
+    volumes:
+      - ./data:/app/data
+      - ./bot_sales:/app/bot_sales
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+  
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+  
+  # Dashboard (Flask)
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5000"
+    environment:
+      - APP_MODULE=dashboard.app:app
+    env_file:
+      - .env.development
+    volumes:
+      - ./dashboard:/app/dashboard
+      - ./data:/app/data
+    depends_on:
+      - bot
+      - redis
+    command: python dashboard/app.py
+    restart: unless-stopped
+
+volumes:
+  redis_data:

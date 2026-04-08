@@ -1,0 +1,252 @@
+{% extends "crm/layout.html" %}
+{% block content %}
+<div class="header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <div class="meta">Minimal functional UI. Data is live from `/api/crm`.</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="toolbar" id="toolbar"></div>
+  <div id="content"></div>
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+  const page = "{{ page }}";
+  const content = document.getElementById("content");
+  const status = document.getElementById("status");
+  const toolbar = document.getElementById("toolbar");
+
+  function setStatus(text, error = false) {
+    status.textContent = text;
+    status.className = error ? "status error" : "status";
+  }
+
+  function asTable(headers, rows) {
+    const head = headers.map((h) => `<th>${h}</th>`).join("");
+    const body = rows.map((r) => `<tr>${r.map((c) => `<td>${c ?? ""}</td>`).join("")}</tr>`).join("");
+    return `<div class="table-wrapper"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  function kpiCards(items) {
+    return `<div class="grid cols-4">${items.map((k) => `<div class="kpi"><span>${k.label}</span><strong>${k.value}</strong></div>`).join("")}</div>`;
+  }
+
+  async function loadDashboard() {
+    const res = await window.crmFetch("/reports/dashboard");
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) return setStatus(data.error || "Failed to load dashboard", true);
+
+    content.innerHTML = kpiCards([
+      { label: "Leads", value: data.leads_created },
+      { label: "Conversion %", value: data.conversion_rate },
+      { label: "Revenue", value: data.revenue },
+      { label: "Avg Ticket", value: data.avg_ticket },
+    ]);
+    setStatus("Dashboard loaded");
+  }
+
+  async function loadContacts() {
+    toolbar.innerHTML = `
+      <input id="contacts-search" placeholder="Search name/email/phone" />
+      <input id="contacts-tag" placeholder="Tag" />
+      <button class="ghost" id="contacts-apply">Apply</button>
+    `;
+    document.getElementById("contacts-apply").onclick = () => loadContacts();
+
+    const search = document.getElementById("contacts-search").value || "";
+    const tag = document.getElementById("contacts-tag").value || "";
+    const qs = new URLSearchParams({ page_size: "50", search, tag });
+    const res = await window.crmFetch(`/contacts?${qs.toString()}`);
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) return setStatus(data.error || "Failed to load contacts", true);
+
+    const rows = (data.items || []).map((c) => [
+      `<a href="/crm/contacts/${c.id}">${c.name}</a>`,
+      c.phone,
+      c.email,
+      c.source_channel,
+      c.score,
+      c.last_activity_at,
+    ]);
+    content.innerHTML = asTable(["Name", "Phone", "Email", "Channel", "Score", "Last Activity"], rows);
+    setStatus(`Loaded ${rows.length} contacts`);
+  }
+
+  async function loadDeals() {
+    toolbar.innerHTML = `<button class="ghost" id="deals-refresh">Refresh</button>`;
+    document.getElementById("deals-refresh").onclick = () => loadDeals();
+
+    const [boardRes, tableRes] = await Promise.all([
+      window.crmFetch("/deals/board"),
+      window.crmFetch("/deals?page_size=50"),
+    ]);
+    if (!boardRes || !tableRes) return;
+    const board = await boardRes.json();
+    const table = await tableRes.json();
+    if (!boardRes.ok || !tableRes.ok) return setStatus("Failed to load deals", true);
+
+    const stageCards = (board.stages || []).map((s) => `<div class="kpi"><span>${s.name}</span><strong>${(s.deals || []).length}</strong></div>`).join("");
+    const stageOptions = (board.stages || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+    const rows = (table.items || []).map((d) => [
+      d.title,
+      `<select data-deal-stage="${d.id}">${stageOptions}</select><button class="ghost" data-deal-save="${d.id}">Move</button>`,
+      d.status,
+      d.owner_user_id,
+      d.amount_estimated,
+      d.score,
+    ]);
+    content.innerHTML = `<div class="grid cols-4">${stageCards}</div><div style="height:10px"></div>${asTable(["Title", "Stage", "Status", "Owner", "Amount", "Score"], rows)}`;
+    (table.items || []).forEach((d) => {
+      const select = content.querySelector(`select[data-deal-stage="${d.id}"]`);
+      if (select) select.value = d.stage_id;
+    });
+    content.querySelectorAll("[data-deal-save]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-deal-save");
+        const stageSelect = content.querySelector(`select[data-deal-stage="${id}"]`);
+        const stageId = stageSelect ? stageSelect.value : "";
+        const resPatch = await window.crmFetch(`/deals/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ stage_id: stageId }),
+        });
+        const body = await resPatch.json();
+        if (!resPatch.ok) return setStatus(body.error || "Stage update failed", true);
+        await loadDeals();
+      });
+    });
+    setStatus(`Loaded ${(table.items || []).length} deals`);
+  }
+
+  async function loadTasks() {
+    toolbar.innerHTML = `
+      <select id="tasks-scope">
+        <option value="">All</option>
+        <option value="today">Today</option>
+        <option value="overdue">Overdue</option>
+      </select>
+      <button class="ghost" id="tasks-apply">Apply</button>
+    `;
+    document.getElementById("tasks-apply").onclick = () => loadTasks();
+    const scope = document.getElementById("tasks-scope").value || "";
+    const qs = new URLSearchParams({ page_size: "50", due_scope: scope });
+    const res = await window.crmFetch(`/tasks?${qs.toString()}`);
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) return setStatus(data.error || "Failed to load tasks", true);
+
+    const rows = (data.items || []).map((t) => [
+      t.title,
+      t.status,
+      t.priority,
+      t.assigned_to_user_id,
+      t.due_at,
+      t.status === "done" ? "Done" : `<button class="ghost" data-task-complete="${t.id}">Complete</button>`,
+    ]);
+    content.innerHTML = asTable(["Title", "Status", "Priority", "Assigned", "Due", "Action"], rows);
+    content.querySelectorAll("[data-task-complete]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-task-complete");
+        const resPatch = await window.crmFetch(`/tasks/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "done" }),
+        });
+        const body = await resPatch.json();
+        if (!resPatch.ok) return setStatus(body.error || "Task completion failed", true);
+        await loadTasks();
+      });
+    });
+    setStatus(`Loaded ${rows.length} tasks`);
+  }
+
+  async function loadConversations() {
+    const res = await window.crmFetch("/conversations?page_size=50");
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) return setStatus(data.error || "Failed to load conversations", true);
+
+    const rows = (data.items || []).map((c) => [c.channel, c.contact_id, c.external_id, c.last_message_at, c.is_open]);
+    content.innerHTML = asTable(["Channel", "Contact", "External ID", "Last Message", "Open"], rows);
+    setStatus(`Loaded ${rows.length} conversations`);
+  }
+
+  async function loadAutomations() {
+    toolbar.innerHTML = `<button class="ghost" id="automations-refresh">Refresh</button>`;
+    document.getElementById("automations-refresh").onclick = () => loadAutomations();
+
+    const [res, runsRes] = await Promise.all([
+      window.crmFetch("/automations"),
+      window.crmFetch("/automations/runs?status=failed&limit=30"),
+    ]);
+    if (!res || !runsRes) return;
+    const data = await res.json();
+    const runs = await runsRes.json();
+    if (!res.ok || !runsRes.ok) return setStatus("Failed to load automations", true);
+
+    const rows = (data.items || []).map((a) => [a.name, a.trigger_type, a.enabled, a.cooldown_minutes, a.last_run_at]);
+    const failRows = (runs.items || []).map((r) => [r.automation_id, r.status, r.error_message, r.executed_at]);
+    content.innerHTML = `${asTable(["Name", "Trigger", "Enabled", "Cooldown", "Last Run"], rows)}<div style="height:10px"></div>${asTable(["Automation", "Status", "Error", "At"], failRows)}`;
+    setStatus(`Loaded ${rows.length} automations / ${failRows.length} failures`);
+  }
+
+  async function loadReports() {
+    const [dashboardRes, clvRes] = await Promise.all([
+      window.crmFetch("/reports/dashboard"),
+      window.crmFetch("/reports/clv"),
+    ]);
+    if (!dashboardRes || !clvRes) return;
+    const dashboard = await dashboardRes.json();
+    const clv = await clvRes.json();
+    if (!dashboardRes.ok || !clvRes.ok) return setStatus("Failed to load reports", true);
+
+    const cohortRows = (clv.cohorts || []).map((c) => [c.cohort, c.customers, c.revenue, c.avg_clv]);
+    content.innerHTML = `${kpiCards([
+      { label: "Leads", value: dashboard.leads_created },
+      { label: "Conversion", value: dashboard.conversion_rate + "%" },
+      { label: "Revenue", value: dashboard.revenue },
+      { label: "Follow-up", value: dashboard.followup_compliance + "%" },
+    ])}<div style="height:10px"></div>${asTable(["Cohort", "Customers", "Revenue", "Avg CLV"], cohortRows)}`;
+    setStatus("Reports loaded");
+  }
+
+  async function loadSettings() {
+    const [settingsRes, usersRes] = await Promise.all([
+      window.crmFetch("/settings"),
+      window.crmFetch("/users"),
+    ]);
+    if (!settingsRes || !usersRes) return;
+    const settings = await settingsRes.json();
+    const users = await usersRes.json();
+    if (!settingsRes.ok || !usersRes.ok) return setStatus("Failed to load settings", true);
+
+    const stageRows = (settings.pipeline_stages || []).map((s) => [s.position, s.name, s.sla_hours, s.is_won, s.is_lost]);
+    const userRows = (users.items || []).map((u) => [u.full_name, u.email, u.role, u.is_active]);
+    content.innerHTML = `${asTable(["Pos", "Stage", "SLA(h)", "Won", "Lost"], stageRows)}<div style="height:10px"></div>${asTable(["Name", "Email", "Role", "Active"], userRows)}`;
+    setStatus("Settings loaded");
+  }
+
+  const loaders = {
+    dashboard: loadDashboard,
+    contacts: loadContacts,
+    deals: loadDeals,
+    tasks: loadTasks,
+    conversations: loadConversations,
+    automations: loadAutomations,
+    reports: loadReports,
+    settings: loadSettings,
+  };
+
+  (async function init() {
+    if (!loaders[page]) {
+      setStatus("Unsupported page", true);
+      return;
+    }
+    setStatus("Loading...");
+    await loaders[page]();
+  })();
+</script>
+{% endblock %}

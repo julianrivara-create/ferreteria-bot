@@ -1,0 +1,140 @@
+{
+    "preguntas_frecuentes": {
+        "envio": {
+            "pregunta": "¿Cómo es el envío?",
+            "respuesta": "📦 Opciones de envío:\n• CABA: Gratis en moto (24-48hs)\n• AMBA: Consultar costo (48-72hs)\n• Interior: Por Correo/Andreani (3-5 días)\n• Retiro en local: Coordinamos horario",
+            "keywords": [
+                "envio",
+                "envío",
+                "delivery",
+                "entrega",
+                "llega",
+                "demora"
+            ]
+        },
+        "garantia": {
+            "pregunta": "¿Tiene garantía?",
+            "respuesta": "✅ Garantía oficial:\n• 1 año de garantía del fabricante\n• Servicio técnico autorizado\n• En caso de falla, coordinamos el service",
+            "keywords": [
+                "garantia",
+                "garantía",
+                "warranty",
+                "servicio técnico",
+                "falla"
+            ]
+        },
+        "pagos": {
+            "pregunta": "¿Qué formas de pago aceptan?",
+            "respuesta": "💳 Formas de pago:\n• Transferencia bancaria\n• Efectivo (en retiro)\n• MercadoPago (link de pago)\n• Tarjeta: 3/6/12 cuotas con MercadoPago",
+            "keywords": [
+                "pago",
+                "tarjeta",
+                "cuotas",
+                "efectivo",
+                "transferencia",
+                "mercadopago"
+            ]
+        },
+        "cuotas": {
+            "pregunta": "¿Puedo pagar en cuotas?",
+            "respuesta": "💳 Cuotas con MercadoPago:\n• 3 cuotas sin interés\n• 6/12 cuotas con interés\n• Elegís la opción en el checkout\n• Te mandamos el link de pago",
+            "keywords": [
+                "cuotas",
+                "financiación",
+                "financiacion",
+                "mensualidades",
+                "partes"
+            ]
+        },
+        "factura_a": {
+            "pregunta": "¿Hacen factura A?",
+            "respuesta": "📋 Para factura A necesitamos que hables con la dueña.\nTe derivo para que te atienda personalmente con los datos fiscales.",
+            "keywords": [
+                "factura a",
+                "factura A",
+                "responsable inscripto",
+                "monotributista",
+                "cuit"
+            ]
+        },
+        "stock": {
+            "pregunta": "¿Tienen stock de...?",
+            "respuesta": "Para chequear stock exacto, decime qué producto buscás (modelo, capacidad, color) y te consulto en tiempo real.",
+            "keywords": [
+                "stock",
+                "disponibilidad",
+                "tienen",
+                "hay"
+            ]
+        },
+        "cambio_color": {
+            "pregunta": "¿Puedo cambiar el color después?",
+            "respuesta": "Una vez confirmada la venta, no se pueden hacer cambios de color o modelo. Por eso te pedimos que confirmes bien antes de reservar.",
+            "keywords": [
+                "cambiar",
+                "cambio",
+                "otro color",
+                "diferente"
+            ]
+        },
+        "devolucion": {
+            "pregunta": "¿Puedo devolver?",
+            "respuesta": "📦 Política de devoluciones:\n• 10 días desde recepción\n• Producto sin usar, en caja original\n• Coordinar antes de devolver\n• Reembolso o cambio por otro producto",
+            "keywords": [
+                "devolucion",
+                "devolución",
+                "cambio",
+                "reembolso",
+                "arrepentimiento"
+            ]
+        },
+        "precio_incluye_envio": {
+            "pregunta": "¿El precio incluye envío?",
+            "respuesta": "El precio publicado NO incluye envío.\n• CABA: envío gratis\n• AMBA/Interior: se cotiza según zona\n• Retiro: sin cargo",
+            "keywords": [
+                "incluye envio",
+                "incluye envío",
+                "costo envio",
+                "costo envío"
+            ]
+        },
+        "cuando_llega": {
+            "pregunta": "¿Cuándo llega?",
+            "respuesta": "⏰ Tiempos estimados:\n• CABA moto: 24-48hs\n• AMBA: 48-72hs\n• Interior: 3-5 días hábiles\nTe avisamos cuando despachamos",
+            "keywords": [
+                "cuando llega",
+                "cuándo llega",
+                "tiempo",
+                "demora",
+                "tarda"
+            ]
+        },
+        "original": {
+            "pregunta": "¿Es original?",
+            "respuesta": "✅ Todos nuestros productos son 100% originales y nuevos.\n• Caja sellada de fábrica\n• Garantía oficial\n• Importación legal",
+            "keywords": [
+                "original",
+                "nuevo",
+                "sellado",
+                "caja",
+                "trucho",
+                "falso"
+            ]
+        },
+        "usado": {
+            "pregunta": "¿Venden usados/reacondicionados?",
+            "respuesta": "No, solo vendemos productos nuevos y originales. No trabajamos con usados ni reacondicionados.",
+            "keywords": [
+                "usado",
+                "segunda mano",
+                "reacondicionado",
+                "refurbished"
+            ]
+        }
+    },
+    "metadata": {
+        "version": "1.0",
+        "last_updated": "2026-01-21",
+        "total_faqs": 13
+    }
+}

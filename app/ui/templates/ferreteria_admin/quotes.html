@@ -1,0 +1,50 @@
+{% extends "ferreteria_admin/base.html" %}
+{% block content %}
+<h1>Accepted / review queue</h1>
+<p class="muted">Operational queue for quotes waiting on human follow-up.</p>
+<form method="get" class="inline">
+  <label>Automation state</label>
+  <select name="automation_state">
+    <option value="">all</option>
+    <option value="manual_only" {% if "manual_only" in automation_states %}selected{% endif %}>manual_only</option>
+    <option value="eligible_for_auto_followup" {% if "eligible_for_auto_followup" in automation_states %}selected{% endif %}>eligible_for_auto_followup</option>
+    <option value="awaiting_customer_confirmation" {% if "awaiting_customer_confirmation" in automation_states %}selected{% endif %}>awaiting_customer_confirmation</option>
+    <option value="automation_blocked" {% if "automation_blocked" in automation_states %}selected{% endif %}>automation_blocked</option>
+  </select>
+  <button type="submit">Filter</button>
+</form>
+<table>
+  <thead>
+    <tr>
+      <th>Quote</th>
+      <th>Customer</th>
+      <th>Status</th>
+      <th>Automation</th>
+      <th>Auto reason</th>
+      <th>Channel</th>
+      <th>Blocking</th>
+      <th>Last auto follow-up</th>
+      <th>Accepted</th>
+      <th>Updated</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for quote in quotes %}
+    <tr>
+      <td><a href="/ops/ferreteria/quotes/{{ quote.id }}">{{ quote.id }}</a></td>
+      <td>{{ quote.customer_ref or "-" }}</td>
+      <td>{{ quote.status }}</td>
+      <td>{{ quote.automation_state or "manual_only" }}</td>
+      <td>{{ quote.automation_reason or "-" }}</td>
+      <td>{{ quote.channel }}</td>
+      <td>{{ "yes" if quote.has_blocking_lines else "no" }}</td>
+      <td>{{ quote.last_auto_followup_at or "-" }}</td>
+      <td>{{ quote.accepted_at or "-" }}</td>
+      <td>{{ quote.updated_at }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9">No quotes in queue.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

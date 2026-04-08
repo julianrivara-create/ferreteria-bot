@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <title>Hablar con el bot</title>
+    <style>
+      :root {
+        --bg: #f5f1e8;
+        --paper: #fffdf9;
+        --panel: #f8f4ec;
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --line: #d6cfc1;
+        --accent: #9a3412;
+        --accent-soft: #f97316;
+        --good: #166534;
+        --warn: #a16207;
+        --bad: #b91c1c;
+        --shadow: 0 10px 30px rgba(31, 41, 55, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: radial-gradient(circle at top left, #fff7ed, var(--bg) 45%); color: var(--ink); font-family: Georgia, "Times New Roman", serif; }
+      .shell { max-width: 1500px; margin: 0 auto; padding: 24px; }
+      .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 16px; }
+      .title { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+      .subtitle { color: var(--muted); font-size: 14px; }
+      .nav { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; align-items: center; }
+      .nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 0 4px; }
+      .nav a { text-decoration: none; color: var(--ink); padding: 10px 14px; background: rgba(255,255,255,0.55); border: 1px solid var(--line); border-radius: 999px; }
+      .subtle-link { text-decoration: none; color: var(--accent); font-size: 13px; }
+      .nav a.is-active { border-color: rgba(249,115,22,0.4); color: var(--accent); background: rgba(249,115,22,0.08); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.08); }
+      .nav a:hover { border-color: var(--accent-soft); color: var(--accent); }
+      .card { background: var(--paper); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
+      .card-pad { padding: 18px; }
+      .page-hero { display: grid; gap: 12px; padding: 22px; border-radius: 24px; background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255,247,237,0.96)); border: 1px solid rgba(154, 52, 18, 0.12); box-shadow: var(--shadow); margin-bottom: 18px; }
+      .page-hero h1, .page-hero h2 { margin: 0; font-size: 28px; }
+      .page-hero .lead { color: var(--muted); line-height: 1.55; max-width: 900px; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+      .hero-note { padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.72); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+      .grid-3 { display: grid; grid-template-columns: 280px minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .stack { display: grid; gap: 18px; }
+      .stack-sm { display: grid; gap: 10px; }
+      .summary-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 16px; }
+      .workspace-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) 380px; gap: 18px; align-items: start; }
+      .tool-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+      .tool-card { display: grid; gap: 8px; padding: 16px; border-radius: 18px; border: 1px solid var(--line); background: #fff; text-decoration: none; color: inherit; }
+      .tool-card:hover { border-color: var(--accent-soft); }
+      .success-banner { padding: 14px; border-radius: 16px; border: 1px solid rgba(22, 101, 52, 0.2); background: rgba(22, 101, 52, 0.08); }
+      .message-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+      .message-actions a, .message-actions button { text-decoration: none; }
+      .section-title { font-size: 18px; font-weight: 700; margin: 0 0 8px; }
+      .muted { color: var(--muted); }
+      .help { color: var(--muted); font-size: 13px; line-height: 1.45; }
+      .chip { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--line); background: #fff; }
+      .chip.good { color: var(--good); border-color: rgba(22, 101, 52, 0.25); background: rgba(22, 101, 52, 0.08); }
+      .chip.warn { color: var(--warn); border-color: rgba(161, 98, 7, 0.25); background: rgba(161, 98, 7, 0.08); }
+      .chip.bad { color: var(--bad); border-color: rgba(185, 28, 28, 0.25); background: rgba(185, 28, 28, 0.08); }
+      .chip.accent { color: var(--accent); border-color: rgba(154, 52, 18, 0.25); background: rgba(154, 52, 18, 0.08); }
+      .metric { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+      .metric strong { display: block; font-size: 22px; }
+      .metric span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+      .session-link { display: block; padding: 12px; border: 1px solid var(--line); border-radius: 16px; text-decoration: none; color: inherit; margin-bottom: 10px; background: #fff; }
+      .session-link:hover, .session-link.active { border-color: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.15); }
+      .workflow-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+      .workflow-card h3 { margin: 0; font-size: 17px; }
+      .workflow-list { display: grid; gap: 10px; }
+      .workflow-list .session-link { margin-bottom: 0; }
+      .step-card { display: grid; gap: 8px; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255,255,255,0.72); }
+      .step-number { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 999px; background: rgba(154, 52, 18, 0.1); color: var(--accent); font-weight: 700; }
+      .preview-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+      .preview-box { padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
+      .preview-box.before { background: #faf7f1; }
+      .preview-box.after { background: rgba(22, 101, 52, 0.06); border-color: rgba(22, 101, 52, 0.18); }
+      .chat { display: grid; gap: 14px; }
+      .bubble { border-radius: 18px; padding: 14px 16px; border: 1px solid var(--line); background: #fff; }
+      .bubble.user { background: #fffaf4; margin-left: 50px; }
+      .bubble.assistant { background: #fcfcfb; margin-right: 50px; }
+      .bubble .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      form { display: grid; gap: 10px; }
+      input, select, textarea, button { width: 100%; border-radius: 12px; border: 1px solid var(--line); padding: 10px 12px; font: inherit; background: #fff; color: var(--ink); }
+      textarea { min-height: 100px; resize: vertical; }
+      label.inline-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+      label.inline-toggle input { width: auto; }
+      button { width: auto; background: var(--ink); color: #fff; border: none; cursor: pointer; }
+      button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+      .danger { background: var(--bad); }
+      .warning { background: var(--warn); }
+      .accent-btn { background: var(--accent); }
+      .panel-soft { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+      .form-grid { display: grid; gap: 12px; }
+      .form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+      .domain-panel { display: none; }
+      .domain-panel.is-active { display: grid; gap: 12px; }
+      .callout { padding: 14px; border-radius: 16px; border: 1px solid rgba(154, 52, 18, 0.18); background: rgba(154, 52, 18, 0.06); }
+      .callout.good { border-color: rgba(22, 101, 52, 0.18); background: rgba(22, 101, 52, 0.06); }
+      .callout.warn { border-color: rgba(161, 98, 7, 0.2); background: rgba(161, 98, 7, 0.06); }
+      .review-target { border-color: rgba(249,115,22,0.45); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.12); }
+      .review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .review-actions a { text-decoration: none; }
+      .caption { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+      details.technical { border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 12px 14px; }
+      details.technical summary { cursor: pointer; font-weight: 700; color: var(--ink); }
+      details.subsection { border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,0.82); padding: 12px 14px; }
+      details.subsection summary { cursor: pointer; font-weight: 700; color: var(--ink); }
+      .list-clean { display: grid; gap: 10px; margin: 0; padding-left: 18px; }
+      .field-block { display: grid; gap: 8px; }
+      .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+      a { color: var(--accent); }
+      .empty { padding: 28px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 18px; background: rgba(255,255,255,0.6); }
+      .error { color: var(--bad); background: rgba(185,28,28,0.08); border: 1px solid rgba(185,28,28,0.16); border-radius: 14px; padding: 12px 14px; }
+      .progress { height: 10px; background: #ebe3d5; border-radius: 999px; overflow: hidden; }
+      .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); }
+      @media (max-width: 1180px) { .grid-3, .workspace-layout { grid-template-columns: 1fr; } .bubble.user, .bubble.assistant { margin: 0; } }
+      @media (max-width: 860px) { .grid-2, .form-grid.cols-2, .preview-grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="topbar">
+        <div>
+          <div class="title">Hablar con el bot</div>
+          <div class="subtitle">Probá conversaciones, enseñale al bot qué tendría que hacer y activá cambios listos sin entrar en pantallas técnicas.</div>
+        </div>
+        <div class="row">
+          <a class="subtle-link" href="/ops/ferreteria/training/help">Ayuda operativa</a>
+          <span class="chip accent">Uso interno</span>
+          <span class="chip">Revisión antes de activar cambios</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/ops/ferreteria/training" class="is-active">Hablar con el bot</a>
+        <a href="/ops/ferreteria/training/suggestions?queue=approved" class="">Cambios listos</a>
+        <a href="/ops/ferreteria/training/tools" class="">Más herramientas</a>
+      </nav>
+      
+
+
+
+<div class="page-hero">
+  <div class="caption">A → B → C</div>
+  <h1>Hablar con el bot</h1>
+  <div class="lead">Esta es la pantalla principal. Primero probás una conversación, después marcás una respuesta con <strong>Esto estuvo mal</strong> y por último dejás un <strong>cambio en preparación</strong> para revisar o activar más tarde.</div>
+  <div class="hero-actions">
+    <span class="hero-note">Paso A: hablá con el bot. Paso B: enseñale qué tendría que haber hecho. Paso C: activá el cambio desde <strong>Cambios listos</strong>.</span>
+    <a class="chip accent" href="/ops/ferreteria/training/suggestions?queue=approved">Ir a cambios listos</a>
+    <a class="chip" href="/ops/ferreteria/training/tools">Abrir más herramientas</a>
+  </div>
+</div>
+
+<div class="summary-grid">
+  <div class="metric"><span>Para revisar ahora</span><strong>1</strong></div>
+  <div class="metric"><span>Cambios en preparación</span><strong>1</strong></div>
+  <div class="metric"><span>Listos para activar</span><strong>1</strong></div>
+  <div class="metric"><span>Casos futuros por atender</span><strong>1</strong></div>
+</div>
+
+<div class="workspace-layout">
+  <div class="stack">
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between; align-items:flex-start;">
+        <div>
+          <h2 class="section-title" style="margin-bottom:4px;">Paso A. Probá una conversación</h2>
+          <div class="muted">Escribí como un cliente real. Cuando aparezca una respuesta del bot que no te convence, marcala desde la misma conversación.</div>
+        </div>
+        
+        <div class="row">
+          <span class="chip good">Abierta</span>
+          <span class="chip">Balanceado</span>
+        </div>
+        
+      </div>
+
+      
+      <div class="chat" style="margin-top:18px;">
+        
+        <div class="bubble user ">
+          <div class="meta">
+            <strong>cliente</strong>
+            
+            
+            
+          </div>
+          <div>Necesito canio pvc de 20 para el baño</div>
+          
+        </div>
+        
+        <div class="bubble assistant ">
+          <div class="meta">
+            <strong>bot</strong>
+            <span class="chip accent">Regla fija</span>
+            
+            
+            <span>0 / 0 / 0 tok</span>
+            <span>US$ 0.0000</span>
+            
+          </div>
+          <div>No encontré “canio pvc” en el catálogo. Si querés, escribime el nombre exacto del producto.</div>
+          
+          <div class="message-actions">
+            <a class="chip " href="/ops/ferreteria/training?session_id=training:615d992f26774cbc94788b94032f3a8d&review_message_id=096c44d12909487e88fb988684dbb4a5">
+              Esto estuvo mal
+            </a>
+            
+            <a class="chip good" href="/ops/ferreteria/training/cases/bbba8e9082d44823b7da51703858b1ad">Abrir ajuste avanzado</a>
+            
+          </div>
+          
+        </div>
+        
+        <div class="bubble user ">
+          <div class="meta">
+            <strong>cliente</strong>
+            
+            
+            
+          </div>
+          <div>Necesito mecha para pared</div>
+          
+        </div>
+        
+        <div class="bubble assistant ">
+          <div class="meta">
+            <strong>bot</strong>
+            <span class="chip accent">Asistido por modelo</span>
+            <span>gpt-4o-mini</span>
+            
+            <span>118 / 44 / 162 tok</span>
+            <span>US$ 0.0171</span>
+            
+          </div>
+          <div>Te paso una mecha estándar de 8 mm para eso.</div>
+          
+          <div class="message-actions">
+            <a class="chip " href="/ops/ferreteria/training?session_id=training:615d992f26774cbc94788b94032f3a8d&review_message_id=814210e278d8471f88b546fed2fbb9d0">
+              Esto estuvo mal
+            </a>
+            
+            <a class="chip good" href="/ops/ferreteria/training/cases/de90b441d3014a5398b0e0269883442c">Abrir ajuste avanzado</a>
+            
+          </div>
+          
+        </div>
+        
+        <div class="bubble user ">
+          <div class="meta">
+            <strong>cliente</strong>
+            
+            
+            
+          </div>
+          <div>¿Hacen envíos el mismo día?</div>
+          
+        </div>
+        
+        <div class="bubble assistant review-target">
+          <div class="meta">
+            <strong>bot</strong>
+            <span class="chip accent">Asistido por modelo</span>
+            <span>gpt-4o-mini</span>
+            
+            <span>94 / 31 / 125 tok</span>
+            <span>US$ 0.0128</span>
+            
+          </div>
+          <div>Sí, hacemos envíos. ¿Querés que te pase las zonas disponibles?</div>
+          
+          <div class="message-actions">
+            <a class="chip accent" href="/ops/ferreteria/training?session_id=training:615d992f26774cbc94788b94032f3a8d&review_message_id=96c3dca8a90f4b4da0e5fc31091dff08">
+              Estás enseñando sobre esta respuesta
+            </a>
+            
+            <span class="chip warn">Pendiente de revisión</span>
+            
+          </div>
+          
+        </div>
+        
+      </div>
+
+      <form method="post" style="margin-top:18px;">
+        <input type="hidden" name="action" value="send_message">
+        <input type="hidden" name="session_id" value="training:615d992f26774cbc94788b94032f3a8d">
+        <textarea name="message" placeholder="Ejemplo: Necesito mecha para pared de 8 mm."></textarea>
+        <div class="row">
+          <button type="submit" class="accent-btn">Enviar al bot</button>
+        </div>
+      </form>
+      <div class="row" style="margin-top:10px;">
+        <form method="post">
+          <input type="hidden" name="action" value="reset_session">
+          <input type="hidden" name="session_id" value="training:615d992f26774cbc94788b94032f3a8d">
+          <button type="submit" class="secondary">Reiniciar sesión</button>
+        </form>
+        <form method="post">
+          <input type="hidden" name="action" value="close_session">
+          <input type="hidden" name="session_id" value="training:615d992f26774cbc94788b94032f3a8d">
+          <button type="submit" class="secondary">Cerrar sesión</button>
+        </form>
+      </div>
+      
+    </div>
+
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <h2 class="section-title" style="margin-bottom:4px;">Sesiones recientes</h2>
+          <div class="help">Volvé a una prueba anterior cuando quieras seguir enseñando desde la misma conversación.</div>
+        </div>
+        
+        <span class="chip warn">1 con respuestas pendientes</span>
+        
+      </div>
+      <div class="workflow-list" style="margin-top:14px;">
+        
+        <a class="session-link " href="/ops/ferreteria/training?session_id=training:07d628a53af44e0ab6450050f9f00678">
+          <div class="row" style="justify-content:space-between;">
+            <strong>07d628a5</strong>
+            <span class="chip accent">Cerrada</span>
+          </div>
+          <div class="muted">Económico · 2 revisadas de 2 respuestas del bot</div>
+        </a>
+        
+        <a class="session-link active" href="/ops/ferreteria/training?session_id=training:615d992f26774cbc94788b94032f3a8d">
+          <div class="row" style="justify-content:space-between;">
+            <strong>615d992f</strong>
+            <span class="chip good">Abierta</span>
+          </div>
+          <div class="muted">Balanceado · 2 revisadas de 3 respuestas del bot</div>
+        </a>
+        
+      </div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card card-pad">
+      <h2 class="section-title">Paso B. Enseñarle qué tendría que haber hecho</h2>
+      <div class="stack-sm">
+        <div class="step-card">
+          <div class="row"><span class="step-number">1</span><strong>Elegí la respuesta</strong></div>
+          <div class="help">En la conversación, marcá la primera respuesta del bot que se desvió.</div>
+        </div>
+        <div class="step-card">
+          <div class="row"><span class="step-number">2</span><strong>Explicalo en lenguaje simple</strong></div>
+          <div class="help">No hace falta elegir tipos técnicos. Contanos qué pasó y el sistema arma un borrador recomendado.</div>
+        </div>
+        <div class="step-card">
+          <div class="row"><span class="step-number">3</span><strong>Guardá el cambio en preparación</strong></div>
+          <div class="help">El cambio todavía no queda activo. Solo queda listo para revisar o ajustar.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <h2 class="section-title">Esto estuvo mal</h2>
+      
+      <div class="callout stack-sm" style="margin-bottom:12px;">
+        <div><strong>Respuesta elegida del bot</strong></div>
+        <div>Sí, hacemos envíos. ¿Querés que te pase las zonas disponibles?</div>
+        <div class="help">Guardamos una enseñanza sobre esta respuesta puntual, no sobre toda la sesión.</div>
+      </div>
+      <form method="post">
+        <input type="hidden" name="action" value="save_simple_review">
+        <input type="hidden" name="session_id" value="training:615d992f26774cbc94788b94032f3a8d">
+        <input type="hidden" name="bot_message_id" value="96c3dca8a90f4b4da0e5fc31091dff08">
+        <div class="field-block">
+          <label>¿Qué estuvo mal?</label>
+          <select name="simple_choice" id="simple-choice-select" data-simple-choice>
+            
+            <option value="understand_term" >No entendió cómo lo pidió</option>
+            
+            <option value="faq_answer" >Faltó una respuesta estándar</option>
+            
+            <option value="clarify_first" >Tendría que haber preguntado algo antes</option>
+            
+            <option value="block_first" >No debería haber respondido todavía</option>
+            
+            <option value="correct_family" >Eligió la familia o producto equivocado</option>
+            
+            <option value="not_sure" selected>No estoy seguro todavía</option>
+            
+          </select>
+          <div class="help" id="simple-choice-help">
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              Usalo cuando querés guardar el aprendizaje sin forzar una corrección técnica equivocada.
+            
+          </div>
+        </div>
+        <div class="field-block">
+          <label>¿Qué tendría que haber hecho primero?</label>
+          <textarea name="simple_first_step" placeholder="Ejemplo: primero tendría que haber preguntado para qué superficie era."></textarea>
+        </div>
+        <div class="field-block">
+          <label>¿Qué debería responder o preguntar?</label>
+          <textarea name="simple_expected_answer" placeholder="Ejemplo: ¿La necesitás para pared, hormigón o cerámica?"></textarea>
+        </div>
+        <div class="field-block">
+          <label>Explicación corta para el equipo</label>
+          <textarea name="simple_what_was_wrong" placeholder="Ejemplo: se apuró y eligió una variante sin pedir el dato clave."></textarea>
+        </div>
+        <details class="subsection">
+          <summary>Opciones avanzadas</summary>
+          <div class="stack-sm" style="margin-top:12px;">
+            <div class="help">Abrilo solo si ya sabés cuál era la familia o el producto correctos y querés ayudar a la recomendación automática.</div>
+            <div class="form-grid cols-2">
+              <div class="field-block">
+                <label>Familia correcta</label>
+                <input type="text" name="simple_family" value="" placeholder="Ejemplo: mecha">
+              </div>
+              <div class="field-block">
+                <label>Producto correcto</label>
+                <input type="text" name="simple_canonical_product" value="" placeholder="Ejemplo: caño pvc">
+              </div>
+            </div>
+          </div>
+        </details>
+        <label class="inline-toggle"><input type="checkbox" name="simple_unsure" > No estoy seguro todavía</label>
+        <label class="inline-toggle"><input type="checkbox" name="simple_future_only" > Guardar solo como ejemplo futuro</label>
+        <div class="message-actions">
+          <button type="submit" class="accent-btn">Guardar como cambio en preparación</button>
+          
+        </div>
+      </form>
+      
+    </div>
+
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <h2 class="section-title" style="margin-bottom:4px;">Paso C. Cambios listos</h2>
+          <div class="help">Estos ya pasaron revisión y solo faltan activarse.</div>
+        </div>
+        <a href="/ops/ferreteria/training/suggestions?queue=approved">Ver todos</a>
+      </div>
+      <div class="workflow-list" style="margin-top:12px;">
+        
+        <div class="session-link">
+          <div class="row" style="justify-content:space-between;">
+            <strong>Mejorar pregunta de aclaración</strong>
+            <span class="chip good">Lista para activar</span>
+          </div>
+          <div>Cambiar la primera pregunta para &#39;mecha&#39; por &#39;¿Para pared, hormigón o cerámica?&#39;.</div>
+          <div class="muted">Primero va a preguntar &#39;¿Para pared, hormigón o cerámica?&#39;.</div>
+          <div class="message-actions">
+            <a class="chip accent" href="/ops/ferreteria/training/suggestions/f022056efed74ee5b69197ddef388fc7">Revisar / activar</a>
+            <a class="chip" href="/ops/ferreteria/training/cases/de90b441d3014a5398b0e0269883442c">Caso de origen</a>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between;">
+        <h2 class="section-title" style="margin:0;">Más herramientas</h2>
+        <a href="/ops/ferreteria/training/tools">Abrir todas</a>
+      </div>
+      <div class="stack-sm" style="margin-top:12px;">
+        <a class="tool-card" href="/ops/ferreteria/training/tools">
+          <strong>Atajos y seguimiento</strong>
+          <div class="help">Ayuda, términos sin resolver, impacto, uso, sesiones, historial y colas avanzadas.</div>
+        </a>
+        
+        <a class="tool-card" href="/ops/ferreteria/training/cases/406a8a5491f04fd2abdc658105293852">
+          <strong>Ajuste avanzado pendiente</strong>
+          <div class="help">Crear primera propuesta</div>
+        </a>
+        
+        
+        <a class="tool-card" href="/ops/ferreteria/training/cases/406a8a5491f04fd2abdc658105293852">
+          <strong>Cobertura futura</strong>
+          <div class="help">Exportalo cuando quieras dejar este caso protegido para más adelante.</div>
+        </a>
+        
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    const select = document.querySelector('[data-simple-choice]');
+    const help = document.getElementById('simple-choice-help');
+    const choices = [{"help": "Usalo cuando el cliente habl\u00f3 de una forma real y el bot no reconoci\u00f3 el producto o t\u00e9rmino.", "key": "understand_term", "label": "No entendi\u00f3 c\u00f3mo lo pidi\u00f3"}, {"help": "Usalo cuando la salida correcta era una respuesta frecuente o una pol\u00edtica del local.", "key": "faq_answer", "label": "Falt\u00f3 una respuesta est\u00e1ndar"}, {"help": "Usalo cuando el bot estaba cerca, pero primero necesitaba una aclaraci\u00f3n concreta.", "key": "clarify_first", "label": "Tendr\u00eda que haber preguntado algo antes"}, {"help": "Usalo cuando el bot respondi\u00f3 con demasiado riesgo y conven\u00eda frenar hasta tener m\u00e1s detalle.", "key": "block_first", "label": "No deber\u00eda haber respondido todav\u00eda"}, {"help": "Usalo cuando se fue a otro producto o familia y hay que corregir esa detecci\u00f3n.", "key": "correct_family", "label": "Eligi\u00f3 la familia o producto equivocado"}, {"help": "Usalo cuando quer\u00e9s guardar el aprendizaje sin forzar una correcci\u00f3n t\u00e9cnica equivocada.", "key": "not_sure", "label": "No estoy seguro todav\u00eda"}];
+    if (!select || !help) return;
+    function syncHelp() {
+      const selected = choices.find((item) => item.key === select.value);
+      help.textContent = selected ? selected.help : '';
+    }
+    select.addEventListener('change', syncHelp);
+    syncHelp();
+  })();
+</script>
+
+    </div>
+  </body>
+</html>

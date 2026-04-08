@@ -1,0 +1,14 @@
+{% extends "ferreteria_admin/base.html" %}
+{% block content %}
+<h1>Knowledge editor: {{ domain }}</h1>
+<p class="muted">Editable tenant-scoped ferreteria knowledge. Changes are validated before save.</p>
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+<form method="post">
+  <label>Change reason</label><br>
+  <input type="text" name="change_reason" style="width: 100%;"><br><br>
+  <textarea name="payload">{{ payload_yaml }}</textarea><br>
+  <button type="submit">Save {{ domain }}</button>
+</form>
+{% endblock %}

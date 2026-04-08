@@ -1,0 +1,137 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+{% if error %}<div class="error" style="margin-bottom:18px;">{{ error }}</div>{% endif %}
+{% if applied_suggestion %}
+<div class="success-banner" style="margin-bottom:18px;">
+  <div><strong>Cambio activado</strong></div>
+  <div class="help" style="margin-top:6px;">{{ applied_suggestion.human_summary }}</div>
+  <div class="message-actions" style="margin-top:10px;">
+    <a class="chip accent" href="/ops/ferreteria/training/suggestions/{{ applied_suggestion.id }}">Ver detalle</a>
+    {% if applied_suggestion.case_url %}<a class="chip" href="{{ applied_suggestion.case_url }}">Caso de origen</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if queue == 'approved' %}
+<div class="page-hero">
+  <div class="caption">Paso C</div>
+  <h1>Cambios listos</h1>
+  <div class="lead">Esta pantalla muestra solo los cambios que ya están listos para activarse. Mirá el resumen, el antes/después y activá cuando estés de acuerdo.</div>
+  <div class="hero-actions">
+    <a class="chip accent" href="/ops/ferreteria/training">Volver a hablar con el bot</a>
+    <a class="chip" href="/ops/ferreteria/training/tools">Más herramientas</a>
+  </div>
+</div>
+
+<div class="summary-grid">
+  <div class="metric"><span>Cambios en preparación</span><strong>{{ workflow_counts.draft_suggestions }}</strong></div>
+  <div class="metric"><span>Listos para activar</span><strong>{{ workflow_counts.approved_waiting_apply }}</strong></div>
+  <div class="metric"><span>Activos</span><strong>{{ workflow_counts.recently_applied }}</strong></div>
+</div>
+
+<div class="stack">
+  {% for suggestion in suggestions %}
+  <div class="card card-pad">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <div class="caption">Cambio listo</div>
+        <h2 class="section-title" style="margin-bottom:4px;">{{ suggestion.domain_label }}</h2>
+      </div>
+      <span class="chip good">{{ suggestion.status_label }}</span>
+    </div>
+    <div class="callout stack-sm" style="margin-top:12px;">
+      <div><strong>{{ suggestion.human_summary }}</strong></div>
+      <div class="help">{{ suggestion.impact_summary }}</div>
+    </div>
+    <div class="preview-grid" style="margin-top:14px;">
+      <div class="preview-box before">
+        <div class="caption">{{ suggestion.before_after_preview.before_label }}</div>
+        <div style="margin-top:6px;">{{ suggestion.before_after_preview.before_text }}</div>
+      </div>
+      <div class="preview-box after">
+        <div class="caption">{{ suggestion.before_after_preview.after_label }}</div>
+        <div style="margin-top:6px;">{{ suggestion.before_after_preview.after_text }}</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px; align-items:flex-start;">
+      <div class="panel-soft" style="flex:1;">
+        <strong>Caso de origen</strong>
+        <div class="help" style="margin-top:6px;">{{ suggestion.review.user_input if suggestion.review else '-' }}</div>
+      </div>
+      <div class="panel-soft" style="flex:1;">
+        <strong>En qué fijarse</strong>
+        <div class="help" style="margin-top:6px;">{{ suggestion.semantic_review.review_focus }}</div>
+      </div>
+    </div>
+    <div class="message-actions">
+      <form method="post" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="hidden" name="action" value="apply_suggestion">
+        <input type="hidden" name="suggestion_id" value="{{ suggestion.id }}">
+        <input type="hidden" name="reason" value="Activado desde Cambios listos">
+        <button type="submit" class="warning">Activar cambio</button>
+      </form>
+      <a class="chip" href="/ops/ferreteria/training/suggestions/{{ suggestion.id }}">Ver detalle</a>
+      {% if suggestion.case_url %}<a class="chip" href="{{ suggestion.case_url }}">Abrir caso</a>{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="empty">No hay cambios listos para activar en este momento.</div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="page-hero">
+  <div class="caption">Historial y colas avanzadas</div>
+  <h1>Seguimiento de cambios</h1>
+  <div class="lead">Esta vista queda para revisar borradores, rechazadas, activas e historial completo. El paso simple para el día a día está en <strong>Cambios listos</strong>.</div>
+  <div class="hero-actions">
+    <a class="chip accent" href="/ops/ferreteria/training/suggestions?queue=approved">Volver a cambios listos</a>
+    <a class="chip" href="/ops/ferreteria/training/tools">Más herramientas</a>
+  </div>
+</div>
+<div class="card card-pad">
+  <h2 class="section-title">Cola avanzada</h2>
+  <form method="get" class="row" style="margin-bottom:16px;">
+    <input type="hidden" name="queue" value="{{ queue or '' }}">
+    <select name="status">
+      <option value="">Todos los estados</option>
+      <option value="draft">Cambio en preparación</option>
+      <option value="approved">Lista para activar</option>
+      <option value="rejected">Rechazada</option>
+      <option value="applied">Activa</option>
+    </select>
+    <select name="domain">
+      <option value="">Todos los tipos</option>
+      <option value="synonym">Corrección de término</option>
+      <option value="faq">Respuesta frecuente o política</option>
+      <option value="clarification_rule">Mejorar pregunta de aclaración</option>
+      <option value="family_rule">Corregir detección de producto o familia</option>
+      <option value="blocked_term">No responder este término todavía</option>
+      <option value="test_case_only">Solo caso futuro</option>
+    </select>
+    <input type="text" name="operator" placeholder="Operador" value="{{ request.args.get('operator', '') }}">
+    <button type="submit" class="secondary">Filtrar</button>
+  </form>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Cambio</th><th>Tipo</th><th>Estado</th><th>Qué resuelve</th><th>Caso</th><th>Próximo paso</th></tr>
+      </thead>
+      <tbody>
+        {% for suggestion in suggestions %}
+        <tr>
+          <td><a href="/ops/ferreteria/training/suggestions/{{ suggestion.id }}">{{ suggestion.id[:8] }}</a></td>
+          <td>{{ suggestion.domain_label }}</td>
+          <td>{{ suggestion.status_label }}</td>
+          <td>{{ suggestion.human_summary }}</td>
+          <td>{% if suggestion.case_url %}<a href="{{ suggestion.case_url }}">Abrir caso</a>{% else %}-{% endif %}</td>
+          <td>{{ suggestion.next_action_label }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">No hay cambios para esta vista.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

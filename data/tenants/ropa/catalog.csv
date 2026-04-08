@@ -1,0 +1,4 @@
+sku,category,name,price,currency,stock,brand,color,material,size
+CLO-001,Remeras,Remera Basica,18000,ARS,40,UrbanFit,Black,Algodon,M
+CLO-002,Pantalones,Jean Slim,42000,ARS,25,UrbanFit,Blue,Denim,32
+CLO-003,Calzado,Zapatilla Runner,56000,ARS,18,RunCo,White,Mesh,42

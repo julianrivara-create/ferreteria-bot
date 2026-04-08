@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Training Cases</title>
+    <style>
+      :root {
+        --bg: #f5f1e8;
+        --paper: #fffdf9;
+        --panel: #f8f4ec;
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --line: #d6cfc1;
+        --accent: #9a3412;
+        --accent-soft: #f97316;
+        --good: #166534;
+        --warn: #a16207;
+        --bad: #b91c1c;
+        --shadow: 0 10px 30px rgba(31, 41, 55, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: radial-gradient(circle at top left, #fff7ed, var(--bg) 45%); color: var(--ink); font-family: Georgia, "Times New Roman", serif; }
+      .shell { max-width: 1500px; margin: 0 auto; padding: 24px; }
+      .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 16px; }
+      .title { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+      .subtitle { color: var(--muted); font-size: 14px; }
+      .nav { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; }
+      .nav a { text-decoration: none; color: var(--ink); padding: 10px 14px; background: rgba(255,255,255,0.55); border: 1px solid var(--line); border-radius: 999px; }
+      .nav a.is-active { border-color: rgba(249,115,22,0.4); color: var(--accent); background: rgba(249,115,22,0.08); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.08); }
+      .nav a:hover { border-color: var(--accent-soft); color: var(--accent); }
+      .card { background: var(--paper); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
+      .card-pad { padding: 18px; }
+      .page-hero { display: grid; gap: 12px; padding: 22px; border-radius: 24px; background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255,247,237,0.96)); border: 1px solid rgba(154, 52, 18, 0.12); box-shadow: var(--shadow); margin-bottom: 18px; }
+      .page-hero h1, .page-hero h2 { margin: 0; font-size: 28px; }
+      .page-hero .lead { color: var(--muted); line-height: 1.55; max-width: 900px; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+      .hero-note { padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.72); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+      .grid-3 { display: grid; grid-template-columns: 280px minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .stack { display: grid; gap: 18px; }
+      .stack-sm { display: grid; gap: 10px; }
+      .summary-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 16px; }
+      .section-title { font-size: 18px; font-weight: 700; margin: 0 0 8px; }
+      .muted { color: var(--muted); }
+      .help { color: var(--muted); font-size: 13px; line-height: 1.45; }
+      .chip { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--line); background: #fff; }
+      .chip.good { color: var(--good); border-color: rgba(22, 101, 52, 0.25); background: rgba(22, 101, 52, 0.08); }
+      .chip.warn { color: var(--warn); border-color: rgba(161, 98, 7, 0.25); background: rgba(161, 98, 7, 0.08); }
+      .chip.bad { color: var(--bad); border-color: rgba(185, 28, 28, 0.25); background: rgba(185, 28, 28, 0.08); }
+      .chip.accent { color: var(--accent); border-color: rgba(154, 52, 18, 0.25); background: rgba(154, 52, 18, 0.08); }
+      .metric { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+      .metric strong { display: block; font-size: 22px; }
+      .metric span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+      .session-link { display: block; padding: 12px; border: 1px solid var(--line); border-radius: 16px; text-decoration: none; color: inherit; margin-bottom: 10px; background: #fff; }
+      .session-link:hover, .session-link.active { border-color: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.15); }
+      .workflow-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+      .workflow-card h3 { margin: 0; font-size: 17px; }
+      .workflow-list { display: grid; gap: 10px; }
+      .workflow-list .session-link { margin-bottom: 0; }
+      .step-card { display: grid; gap: 8px; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255,255,255,0.72); }
+      .step-number { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 999px; background: rgba(154, 52, 18, 0.1); color: var(--accent); font-weight: 700; }
+      .preview-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+      .preview-box { padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
+      .preview-box.before { background: #faf7f1; }
+      .preview-box.after { background: rgba(22, 101, 52, 0.06); border-color: rgba(22, 101, 52, 0.18); }
+      .chat { display: grid; gap: 14px; }
+      .bubble { border-radius: 18px; padding: 14px 16px; border: 1px solid var(--line); background: #fff; }
+      .bubble.user { background: #fffaf4; margin-left: 50px; }
+      .bubble.assistant { background: #fcfcfb; margin-right: 50px; }
+      .bubble .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      form { display: grid; gap: 10px; }
+      input, select, textarea, button { width: 100%; border-radius: 12px; border: 1px solid var(--line); padding: 10px 12px; font: inherit; background: #fff; color: var(--ink); }
+      textarea { min-height: 100px; resize: vertical; }
+      label.inline-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+      label.inline-toggle input { width: auto; }
+      button { width: auto; background: var(--ink); color: #fff; border: none; cursor: pointer; }
+      button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+      .danger { background: var(--bad); }
+      .warning { background: var(--warn); }
+      .accent-btn { background: var(--accent); }
+      .panel-soft { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+      .form-grid { display: grid; gap: 12px; }
+      .form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+      .domain-panel { display: none; }
+      .domain-panel.is-active { display: grid; gap: 12px; }
+      .callout { padding: 14px; border-radius: 16px; border: 1px solid rgba(154, 52, 18, 0.18); background: rgba(154, 52, 18, 0.06); }
+      .callout.good { border-color: rgba(22, 101, 52, 0.18); background: rgba(22, 101, 52, 0.06); }
+      .callout.warn { border-color: rgba(161, 98, 7, 0.2); background: rgba(161, 98, 7, 0.06); }
+      .review-target { border-color: rgba(249,115,22,0.45); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.12); }
+      .review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .review-actions a { text-decoration: none; }
+      .caption { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+      details.technical { border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 12px 14px; }
+      details.technical summary { cursor: pointer; font-weight: 700; color: var(--ink); }
+      .field-block { display: grid; gap: 8px; }
+      .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+      a { color: var(--accent); }
+      .empty { padding: 28px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 18px; background: rgba(255,255,255,0.6); }
+      .error { color: var(--bad); background: rgba(185,28,28,0.08); border: 1px solid rgba(185,28,28,0.16); border-radius: 14px; padding: 12px 14px; }
+      .progress { height: 10px; background: #ebe3d5; border-radius: 999px; overflow: hidden; }
+      .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); }
+      @media (max-width: 1180px) { .grid-3 { grid-template-columns: 1fr; } .bubble.user, .bubble.assistant { margin: 0; } }
+      @media (max-width: 860px) { .grid-2, .form-grid.cols-2, .preview-grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="topbar">
+        <div>
+          <div class="title">Training Cases</div>
+          <div class="subtitle">Conversational training console for reviewed bot improvement.</div>
+        </div>
+        <div class="row">
+          <span class="chip accent">Internal operator surface</span>
+          <span class="chip">Safe review-before-apply workflow</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/ops/ferreteria/training" class="">Workflow</a>
+        <a href="/ops/ferreteria/training/sandbox" class="">Sandbox</a>
+        <a href="/ops/ferreteria/training/sessions" class="">Session History</a>
+        <a href="/ops/ferreteria/training/cases" class="is-active">Cases</a>
+        <a href="/ops/ferreteria/training/suggestions" class="">Suggestions</a>
+        <a href="/ops/ferreteria/training/usage" class="">Usage</a>
+      </nav>
+      
+<div class="page-hero">
+  <div class="caption">Case queue</div>
+  <h1>Training Cases</h1>
+  <div class="lead">Use this queue when you want to move through saved reviews as work items: find what still needs a first draft, what already has a suggestion, and which cases still need regression attention.</div>
+  <div class="hero-actions">
+    <a class="chip accent" href="/ops/ferreteria/training/cases?queue=needs_suggestion">Open cases needing a first suggestion</a>
+    <a class="chip" href="/ops/ferreteria/training/cases?queue=regression_candidates">Open regression attention queue</a>
+  </div>
+</div>
+<div class="card card-pad">
+  <h2 class="section-title">Training Cases</h2>
+  <div class="summary-grid">
+    <a class="session-link" href="/ops/ferreteria/training/sessions?queue=needs_review">
+      <div class="caption">Sessions needing review</div>
+      <strong style="font-size:24px;">0</strong>
+    </a>
+    <a class="session-link" href="/ops/ferreteria/training/cases?queue=needs_suggestion">
+      <div class="caption">Cases needing suggestion</div>
+      <strong style="font-size:24px;">1</strong>
+    </a>
+    <a class="session-link" href="/ops/ferreteria/training/suggestions?queue=draft">
+      <div class="caption">Draft suggestions</div>
+      <strong style="font-size:24px;">1</strong>
+    </a>
+    <a class="session-link" href="/ops/ferreteria/training/cases?queue=regression_candidates">
+      <div class="caption">Regression candidates needing attention</div>
+      <strong style="font-size:24px;">1</strong>
+    </a>
+  </div>
+  <form method="get" class="row" style="margin-bottom:16px;">
+    <select name="review_label">
+      <option value="">All reviews</option>
+      <option value="correct">Correct</option>
+      <option value="partially_correct">Partial</option>
+      <option value="incorrect">Incorrect</option>
+      <option value="unsafe">Unsafe</option>
+    </select>
+    <select name="failure_tag">
+      <option value="">All failure tags</option>
+      <option value="did_not_understand_term">Didn't understand term</option>
+      <option value="wrong_family">Wrong family</option>
+      <option value="wrong_variant">Wrong variant</option>
+      <option value="should_have_asked_clarification">Needed clarification</option>
+      <option value="answered_too_unsafely">Too unsafe</option>
+      <option value="should_have_escalated">Should have escalated</option>
+      <option value="missed_faq_or_policy">Missed FAQ or policy</option>
+      <option value="other">Other</option>
+    </select>
+    <input type="text" name="family" placeholder="Family" value="">
+    <input type="text" name="operator" placeholder="Operator" value="">
+    <input type="text" name="repeated_term" placeholder="Repeated term" value="">
+    <select name="domain">
+      <option value="">All domains</option>
+      <option value="synonym">synonym</option>
+      <option value="faq">faq</option>
+      <option value="clarification_rule">clarification_rule</option>
+      <option value="family_rule">family_rule</option>
+      <option value="blocked_term">blocked_term</option>
+      <option value="complementary_rule">complementary_rule</option>
+      <option value="substitute_rule">substitute_rule</option>
+      <option value="language_pattern">language_pattern</option>
+      <option value="unresolved_term_mapping">unresolved_term_mapping</option>
+      <option value="test_case_only">test_case_only</option>
+    </select>
+    <button type="submit" class="secondary">Filter</button>
+  </form>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Case</th><th>Customer message</th><th>Review</th><th>Workflow</th><th>Family</th><th>Fix type</th><th>Suggestion</th><th>Regression next action</th><th>Next action</th><th>Updated</th></tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td><a href="/ops/ferreteria/training/cases/075ee2766ab44bbf983199890d07a0d3">075ee276</a></td>
+        <td>Necesito canio pvc de 20 para el baño</td>
+        <td>
+          incorrect
+          
+          <div class="muted">Didn&#39;t understand the term</div>
+          
+        </td>
+        <td><span class="chip accent">Draft suggestion</span></td>
+        <td>cano</td>
+        <td>Term understanding fix</td>
+        <td>draft</td>
+        <td>
+          <div><span class="chip accent">No regression asset yet</span></div>
+          <div class="muted" style="margin-top:6px;">Create a regression candidate if this case should be protected beyond the live knowledge change.</div>
+        </td>
+        <td>
+          <div><strong>Review draft suggestion</strong></div>
+          <div class="muted" style="margin-top:6px;">
+            <a href="/ops/ferreteria/training/cases/075ee2766ab44bbf983199890d07a0d3">Open case</a>
+             · <a href="/ops/ferreteria/training/sandbox?session_id=training:39108979ae684fdcab55eb62592f5c15&amp;review_message_id=ae100dc40f7e4004adabcbf10f3f0941">Source transcript</a>
+          </div>
+        </td>
+        <td>2026-03-18T15:50:25</td>
+      </tr>
+      
+      <tr>
+        <td><a href="/ops/ferreteria/training/cases/1b18263c27f942058d577b25ffcf66f4">1b18263c</a></td>
+        <td>Necesito mecha para pared</td>
+        <td>
+          incorrect
+          
+          <div class="muted">Should have asked a clarification</div>
+          
+        </td>
+        <td><span class="chip warn">Approved, waiting apply</span></td>
+        <td>mecha</td>
+        <td>Clarification question fix</td>
+        <td>approved</td>
+        <td>
+          <div><span class="chip accent">No regression asset yet</span></div>
+          <div class="muted" style="margin-top:6px;">Create a regression candidate if this case should be protected beyond the live knowledge change.</div>
+        </td>
+        <td>
+          <div><strong>Apply approved suggestion</strong></div>
+          <div class="muted" style="margin-top:6px;">
+            <a href="/ops/ferreteria/training/cases/1b18263c27f942058d577b25ffcf66f4">Open case</a>
+             · <a href="/ops/ferreteria/training/sandbox?session_id=training:39108979ae684fdcab55eb62592f5c15&amp;review_message_id=673d13c55aa2478187316a63155a21f7">Source transcript</a>
+          </div>
+        </td>
+        <td>2026-03-18T15:50:25</td>
+      </tr>
+      
+      <tr>
+        <td><a href="/ops/ferreteria/training/cases/6c806f274da745fda005ee7f1ea00da1">6c806f27</a></td>
+        <td>¿Hacen factura A?</td>
+        <td>
+          incorrect
+          
+          <div class="muted">Missed FAQ or policy answer</div>
+          
+        </td>
+        <td><span class="chip good">Already applied</span></td>
+        <td>-</td>
+        <td>FAQ or policy answer</td>
+        <td>applied</td>
+        <td>
+          <div><span class="chip good">Regression exported</span></div>
+          <div class="muted" style="margin-top:6px;">Only add or finish a suggestion if this case should also change live bot behavior.</div>
+        </td>
+        <td>
+          <div><strong>Review case</strong></div>
+          <div class="muted" style="margin-top:6px;">
+            <a href="/ops/ferreteria/training/cases/6c806f274da745fda005ee7f1ea00da1">Open case</a>
+             · <a href="/ops/ferreteria/training/sandbox?session_id=training:c0c33aa4b1cd40d8afab6baab32d8714&amp;review_message_id=448edb06ca32483d8b4c1b02fd6827e1">Source transcript</a>
+          </div>
+        </td>
+        <td>2026-03-18T15:50:25</td>
+      </tr>
+      
+      <tr>
+        <td><a href="/ops/ferreteria/training/cases/ddaab547b7e14692b034efdec551a987">ddaab547</a></td>
+        <td>Necesito termofusión para agua caliente</td>
+        <td>
+          incorrect
+          
+          <div class="muted">Other</div>
+          
+        </td>
+        <td><span class="chip accent">Needs suggestion · has regression candidate</span></td>
+        <td>termofusion</td>
+        <td>-</td>
+        <td>-</td>
+        <td>
+          <div><span class="chip warn">Candidate ready to export</span></div>
+          <div class="muted" style="margin-top:6px;">Export the candidate when this case should stay protected in regression fixtures.</div>
+        </td>
+        <td>
+          <div><strong>Draft first suggestion</strong></div>
+          <div class="muted" style="margin-top:6px;">
+            <a href="/ops/ferreteria/training/cases/ddaab547b7e14692b034efdec551a987">Open case</a>
+             · <a href="/ops/ferreteria/training/sandbox?session_id=training:c0c33aa4b1cd40d8afab6baab32d8714&amp;review_message_id=7b8ef05b48ea44f9b1935c02f26d040e">Source transcript</a>
+          </div>
+        </td>
+        <td>2026-03-18T15:50:25</td>
+      </tr>
+      
+    </tbody>
+  </table>
+  </div>
+</div>
+
+    </div>
+  </body>
+</html>

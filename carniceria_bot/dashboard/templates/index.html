@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block page_title %}Dashboard - Overview{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">📊 Overview</h2>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-value" id="totalSales">-</div>
+            <div class="stat-label">Ventas Totales</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-value text-success" id="salesToday">-</div>
+            <div class="stat-label">Ventas Hoy</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-value text-primary" id="totalRevenue">-</div>
+            <div class="stat-label">Revenue Total</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-value text-warning" id="conversionRate">-</div>
+            <div class="stat-label">Conversión</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="chart-container">
+            <h5 class="mb-3">Ventas por Día (Últimos 30 días)</h5>
+            <canvas id="salesChart"></canvas>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="chart-container">
+            <h5 class="mb-3">Top Productos</h5>
+            <canvas id="topProductsChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sales -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="chart-container">
+            <h5 class="mb-3">Últimas Ventas</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Producto</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentSales">
+                        <tr>
+                            <td colspan="5" class="text-center">Cargando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const TENANT_SLUG = "{{ tenant_slug }}";
+    const DASH_API = `/dashboard/api/t/${TENANT_SLUG}`;
+
+    // Load stats
+    async function loadStats() {
+        const response = await fetch(`${DASH_API}/stats`);
+        const data = await response.json();
+
+        document.getElementById('totalSales').textContent = data.total_sales;
+        document.getElementById('salesToday').textContent = data.sales_today;
+        document.getElementById('totalRevenue').textContent = `$${data.total_revenue.toLocaleString()}`;
+        document.getElementById('conversionRate').textContent = `${data.conversion_rate}%`;
+    }
+
+    // Load sales chart
+    async function loadSalesChart() {
+        const response = await fetch(`${DASH_API}/analytics/sales-by-day`);
+        const data = await response.json();
+
+        const labels = data.map(d => d.date);
+        const values = data.map(d => d.count);
+
+        const ctx = document.getElementById('salesChart');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Ventas',
+                    data: values,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Load top products chart
+    async function loadTopProductsChart() {
+        const response = await fetch(`${DASH_API}/analytics/top-products?limit=5`);
+        const data = await response.json();
+
+        const labels = data.map(d => d.product_sku);
+        const values = data.map(d => d.sales_count);
+
+        const ctx = document.getElementById('topProductsChart');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: [
+                        '#667eea',
+                        '#764ba2',
+                        '#f093fb',
+                        '#4facfe',
+                        '#43e97b'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    // Load recent sales
+    async function loadRecentSales() {
+        const response = await fetch(`${DASH_API}/analytics/top-products?limit=10`);
+        const sales = await response.json();
+
+        const tbody = document.getElementById('recentSales');
+        tbody.innerHTML = '';
+
+        sales.forEach((sale, idx) => {
+            const row = `
+            <tr>
+                <td>#${idx + 1}</td>
+                <td>${sale.product_sku}</td>
+                <td>$${parseInt(sale.total_revenue || 0).toLocaleString()}</td>
+                <td><span class="badge bg-success">confirmed</span></td>
+                <td>-</td>
+            </tr>
+        `;
+            tbody.innerHTML += row;
+        });
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        loadStats();
+        loadSalesChart();
+        loadTopProductsChart();
+        loadRecentSales();
+    });
+</script>
+{% endblock %}

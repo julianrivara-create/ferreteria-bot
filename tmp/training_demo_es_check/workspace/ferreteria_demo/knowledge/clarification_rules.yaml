@@ -1,0 +1,82 @@
+rules:
+  tornillo:
+    prompt: "decime medida o tipo (ej: autoperforante 8x1, hexagonal, etc.)"
+    examples:
+      - autoperforante 8x1
+      - hexagonal
+    required_dimensions:
+      - size
+      - type
+  mecha:
+    prompt: "decime medida y material (ej: mecha para madera 8mm, para metal, etc.)"
+    examples:
+      - mecha para madera 8mm
+      - para metal
+    required_dimensions:
+      - size
+      - material
+  broca:
+    prompt: "decime medida y material"
+    examples:
+      - broca widia 8mm
+      - para hormigon
+    required_dimensions:
+      - size
+      - material
+  cano:
+    prompt: "decime medida y material (ej: PVC 20mm, hierro, flexible, etc.)"
+    examples:
+      - PVC 20mm
+      - hierro
+    required_dimensions:
+      - material
+      - diameter
+  pintura:
+    prompt: "decime tipo y cantidad (ej: latex interior blanco 4L, esmalte, etc.)"
+    examples:
+      - latex interior blanco 4L
+      - esmalte
+    required_dimensions:
+      - type
+      - presentation
+  latex:
+    prompt: "decime tipo y litros"
+    examples:
+      - interior 20L
+    required_dimensions:
+      - presentation
+  silicona:
+    prompt: "decime uso (interior/exterior, neutra/acetica) y presentacion"
+    examples:
+      - neutra 280ml
+      - sanitaria
+    required_dimensions: []
+  tarugo:
+    prompt: "decime medida (ej: N6, N8, N10)"
+    examples:
+      - N8
+    required_dimensions: []
+  taco:
+    prompt: "decime medida"
+    examples:
+      - N8
+    required_dimensions: []
+  rodillo:
+    prompt: "decime ancho y tipo de pelo"
+    examples:
+      - 22cm antigota
+    required_dimensions: []
+  cable:
+    prompt: "decime seccion, uso y metros aproximados"
+    examples:
+      - 2.5mm obra 20m
+    required_dimensions:
+      - size
+      - use
+  cano:
+    prompt: "decime material y diametro"
+    examples:
+      - PVC 20mm
+    required_dimensions:
+      - material
+      - diameter

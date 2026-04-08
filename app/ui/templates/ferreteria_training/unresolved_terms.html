@@ -1,0 +1,197 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+
+<div class="page-hero">
+  <div>
+    <div class="caption">Atajo operativo</div>
+    <h2>Términos sin resolver</h2>
+    <div class="lead">
+      Palabras o frases que los clientes usaron pero el bot no pudo identificar.
+      Acá conviene detectar qué se repite y crear un borrador rápido para devolverlo al flujo principal: <strong>Hablar con el bot → Cambios listos</strong>.
+    </div>
+  </div>
+  <div class="hero-actions">
+    <span class="chip warn">{{ total }} registros totales</span>
+    <span class="chip">{{ terms|length }} términos únicos</span>
+    <a class="chip" href="/ops/ferreteria/training/tools">Volver a más herramientas</a>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-bottom:18px;">
+  <div class="callout stack-sm">
+    <div><strong>Cómo conviene usar esta pantalla</strong></div>
+    <div class="help">Pensala como una cola auxiliar de detección. Desde acá solo armás un <strong>borrador rápido de corrección de término</strong>. Si el problema es más grande o necesita otra lógica, volvé al flujo principal desde <strong>Hablar con el bot</strong>.</div>
+  </div>
+</div>
+
+{% if terms %}
+<div class="card">
+  <div class="card-pad">
+    <div class="row" style="margin-bottom:14px; gap:16px; align-items:center;">
+      <strong class="section-title" style="margin:0;">Términos más frecuentes</strong>
+      <input type="text" id="term-filter" placeholder="Filtrar…" style="max-width:260px; margin:0;" oninput="filterTerms(this.value)">
+    </div>
+    <div class="table-wrap">
+      <table id="terms-table">
+        <thead>
+          <tr>
+            <th>Término normalizado</th>
+            <th>Tal como lo escribió</th>
+            <th>Frecuencia</th>
+            <th>Última vez visto</th>
+            <th>Razón</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for term in terms %}
+          <tr class="term-row" data-term="{{ term.normalized|lower }}">
+            <td><code>{{ term.normalized }}</code></td>
+            <td style="color:var(--muted); font-size:13px;">{{ term.raw }}</td>
+            <td>
+              {% if term.count >= 10 %}
+                <span class="chip bad">{{ term.count }}x</span>
+              {% elif term.count >= 3 %}
+                <span class="chip warn">{{ term.count }}x</span>
+              {% else %}
+                <span class="chip">{{ term.count }}x</span>
+              {% endif %}
+            </td>
+            <td style="font-size:13px; color:var(--muted);">{{ term.ts[:10] if term.ts else '—' }}</td>
+            <td style="font-size:12px; color:var(--muted);">{{ term.reason or '—' }}</td>
+            <td>
+              <button class="accent-btn" style="font-size:13px; padding:6px 14px;" onclick='openSuggestModal({{ term|tojson }})'>
+                Crear borrador rápido
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="empty">No hay términos sin resolver registrados. El bot está entendiendo todo bien, o todavía no tiene suficiente tráfico.</div>
+{% endif %}
+
+<div id="suggest-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center;">
+  <div class="card" style="max-width:560px; width:100%; margin:24px; max-height:90vh; overflow-y:auto;">
+    <div class="card-pad">
+      <div class="row" style="margin-bottom:16px;">
+        <strong class="section-title" style="margin:0;">Crear borrador rápido para término</strong>
+        <button class="secondary" style="width:auto; padding:6px 14px;" onclick="closeModal()">✕ Cerrar</button>
+      </div>
+
+      <div class="callout warn stack-sm" style="margin-bottom:14px;">
+        <div><strong>Término:</strong> <code id="modal-term-display"></code> · Frecuencia: <span id="modal-count-display"></span></div>
+        <div class="help">Este atajo crea una corrección rápida para que el bot entienda mejor cómo lo pide el cliente. Después volvés al flujo principal para revisar el caso o ajustar el borrador si hace falta.</div>
+      </div>
+
+      <form id="suggest-form" onsubmit="submitSuggestion(event)">
+        <input type="hidden" id="modal-term" name="term">
+        <input type="hidden" name="domain" value="synonym">
+
+        <div class="field-block">
+          <label>Término correcto</label>
+          <input type="text" name="canonical" id="modal-canonical" placeholder="ej: caño pvc">
+          <div class="help">Es el nombre que el bot debería usar como referencia principal.</div>
+        </div>
+
+        <div class="field-block">
+          <label>Familia correcta</label>
+          <input type="text" name="family" id="modal-family" placeholder="ej: caños y conexiones">
+        </div>
+
+        <div class="field-block">
+          <label>Otras formas de pedirlo (separadas por coma)</label>
+          <input type="text" name="aliases" placeholder="ej: canio pvc, caño de pvc">
+        </div>
+
+        <div class="field-block">
+          <label>Resumen corto para el revisor</label>
+          <textarea name="summary" rows="2" placeholder="ej: 'canio pvc' debe entenderse como 'caño pvc' dentro de caños y conexiones"></textarea>
+        </div>
+
+        <div class="row" style="justify-content:flex-end;">
+          <button type="submit" class="accent-btn">Guardar borrador y volver al flujo principal</button>
+        </div>
+
+        <div id="suggest-result" style="display:none; margin-top:10px;"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openSuggestModal(term) {
+  document.getElementById("modal-term").value = term.normalized;
+  document.getElementById("modal-term-display").textContent = term.normalized;
+  document.getElementById("modal-count-display").textContent = term.count + "x";
+  document.getElementById("modal-canonical").value = term.normalized;
+  document.getElementById("modal-family").value = "";
+  document.getElementById("suggest-result").style.display = "none";
+  document.getElementById("suggest-modal").style.display = "flex";
+}
+
+function closeModal() {
+  document.getElementById("suggest-modal").style.display = "none";
+}
+
+function filterTerms(query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll(".term-row").forEach(row => {
+    row.style.display = row.dataset.term.includes(q) ? "" : "none";
+  });
+}
+
+async function submitSuggestion(e) {
+  e.preventDefault();
+  const form = e.target;
+  const resultEl = document.getElementById("suggest-result");
+  const data = {
+    term: form.term.value,
+    domain: form.domain.value,
+    canonical: form.canonical.value,
+    family: form.family.value,
+    aliases: form.aliases.value,
+    summary: form.summary.value,
+  };
+
+  resultEl.style.display = "none";
+
+  try {
+    const resp = await fetch("/api/admin/ferreteria/training/unresolved-terms/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const json = await resp.json();
+    if (resp.ok) {
+      const caseLink = json.case_url ? `<a class="chip" href="${json.case_url}">Abrir caso</a>` : "";
+      const suggestionLink = json.suggestion_url ? `<a class="chip accent" href="${json.suggestion_url}">Abrir corrección</a>` : "";
+      resultEl.className = "callout good";
+      resultEl.innerHTML = `
+        <div><strong>✓ Borrador creado</strong></div>
+        <div class="help">El término ya volvió al flujo principal de entrenamiento.</div>
+        <div class="row" style="margin-top:10px;">${caseLink}${suggestionLink}</div>
+      `;
+      resultEl.style.display = "block";
+      form.reset();
+    } else {
+      resultEl.className = "error";
+      resultEl.textContent = "Error: " + (json.error || "Algo falló.");
+      resultEl.style.display = "block";
+    }
+  } catch (err) {
+    resultEl.className = "error";
+    resultEl.textContent = "Error de red: " + err.message;
+    resultEl.style.display = "block";
+  }
+}
+
+document.getElementById("suggest-modal").addEventListener("click", function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+{% endblock %}

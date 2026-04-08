@@ -1,0 +1,47 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+<div class="page-hero">
+  <div class="caption">Apoyo</div>
+  <h1>Más herramientas</h1>
+  <div class="lead">Acá quedan las vistas de apoyo y las colas avanzadas. La idea es que el trabajo diario pase por <strong>Hablar con el bot</strong> y por <strong>Cambios listos</strong>, y que estas herramientas ayuden solo cuando hace falta mirar algo más fino.</div>
+  <div class="hero-actions">
+    <a class="chip accent" href="/ops/ferreteria/training">Volver al flujo simple</a>
+    <a class="chip" href="/ops/ferreteria/training/suggestions?queue=approved">Abrir cambios listos</a>
+  </div>
+</div>
+
+<div class="tool-grid">
+  <a class="tool-card" href="/ops/ferreteria/training/help">
+    <strong>Ayuda operativa</strong>
+    <div class="help">Guía rápida, FAQ y pasos para abrir el mini demo local.</div>
+  </a>
+  <a class="tool-card" href="/ops/ferreteria/training/unresolved-terms">
+    <strong>Términos sin resolver</strong>
+    <div class="help">Atajo operativo para detectar frases repetidas y devolverlas al flujo principal.</div>
+  </a>
+  <a class="tool-card" href="/ops/ferreteria/training/impact">
+    <strong>Impacto</strong>
+    <div class="help">Lectura secundaria para ver señales de mejora después de activar cambios.</div>
+  </a>
+  <a class="tool-card" href="/ops/ferreteria/training/usage">
+    <strong>Uso</strong>
+    <div class="help">Consumo de tokens y costo del sandbox.</div>
+  </a>
+  <a class="tool-card" href="/ops/ferreteria/training/sessions">
+    <strong>Sesiones</strong>
+    <div class="help">{{ workflow_counts.sessions_needing_review }} sesiones con respuestas pendientes y {{ workflow_counts.open_sessions }} abiertas.</div>
+  </a>
+  <a class="tool-card" href="/ops/ferreteria/training/cases">
+    <strong>Casos y ajustes avanzados</strong>
+    <div class="help">{{ workflow_counts.needs_suggestion }} casos sin propuesta y {{ workflow_counts.regression_attention }} casos futuros por atender.</div>
+  </a>
+  <a class="tool-card" href="/ops/ferreteria/training/suggestions?queue=draft">
+    <strong>Cambios en preparación</strong>
+    <div class="help">{{ workflow_counts.draft_suggestions }} borradores esperando revisión más fina.</div>
+  </a>
+  <a class="tool-card" href="/ops/ferreteria/training/suggestions?queue=applied">
+    <strong>Cambios ya activos</strong>
+    <div class="help">{{ workflow_counts.recently_applied }} cambios aplicados para revisar historial e impacto.</div>
+  </a>
+</div>
+{% endblock %}

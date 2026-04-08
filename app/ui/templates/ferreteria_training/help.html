@@ -1,0 +1,86 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+<div class="page-hero">
+  <div class="caption">Ayuda operativa</div>
+  <h1>Cómo usar la herramienta</h1>
+  <div class="lead">Esta página junta lo importante para el equipo: cómo usar el flujo simple A → B → C, qué significan los estados y cómo abrir el mini demo local cuando querés revisar la interfaz completa sin depender de una operación en vivo.</div>
+  <div class="hero-actions">
+    <a class="chip accent" href="/ops/ferreteria/training">Volver al inicio</a>
+    <a class="chip" href="/ops/ferreteria/training/suggestions?queue=approved">Ir a cambios listos</a>
+    <span class="hero-note">Si querés empezar rápido: hablá con el bot, enseñale qué tendría que hacer y activá cuando el cambio ya esté listo.</span>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card card-pad">
+    <h2 class="section-title">Recorrido recomendado</h2>
+    <div class="stack-sm">
+      <div class="step-card">
+        <div class="row"><span class="step-number">1</span><strong>Hablar con el bot</strong></div>
+        <div class="help">Entrá al inicio, escribí como un cliente real y elegí la primera respuesta del bot que se desvió.</div>
+      </div>
+      <div class="step-card">
+        <div class="row"><span class="step-number">2</span><strong>Enseñarle qué tendría que haber hecho</strong></div>
+        <div class="help">Usá el panel <strong>Esto estuvo mal</strong> y explicalo en lenguaje simple. Eso guarda la revisión y crea un cambio en preparación.</div>
+      </div>
+      <div class="step-card">
+        <div class="row"><span class="step-number">3</span><strong>Activar cuando esté listo</strong></div>
+        <div class="help">En <strong>Cambios listos</strong> revisás el antes/después y activás cuando el cambio ya está listo.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <h2 class="section-title">Qué es secundario</h2>
+    <div class="stack-sm">
+      <div class="panel-soft">
+        <strong>Términos sin resolver</strong>
+        <div class="help">Sirve como atajo para detectar frases repetidas. La idea es volver rápido al flujo principal sin abrir un proceso paralelo.</div>
+      </div>
+      <div class="panel-soft">
+        <strong>Impacto</strong>
+        <div class="help">Te muestra tendencia y señales útiles después de activar cambios. No reemplaza la revisión del caso original.</div>
+      </div>
+      <div class="panel-soft">
+        <strong>Uso</strong>
+        <div class="help">Solo hace falta cuando querés mirar consumo de tokens o costo del sandbox.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <h2 class="section-title">Mini demo local</h2>
+    <div class="help" style="margin-bottom:12px;">Este demo usa la interfaz real con datos demo aislados. Es útil para revisar visualmente el producto, mostrarle el flujo a otra persona o chequear que la narrativa general sigue ordenada.</div>
+    <div class="panel-soft stack-sm">
+      <strong>1. Generar el demo</strong>
+      <pre style="white-space:pre-wrap; margin:0;">{{ demo_bootstrap_command }}</pre>
+    </div>
+    <div class="panel-soft stack-sm">
+      <strong>2. Abrir los snapshots</strong>
+      <pre style="white-space:pre-wrap; margin:0;">{{ demo_open_command }}</pre>
+    </div>
+    <div class="help" style="margin-top:12px;">Snapshot esperado: <code>{{ demo_index_hint }}</code></div>
+  </div>
+
+  <div class="card card-pad">
+    <h2 class="section-title">Estados en lenguaje simple</h2>
+    <div class="list-clean">
+      <div><strong>Cambio en preparación</strong>: el sistema ya armó un borrador, pero todavía no está listo para activarse.</div>
+      <div><strong>Lista para activar</strong>: la corrección ya fue aceptada y solo falta activarla.</div>
+      <div><strong>Activa</strong>: el cambio ya está aplicado en el conocimiento en uso.</div>
+      <div><strong>Caso futuro</strong>: el ejemplo queda guardado como cobertura sin tocar el conocimiento activo.</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-top:18px;">
+  <details class="technical">
+    <summary>Guía operativa completa</summary>
+    <pre style="white-space:pre-wrap; background:var(--surface-alt); padding:14px; border-radius:var(--r-lg); border:1px solid var(--border); margin-top:10px; font-size:12px; overflow-x:auto;">{{ guide_text }}</pre>
+  </details>
+  <details class="technical">
+    <summary>FAQ completa</summary>
+    <pre style="white-space:pre-wrap; background:var(--surface-alt); padding:14px; border-radius:var(--r-lg); border:1px solid var(--border); margin-top:10px; font-size:12px; overflow-x:auto;">{{ faq_text }}</pre>
+  </details>
+</div>
+{% endblock %}

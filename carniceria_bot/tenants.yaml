@@ -1,0 +1,17 @@
+tenants:
+- id: carniceria
+  slug: carniceria
+  name: Carnicería El Buen Corte
+  profile_path: data/tenants/carniceria/profile.yaml
+  phone_numbers:
+  - whatsapp:+5491111111111
+  db_file: data/carniceria.db
+  catalog_file: data/tenants/carniceria/catalog.csv
+  policies_file: data/tenants/carniceria/policies.md
+  branding_file: data/tenants/carniceria/branding.json
+  api_keys:
+    openai: ${OPENAI_API_KEY}
+    gemini: ${GEMINI_API_KEY}
+  features:
+    fraud_detection: true
+    sentiment_analysis: true

@@ -1,0 +1,272 @@
+{
+    "faq": [
+        {
+            "keywords": [
+                "hola",
+                "buen dia",
+                "buenas",
+                "que tal",
+                "inicio",
+                "comenzar"
+            ],
+            "answer": "¡Hola! 👋 Bienvenido a **AtelierTechnology**. \nActualmente estoy operando en **Modo de Respaldo** (conexión limitada).\n\nPuedo responder preguntas sobre:\n• 📦 **Envíos y Retiros**\n• 💳 **Pagos y Dólar**\n• 🛡️ **Garantía**\n• 📱 **Stock iPhone/Mac/iPad**\n\n¿En qué te ayudo hoy?"
+        },
+        {
+            "keywords": [
+                "envio",
+                "envíos",
+                "entrega",
+                "llevan",
+                "moto",
+                "costo de envio",
+                "precio de envio",
+                "precio del envío",
+                "interior"
+            ],
+            "answer": "📦 **Envíos:**\n• **CABA:** Moto mensajería en el día.\n• **GBA:** Consultar costo por zona (Moto/Auto).\n• **Interior del País:** Enviamos por Andreani o Correo Argentino (asegurado).\n• **Retiro:** Podés retirar por nuestro Showroom en Palermo.\n\n_Los envíos se coordinan una vez acreditado el pago._"
+        },
+        {
+            "keywords": [
+                "pago",
+                "pagar",
+                "cuotas",
+                "tarjeta",
+                "efectivo",
+                "dolares",
+                "usdt",
+                "transferencia",
+                "deposito"
+            ],
+            "answer": "💳 **Formas de Pago:**\n\n🔹 **Efectivo (USD/ARS):** Mejor precio (el publicado).\n🔹 **Transferencia (Pesos/USD):** Aceptamos CBU/CVU.\n🔹 **Crypto (USDT):** Recibimos al valor 1:1 con USD.\n🔹 **Tarjetas de Crédito:** Tienen recargo según la cantidad de cuotas (consultar con asesor).\n🔹 **MercadoPago:** Aceptamos dinero en cuenta."
+        },
+        {
+            "keywords": [
+                "garantia",
+                "garantía",
+                "falla",
+                "roto",
+                "service",
+                "tecnico"
+            ],
+            "answer": "🛡️ **Garantía Oficial:**\n\n✅ **Productos Apple:** 1 año de garantía oficial internacional (Apple). Podés validarlo con el número de serie.\n✅ **Garantía del Local:** 3 meses de garantía directa con nosotros ante fallas de fábrica.\n\n_La garantía no cubre daños físicos, golpes o contacto con líquidos._"
+        },
+        {
+            "keywords": [
+                "horario",
+                "abierto",
+                "atienden",
+                "local",
+                "hora",
+                "dias"
+            ],
+            "answer": "🕒 **Nuestros Horarios:**\n\n• **Lunes a Viernes:** 10:00 a 19:00 hs.\n• **Sábados:** 10:00 a 14:00 hs.\n• **Domingos y Feriados:** Cerrado.\n\n_Te esperamos en nuestro showroom de Palermo._"
+        },
+        {
+            "keywords": [
+                "ubicacion",
+                "direccion",
+                "donde estan",
+                "local",
+                "showroom",
+                "donde retiro",
+                "donde queda",
+                "zona",
+                "barrio"
+            ],
+            "answer": "📍 **Ubicación:**\n\nEstamos en **Palermo Hollywood** (CABA), cerca de la zona de productoras.\n\n⚠️ Por seguridad y privacidad, enviamos la dirección exacta y piso únicamente al coordinar una visita o retiro."
+        },
+        {
+            "keywords": [
+                "iphone 15",
+                "15 pro",
+                "iphone nuevo",
+                "iphone",
+                "celular",
+                "telefono"
+            ],
+            "answer": "📱 **iPhone 15 Series (Precios Base):**\n\n• **iPhone 15:** Desde 850 USD\n• **iPhone 15 Plus:** Desde 950 USD\n• **iPhone 15 Pro:** Desde 1100 USD\n• **iPhone 15 Pro Max:** Desde 1300 USD\n\n_Consultar por colores y capacidades específicas (128/256/512GB)._"
+        },
+        {
+            "keywords": [
+                "14 pro",
+                "iphone 14",
+                "13 pro",
+                "iphone 13",
+                "modelos anteriores"
+            ],
+            "answer": "📱 **Modelos Anteriores:**\n\nSlemos tener stock de:\n• **iPhone 14 / 14 Pro**\n• **iPhone 13** (Excelente relación precio-calidad, desde 600 USD)\n• **iPhone 11/12** (Consultar stock remanente)\n\n_Escribí 'asesor' para consultar stock puntual de estos modelos._"
+        },
+        {
+            "keywords": [
+                "macbook",
+                "mac",
+                "air",
+                "pro",
+                "computadora",
+                "notebook"
+            ],
+            "answer": "💻 **MacBooks - Stock:**\n\n• **MacBook Air M1:** La más vendida. Desde 900 USD.\n• **MacBook Air M2:** Nuevo diseño. Desde 1150 USD.\n• **MacBook Pro M2/M3:** Potencia Pro. Desde 1600 USD.\n\n_Disponibles en Gris Espacial y Silver._"
+        },
+        {
+            "keywords": [
+                "ipad",
+                "air",
+                "tablet",
+                "mini"
+            ],
+            "answer": "🖊️ **iPads:**\n\n• **iPad 9na Gen:** Económico y potente (Desde 350 USD).\n• **iPad 10ma Gen:** Diseño todo pantalla.\n• **iPad Air 5 (M1):** Velocidad de computadora.\n• **iPad Pro:** Para profesionales.\n\n_También vendemos Apple Pencil 1 y 2._"
+        },
+        {
+            "keywords": [
+                "airpods",
+                "auriculares",
+                "max"
+            ],
+            "answer": "🎧 **AirPods:**\n\n• **AirPods 2:** 120 USD\n• **AirPods 3:** 170 USD\n• **AirPods Pro 2 (USB-C):** 240 USD\n• **AirPods Max:** 550 USD\n\n_Todos 100% originales y sellados._"
+        },
+        {
+            "keywords": [
+                "apple watch",
+                "reloj",
+                "watch",
+                "ultra"
+            ],
+            "answer": "⌚ **Apple Watch:**\n\n• **Series 9:** Desde 450 USD.\n• **SE 2da Gen:** Desde 290 USD.\n• **Ultra 2:** El más resistente. Desde 850 USD.\n\n_Consultar medidas (41/45mm o 40/44mm)._"
+        },
+        {
+            "keywords": [
+                "playstation",
+                "ps5",
+                "sony",
+                "juegos"
+            ],
+            "answer": "🎮 **PlayStation 5:**\n\n• **PS5 Digital Slim:** 550 USD\n• **PS5 Standard Slim (Disco):** 650 USD\n• **Joysticks DualSense:** 70 USD\n\n_Precios en efectivo/crypto._"
+        },
+        {
+            "keywords": [
+                "cargador",
+                "funda",
+                "accesorios",
+                "vidrio",
+                "hydrogel",
+                "case"
+            ],
+            "answer": "🔌 **Accesorios:**\n\n• **Cargador 20W (Carga Rápida):** Original Apple.\n• **Fundas Silicona:** Variedad de colores.\n• **Vidrio Templado / Hydrogel:** Lo colocamos nosotros sin cargo al comprar el equipo.\n• **Magsafe:** Cargadores inalámbricos disponibles."
+        },
+        {
+            "keywords": [
+                "cambio",
+                "dolar",
+                "cotizacion",
+                "blue",
+                "cara chica",
+                "manchado"
+            ],
+            "answer": "💵 **Dólar y Cotización:**\n\n• **Dólar Blue:** Tomamos al valor **Venta** del día (promedio cuevas).\n• **Pesos:** Aceptamos al tipo de cambio del momento.\n• **Cara Chica / Manchados:** Se toman con un **pequeño recargo** (generalmente -3% a -5%), consultar en el momento."
+        },
+        {
+            "keywords": [
+                "original",
+                "trucho",
+                "replica",
+                "refurbished",
+                "usado",
+                "reacondicionado",
+                "caja sellada"
+            ],
+            "answer": "✨ **Condición de los Equipos:**\n\n📢 **SOLO VENDEMOS NUEVOS.**\nTodos nuestros productos son:\n• **Originales Apple**\n• **Caja Sellada (Blister cerrado)**\n• **No Activated** (La garantía empieza cuando lo prendés).\n\n_No vendemos RFB (Refurbished) ni usados, aunque sí tomamos usados en parte de pago._"
+        },
+        {
+            "keywords": [
+                "factura",
+                "afip",
+                "iva",
+                "factura a"
+            ],
+            "answer": "📄 **Facturación:**\n\n• Hacemos **Factura A y B**.\n• Los precios en lista USD suelen ser finales en efectivo.\n• Para facturar A, se debe adicionar el IVA y percepciones correspondientes (si aplica). Consultar monto final con asesor."
+        },
+        {
+            "keywords": [
+                "reserva",
+                "seña",
+                "guardar",
+                "reservar"
+            ],
+            "answer": "📝 **¿Cómo reservar?**\n\nPodés congelar el precio y asegurar el stock abonando una **seña del 10%**.\n• La reserva dura 48hs hábiles.\n• Si no conseguimos el equipo (raro), te devolvemos el 100% de la seña.\n• El precio se congela en **DÓLARES**."
+        },
+        {
+            "keywords": [
+                "plan canje",
+                "usados",
+                "toman",
+                "toman usado",
+                "permuta",
+                "cambio"
+            ],
+            "answer": "🔄 **Plan Canje (Trade-In):**\n\nTomamos tu iPhone usado como parte de pago.\n👉 **Requisitos:**\n• iPhone 11 en adelante.\n• Batería superior a 80% (idealmente).\n• Sin roturas de vidrio trasero/delantero.\n• FaceID funcionando.\n\n_Enviá fotos y porcentaje de batería para cotización aproximada._"
+        },
+        {
+            "keywords": [
+                "android",
+                "samsung",
+                "xiaomi",
+                "motorola"
+            ],
+            "answer": "🤖 **Android:**\n\nNo, disculpa. **Solo trabajamos ecosistema Apple** (y PlayStation).\nNo vendemos ni tomamos en parte de pago equipos Samsung, Xiaomi, Motorola, etc."
+        },
+        {
+            "keywords": [
+                "asesor",
+                "humano",
+                "persona",
+                "hablar",
+                "alguien",
+                "contacto",
+                "telefono",
+                "whatsapp"
+            ],
+            "answer": "👤 **Contacto Directo:**\n\nEntendido. Si necesitás atención personalizada o cerrar una compra:\n\n👉 **Escribí a nuestro WhatsApp:** +54 9 11 1234-5678\nO aguardá que en cuanto recupere conexión te contacto."
+        },
+        {
+            "keywords": [
+                "stock",
+                "hay",
+                "tienen",
+                "disponible"
+            ],
+            "answer": "📦 **Consultas de Stock:**\n\nEl stock es muy dinámico. En este modo offline no veo el inventario en tiempo real.\nPero **casi siempre tenemos stock inmediato** de:\n• iPhone 13, 14, 15 (Pro/Max)\n• MacBook Air M1\n• AirPods\n\n_Si buscás algo muy específico (ej: 1TB color Azul), mejor consultá con un asesor._"
+        },
+        {
+            "keywords": [
+                "ayuda",
+                "help",
+                "soporte",
+                "menu"
+            ],
+            "answer": "🆘 **Menú de Ayuda:**\n\nProbá preguntando sobre:\n• **Precios** (iPhone, Mac, iPad)\n• **Formas de Pago** (Efectivo, Tarjeta, Crypto)\n• **Envíos** (CABA, Interior)\n• **Ubicación**\n• **Plan Canje**\n\n_O escribí 'asesor' si nada de esto te sirve._"
+        },
+        {
+            "keywords": [
+                "reparacion",
+                "arreglo",
+                "pantalla rota",
+                "bateria",
+                "vidrio"
+            ],
+            "answer": "🛠️ **Servicio Técnico:**\n\nActualmente **nos dedicamos exclusivamente a la venta** de equipos.\nNo realizamos cambios de batería, reparaciones de pantalla ni servicio técnico oficial."
+        },
+        {
+            "keywords": [
+                "gracias",
+                "chau",
+                "listo",
+                "ok",
+                "nos vemos",
+                "perfecto",
+                "dale"
+            ],
+            "answer": "👋 **¡Gracias a vos!**\n\nQuedo a tu disposición.\nSi te decidís, avisanos para coordinar tu compra. ¡Que tengas un excelente día!"
+        }
+    ],
+    "default_response": "Disculpa, en este momento tengo conectividad limitada y no entendí tu pregunta. 🙇‍♂️\n\nProbá consultando por:\n• **Envíos**\n• **Pagos**\n• **Garantía**\n• **Ubicación**\n• **Modelos (iPhone, Mac)**\n\nO escribí **'asesor'** para hablar con un humano."
+}

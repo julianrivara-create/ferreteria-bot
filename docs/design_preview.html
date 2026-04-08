@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Preview · Diseño Nuevo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg:            #F7F8FA;
+        --surface:       #FFFFFF;
+        --surface-alt:   #F3F4F6;
+        --border:        #E4E6EA;
+        --border-strong: #CDD1D8;
+        --ink:           #0F1117;
+        --ink-muted:     #5C6370;
+        --ink-subtle:    #9CA3AF;
+        --accent:        #D6440D;
+        --accent-hover:  #B83A0B;
+        --accent-bg:     #FFF3EE;
+        --accent-border: #FBCBB8;
+        --good:          #0A7C52;
+        --good-bg:       #ECFDF5;
+        --good-border:   #6EE7B7;
+        --warn:          #92400E;
+        --warn-bg:       #FFFBEB;
+        --warn-border:   #FCD34D;
+        --bad:           #991B1B;
+        --bad-bg:        #FEF2F2;
+        --bad-border:    #FECACA;
+        --shadow-xs: 0 1px 2px rgba(15,17,23,.05);
+        --shadow-sm: 0 1px 3px rgba(15,17,23,.08), 0 1px 2px -1px rgba(15,17,23,.06);
+        --shadow-md: 0 4px 8px -1px rgba(15,17,23,.08), 0 2px 4px -2px rgba(15,17,23,.05);
+        --r-sm: 6px; --r: 10px; --r-lg: 14px; --r-xl: 18px; --r-full: 9999px;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Inter", system-ui, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+      a { color: var(--accent); text-decoration: none; }
+
+      .app-header { background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-xs); }
+      .app-header-inner { max-width: 1520px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; gap: 20px; }
+      .app-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: var(--ink); }
+      .brand-icon { width: 32px; height: 32px; border-radius: var(--r-sm); background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+      .brand-divider { width: 1px; height: 20px; background: var(--border); }
+      .brand-section { font-size: 13px; font-weight: 500; color: var(--ink-muted); }
+      .app-nav { display: flex; align-items: center; gap: 2px; flex: 1; }
+      .app-nav a { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: var(--r); font-size: 13.5px; font-weight: 500; color: var(--ink-muted); }
+      .app-nav a.is-active { color: var(--accent); background: var(--accent-bg); }
+      .app-header-right { display: flex; align-items: center; gap: 8px; }
+
+      .shell { max-width: 1520px; margin: 0 auto; padding: 28px 24px; }
+      .page-hero { display: grid; gap: 10px; padding: 20px 24px; border-radius: var(--r-xl); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 20px; }
+      .page-hero h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+      .page-hero .lead { color: var(--ink-muted); line-height: 1.6; max-width: 860px; font-size: 13.5px; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .hero-note { padding: 7px 12px; border-radius: var(--r-lg); background: var(--surface-alt); border: 1px solid var(--border); color: var(--ink-muted); font-size: 12.5px; }
+
+      .workspace-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) 380px; gap: 20px; align-items: start; }
+      .summary-grid { display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; }
+      .stack { display: grid; gap: 16px; }
+      .stack-sm { display: grid; gap: 8px; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .form-grid.cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-sm); }
+      .card-pad { padding: 20px; }
+
+      .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px 16px; box-shadow: var(--shadow-xs); }
+      .metric strong { display: block; font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 2px; }
+      .metric span { color: var(--ink-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; font-weight: 500; }
+
+      .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: var(--r-full); font-size: 11.5px; font-weight: 600; border: 1px solid var(--border); background: var(--surface-alt); color: var(--ink-muted); white-space: nowrap; line-height: 1.4; }
+      .chip.good   { color: var(--good);   border-color: var(--good-border);   background: var(--good-bg); }
+      .chip.warn   { color: var(--warn);   border-color: var(--warn-border);   background: var(--warn-bg); }
+      .chip.accent { color: var(--accent); border-color: var(--accent-border); background: var(--accent-bg); }
+
+      button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 16px; border-radius: var(--r); border: 1px solid transparent; font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; width: auto; background: var(--ink); color: #fff; box-shadow: var(--shadow-xs); }
+      button.secondary { background: var(--surface); color: var(--ink); border-color: var(--border); }
+      button.accent-btn { background: var(--accent); }
+      button.warning { background: #D97706; }
+
+      .field-block { display: grid; gap: 5px; }
+      .field-block label { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+      input, select, textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r); font-family: inherit; font-size: 13.5px; color: var(--ink); background: var(--surface); }
+      textarea { min-height: 80px; resize: vertical; }
+      label.inline-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+      label.inline-toggle input { width: auto; }
+
+      .session-link { display: block; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); color: inherit; margin-bottom: 0; }
+      .session-link.active { border-color: var(--accent-border); box-shadow: 0 0 0 2px var(--accent-bg); }
+
+      .chat { display: grid; gap: 12px; }
+      .bubble { border-radius: var(--r-xl); padding: 12px 16px; border: 1px solid var(--border); background: var(--surface); font-size: 13.5px; line-height: 1.55; }
+      .bubble.user { background: #F0F9FF; border-color: #BAE6FD; margin-left: 40px; }
+      .bubble.assistant { background: var(--surface); margin-right: 40px; }
+      .bubble .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; font-size: 11.5px; color: var(--ink-subtle); }
+      .bubble .meta strong { color: var(--ink-muted); font-weight: 600; }
+      .message-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+      .step-card { display: grid; gap: 6px; padding: 12px 14px; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--surface-alt); font-size: 13px; }
+      .step-number { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--r-full); background: var(--accent-bg); color: var(--accent); font-weight: 700; font-size: 12px; border: 1px solid var(--accent-border); }
+
+      .callout { padding: 12px 14px; border-radius: var(--r-lg); border: 1px solid var(--accent-border); background: var(--accent-bg); font-size: 13px; }
+      .panel-soft { background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; font-size: 13px; }
+      .panel-soft strong { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); display: block; margin-bottom: 4px; }
+      .success-banner { padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid var(--good-border); background: var(--good-bg); font-size: 13px; }
+
+      .section-title { font-size: 15px; font-weight: 700; margin: 0 0 6px; letter-spacing: -.01em; }
+      .caption { font-size: 11.5px; color: var(--ink-subtle); text-transform: uppercase; letter-spacing: .07em; font-weight: 600; }
+      .muted { color: var(--ink-muted); }
+      .help  { color: var(--ink-muted); font-size: 12.5px; line-height: 1.55; }
+
+      .empty { padding: 28px; text-align: center; color: var(--ink-subtle); border: 1.5px dashed var(--border); border-radius: var(--r-xl); background: var(--surface); font-size: 13.5px; }
+      .tool-card { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); color: inherit; }
+      .tool-card strong { font-size: 13.5px; font-weight: 600; }
+      .preview-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+      .preview-box { padding: 12px 14px; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--surface); font-size: 13px; }
+      .preview-box.before { background: #FFFBEB; border-color: var(--warn-border); }
+      .preview-box.after  { background: var(--good-bg); border-color: var(--good-border); }
+
+      /* COMPARISON BANNER */
+      .compare-banner { background: #1e293b; color: #f8fafc; padding: 10px 24px; font-size: 12px; font-weight: 600; text-align: center; letter-spacing: .04em; text-transform: uppercase; }
+    </style>
+  </head>
+  <body>
+
+    <div class="compare-banner">✨ Preview del diseño nuevo — todo lo de abajo es como va a quedar</div>
+
+    <!-- Header -->
+    <header class="app-header">
+      <div class="app-header-inner">
+        <div class="app-brand">
+          <div class="brand-icon">🔧</div>
+          <span>Ferretería</span>
+          <div class="brand-divider"></div>
+          <span class="brand-section">Entrenamiento</span>
+        </div>
+        <nav class="app-nav">
+          <a href="#" class="is-active">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2v4l3 3"/><circle cx="8" cy="8" r="6"/></svg>
+            Hablar con el bot
+          </a>
+          <a href="#">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8l3 3 7-7"/></svg>
+            Cambios listos
+          </a>
+          <a href="#">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
+            Más herramientas
+          </a>
+        </nav>
+        <div class="app-header-right">
+          <a class="help" href="#" style="color:var(--ink-muted); font-size:13px; font-weight:500;">Ayuda</a>
+          <span class="chip accent">Uso interno</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page -->
+    <main>
+      <div class="shell">
+
+        <!-- Metrics -->
+        <div class="summary-grid">
+          <div class="metric"><span>Para revisar ahora</span><strong>3</strong></div>
+          <div class="metric"><span>Cambios en preparación</span><strong>7</strong></div>
+          <div class="metric"><span>Listos para activar</span><strong style="color:var(--accent);">2</strong></div>
+          <div class="metric"><span>Casos futuros</span><strong>12</strong></div>
+        </div>
+
+        <!-- Hero -->
+        <div class="page-hero">
+          <div class="caption">A → B → C</div>
+          <h1>Hablar con el bot</h1>
+          <div class="lead">Esta es la pantalla principal. Primero probás una conversación, después marcás una respuesta con <strong>Esto estuvo mal</strong> y por último dejás un <strong>cambio en preparación</strong> para revisar o activar más tarde.</div>
+          <div class="hero-actions">
+            <span class="hero-note">Paso A: hablá con el bot. Paso B: enseñale qué tendría que haber hecho. Paso C: activá el cambio desde <strong>Cambios listos</strong>.</span>
+            <a class="chip accent" href="#">Ir a cambios listos</a>
+            <a class="chip" href="#">Más herramientas</a>
+          </div>
+        </div>
+
+        <!-- Main layout -->
+        <div class="workspace-layout">
+
+          <!-- Left column -->
+          <div class="stack">
+
+            <!-- Chat card -->
+            <div class="card card-pad">
+              <div class="row" style="justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+                <div>
+                  <h2 class="section-title" style="margin-bottom:4px;">Paso A. Probá una conversación</h2>
+                  <div class="muted">Escribí como un cliente real. Cuando aparezca una respuesta que no te convence, marcala desde la misma conversación.</div>
+                </div>
+                <div class="row">
+                  <span class="chip good">Sesión abierta</span>
+                  <span class="chip">Balanceado</span>
+                </div>
+              </div>
+
+              <div class="chat">
+                <div class="bubble user">
+                  <div class="meta"><strong>cliente</strong></div>
+                  <div>Necesito mecha para pared de 8 mm, ¿cuánto sale?</div>
+                </div>
+                <div class="bubble assistant">
+                  <div class="meta">
+                    <strong>bot</strong>
+                    <span class="chip accent">GPT-4o</span>
+                    <span>42 / 118 / 160 tok</span>
+                    <span>$0.0003</span>
+                  </div>
+                  <div>Para pared tenemos mechas de 8 mm desde $320 la unidad. ¿Necesitás para mampostería o hormigón?</div>
+                  <div class="message-actions">
+                    <a class="chip" href="#">Esto estuvo mal</a>
+                    <span class="chip warn">Pendiente de revisión</span>
+                  </div>
+                </div>
+                <div class="bubble user">
+                  <div class="meta"><strong>cliente</strong></div>
+                  <div>Mampostería, necesito 20.</div>
+                </div>
+                <div class="bubble assistant" style="border-color: var(--accent-border); box-shadow: 0 0 0 2px var(--accent-bg);">
+                  <div class="meta">
+                    <strong>bot</strong>
+                    <span class="chip accent">GPT-4o</span>
+                    <span>64 / 95 / 159 tok</span>
+                  </div>
+                  <div>20 mechas Bosch 8mm para mampostería: $6.400 en total. Tenemos stock disponible.</div>
+                  <div class="message-actions">
+                    <a class="chip accent" href="#">Estás enseñando sobre esta respuesta</a>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top:16px; display:grid; gap:8px;">
+                <textarea placeholder="Ejemplo: Necesito bisagras para puerta de madera..."></textarea>
+                <div class="row">
+                  <button class="accent-btn">Enviar al bot</button>
+                  <button class="secondary">Reiniciar sesión</button>
+                  <button class="secondary">Cerrar sesión</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sessions card -->
+            <div class="card card-pad">
+              <div class="row" style="justify-content:space-between; margin-bottom:14px;">
+                <div>
+                  <h2 class="section-title" style="margin-bottom:4px;">Sesiones recientes</h2>
+                  <div class="help">Volvé a una prueba anterior cuando quieras seguir enseñando.</div>
+                </div>
+                <span class="chip warn">2 con respuestas pendientes</span>
+              </div>
+              <div class="stack-sm">
+                <div class="session-link active">
+                  <div class="row" style="justify-content:space-between;">
+                    <strong>a3f9d2c1</strong>
+                    <span class="chip good">Abierta</span>
+                  </div>
+                  <div class="muted">Balanceado · 3 revisadas de 5 respuestas del bot</div>
+                </div>
+                <div class="session-link">
+                  <div class="row" style="justify-content:space-between;">
+                    <strong>b7e12f44</strong>
+                    <span class="chip warn">Límite</span>
+                  </div>
+                  <div class="muted">Económico · 1 revisada de 4 respuestas del bot</div>
+                </div>
+                <div class="session-link">
+                  <div class="row" style="justify-content:space-between;">
+                    <strong>c09aa821</strong>
+                    <span class="chip accent">Cerrada</span>
+                  </div>
+                  <div class="muted">Completo · 2 revisadas de 2 respuestas del bot</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right column -->
+          <div class="stack">
+
+            <!-- Steps -->
+            <div class="card card-pad">
+              <h2 class="section-title">Paso B. Enseñarle qué tendría que haber hecho</h2>
+              <div class="stack-sm">
+                <div class="step-card">
+                  <div class="row"><span class="step-number">1</span><strong>Elegí la respuesta</strong></div>
+                  <div class="help">En la conversación, marcá la primera respuesta del bot que se desvió.</div>
+                </div>
+                <div class="step-card">
+                  <div class="row"><span class="step-number">2</span><strong>Explicalo en lenguaje simple</strong></div>
+                  <div class="help">No hace falta elegir tipos técnicos. Contanos qué pasó y el sistema arma un borrador recomendado.</div>
+                </div>
+                <div class="step-card">
+                  <div class="row"><span class="step-number">3</span><strong>Guardá el cambio en preparación</strong></div>
+                  <div class="help">El cambio todavía no queda activo. Solo queda listo para revisar o ajustar.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Teaching form -->
+            <div class="card card-pad">
+              <h2 class="section-title">Esto estuvo mal</h2>
+              <div class="callout stack-sm" style="margin-bottom:14px;">
+                <div><strong style="font-size:12.5px; color:var(--ink-muted); font-weight:600;">Respuesta elegida del bot</strong></div>
+                <div>20 mechas Bosch 8mm para mampostería: $6.400 en total. Tenemos stock disponible.</div>
+                <div class="help">Guardamos una enseñanza sobre esta respuesta puntual, no sobre toda la sesión.</div>
+              </div>
+              <div style="display:grid; gap:12px;">
+                <div class="field-block">
+                  <label>¿Qué estuvo mal?</label>
+                  <select>
+                    <option>No preguntó el dato clave antes de cotizar</option>
+                    <option>Precio incorrecto</option>
+                    <option>Producto equivocado</option>
+                  </select>
+                </div>
+                <div class="field-block">
+                  <label>¿Qué tendría que haber hecho primero?</label>
+                  <textarea placeholder="Ejemplo: primero tendría que haber preguntado para qué superficie era."></textarea>
+                </div>
+                <div class="field-block">
+                  <label>¿Qué debería responder o preguntar?</label>
+                  <textarea placeholder="Ejemplo: ¿La necesitás para pared, hormigón o cerámica?" style="min-height:60px;"></textarea>
+                </div>
+                <label class="inline-toggle"><input type="checkbox"> No estoy seguro todavía</label>
+                <label class="inline-toggle"><input type="checkbox"> Guardar solo como ejemplo futuro</label>
+                <div class="message-actions">
+                  <button class="accent-btn">Guardar como cambio en preparación</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ready changes -->
+            <div class="card card-pad">
+              <div class="row" style="justify-content:space-between; margin-bottom:14px;">
+                <div>
+                  <h2 class="section-title" style="margin-bottom:2px;">Paso C. Cambios listos</h2>
+                  <div class="help">Estos ya pasaron revisión y solo faltan activarse.</div>
+                </div>
+                <a href="#" style="font-size:13px; font-weight:500; color:var(--ink-muted);">Ver todos</a>
+              </div>
+              <div class="stack-sm">
+                <div class="session-link">
+                  <div class="row" style="justify-content:space-between;">
+                    <strong>Corrección de término</strong>
+                    <span class="chip good">Lista para activar</span>
+                  </div>
+                  <div style="font-size:13px; margin-top:4px;">Agregar sinónimo "mecha" → "broca"</div>
+                  <div class="message-actions">
+                    <a class="chip accent" href="#">Revisar / activar</a>
+                    <a class="chip" href="#">Caso de origen</a>
+                  </div>
+                </div>
+                <div class="session-link">
+                  <div class="row" style="justify-content:space-between;">
+                    <strong>Respuesta frecuente</strong>
+                    <span class="chip good">Lista para activar</span>
+                  </div>
+                  <div style="font-size:13px; margin-top:4px;">Agregar política de precios por volumen</div>
+                  <div class="message-actions">
+                    <a class="chip accent" href="#">Revisar / activar</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+  </body>
+</html>

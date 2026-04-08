@@ -1,0 +1,240 @@
+{
+    "faq": [
+        {
+            "keywords": [
+                "hola",
+                "buen dia",
+                "buenas",
+                "que tal",
+                "inicio",
+                "comenzar"
+            ],
+            "answer": "¡Hola! 👋 Bienvenido a **Ferretería Central**.\nActualmente estoy operando en **Modo de Respaldo** (conexión limitada).\n\nPuedo responder preguntas sobre:\n• 📦 **Envíos y entregas**\n• 💳 **Formas de pago**\n• 🛡️ **Garantía**\n• 🔧 **Productos y stock**\n\n¿En qué te ayudo hoy?"
+        },
+        {
+            "keywords": [
+                "envio",
+                "envíos",
+                "entrega",
+                "llevan",
+                "moto",
+                "costo de envio",
+                "precio de envio",
+                "precio del envío",
+                "interior"
+            ],
+            "answer": "📦 **Envíos:**\n• **CABA:** Moto mensajería en el día.\n• **GBA:** Consultar costo por zona (Moto/Auto).\n• **Interior del País:** Enviamos por Andreani o Correo Argentino (asegurado).\n• **Entrega coordinada según zona.**\n\n_Los envíos se coordinan una vez acreditado el pago._"
+        },
+        {
+            "keywords": [
+                "pago",
+                "pagar",
+                "cuotas",
+                "tarjeta",
+                "efectivo",
+                "dolares",
+                "usdt",
+                "transferencia",
+                "deposito"
+            ],
+            "answer": "💳 **Formas de Pago:**\n\n🔹 **Efectivo (ARS/USD):** Mejor precio.\n🔹 **Transferencia:** Aceptamos CBU/CVU.\n🔹 **MercadoPago:** Aceptamos dinero en cuenta.\n🔹 **Tarjetas de Crédito:** Tienen recargo según cuotas (consultar con asesor)."
+        },
+        {
+            "keywords": [
+                "garantia",
+                "garantía",
+                "falla",
+                "roto",
+                "defecto"
+            ],
+            "answer": "🛡️ **Garantía:**\n\n✅ Todos nuestros productos cuentan con garantía. Las herramientas eléctricas tienen garantía de fábrica según marca y modelo.\n\n_La garantía no cubre mal uso, desgaste normal ni daños por humedad._"
+        },
+        {
+            "keywords": [
+                "horario",
+                "abierto",
+                "atienden",
+                "local",
+                "hora",
+                "dias"
+            ],
+            "answer": "🕒 **Nuestros Horarios:**\n\n• **Lunes a Viernes:** 8:00 a 18:00 hs.\n• **Sábados:** 8:00 a 13:00 hs.\n• **Domingos y Feriados:** Cerrado.\n\n_Atención por canales digitales durante el horario comercial._"
+        },
+        {
+            "keywords": [
+                "ubicacion",
+                "direccion",
+                "donde estan",
+                "local",
+                "showroom",
+                "donde retiro",
+                "donde queda",
+                "zona",
+                "barrio"
+            ],
+            "answer": "📍 **Ubicación:**\n\nContamos con local físico con retiro en el día. Consultá por dirección exacta con un asesor o por envío a domicilio."
+        },
+        {
+            "keywords": [
+                "herramienta",
+                "taladro",
+                "amoladora",
+                "sierra",
+                "atornillador",
+                "fresadora",
+                "lijadora"
+            ],
+            "answer": "🔧 **Herramientas Eléctricas:**\n\nTenemos stock de:\n• **Taladros** (de impacto y percutor)\n• **Amoladoras** (varios diámetros)\n• **Sierras** (circular, caladora, sable)\n• **Atornilladores** eléctricos e inalámbricos\n• **Lijadoras** orbitales y de banda\n\n_Consultá marca, potencia y precio con un asesor._"
+        },
+        {
+            "keywords": [
+                "destornillador",
+                "llave",
+                "martillo",
+                "alicate",
+                "pinza",
+                "cutter",
+                "nivel",
+                "metro",
+                "herramienta manual"
+            ],
+            "answer": "🪛 **Herramientas Manuales:**\n\nTenemos:\n• **Destornilladores** (punta plana, Phillips, Torx)\n• **Llaves** (fija, combinada, Allen, regulable)\n• **Martillos y mazas**\n• **Alicates y pinzas**\n• **Niveles y metros**\n\n_Preguntá por marca y medida._"
+        },
+        {
+            "keywords": [
+                "tornillo",
+                "tarugo",
+                "clavo",
+                "arandela",
+                "tuerca",
+                "bulón",
+                "fijacion",
+                "anclaje"
+            ],
+            "answer": "⚙️ **Fijaciones y Sujetadores:**\n\nTenemos:\n• **Tornillos** (drywall, madera, autoperforante, inox)\n• **Tarugos** (plástico, metálico, químico)\n• **Clavos y grampas**\n• **Tuercas, bulones y arandelas**\n• **Anclajes para cemento y hormigón**\n\n_Indicá medida y uso._"
+        },
+        {
+            "keywords": [
+                "pintura",
+                "latex",
+                "esmalte",
+                "sellador",
+                "imprimacion",
+                "rodillo",
+                "brocha",
+                "pincel"
+            ],
+            "answer": "🎨 **Pinturas y Accesorios:**\n\nTenemos:\n• **Látex interior y exterior**\n• **Esmalte sintético y al agua**\n• **Selladores e imprimaciones**\n• **Rodillos, brochas y pinceles**\n• **Bandejas y extensiones**\n\n_Indicá superficie y litros necesarios._"
+        },
+        {
+            "keywords": [
+                "electricidad",
+                "cable",
+                "enchufe",
+                "llave de luz",
+                "disyuntor",
+                "termomagnética"
+            ],
+            "answer": "⚡ **Electricidad:**\n\nTenemos:\n• **Cables** (varios secciones: 1,5 / 2,5 / 4 / 6 mm²)\n• **Enchufes y tomas**\n• **Interruptores y llaves de luz**\n• **Termomagnéticas y disyuntores**\n• **Cajas y cañerías**\n\n_Consultá por marca y amperaje._"
+        },
+        {
+            "keywords": [
+                "plomeria",
+                "caño",
+                "llave de paso",
+                "union",
+                "fitting",
+                "cañeria",
+                "agua",
+                "griferia"
+            ],
+            "answer": "🔧 **Plomería:**\n\nTenemos:\n• **Caños** (PVC, PP-R, multicapa)\n• **Llaves de paso y válvulas**\n• **Uniones, codos y tees**\n• **Fittings de compresión**\n• **Grifería y accesorios de baño**\n\n_Indicá diámetro y presión de trabajo._"
+        },
+        {
+            "keywords": [
+                "adhesivo",
+                "pegamento",
+                "silicona",
+                "sellador",
+                "teflón",
+                "cemento de contacto"
+            ],
+            "answer": "🔩 **Adhesivos y Selladores:**\n\nTenemos:\n• **Cementos de contacto**\n• **Siliconas** (neutra, acética, sanitaria)\n• **Epoxi de dos componentes**\n• **Cinta de teflón**\n• **Espuma de poliuretano**\n\n_Consultá para qué uso lo necesitás._"
+        },
+        {
+            "keywords": [
+                "factura",
+                "afip",
+                "iva",
+                "factura a",
+                "responsable inscripto"
+            ],
+            "answer": "📄 **Facturación:**\n\n• Emitimos **Factura A y B**.\n• Para Factura A se adiciona el IVA correspondiente.\n• Consultar con un asesor para coordinar datos fiscales."
+        },
+        {
+            "keywords": [
+                "reserva",
+                "seña",
+                "guardar",
+                "reservar",
+                "apartar"
+            ],
+            "answer": "📝 **¿Cómo reservar?**\n\nPodés apartar el producto con una seña.\n• La reserva dura 48hs hábiles.\n• El precio se mantiene al momento de la reserva.\n\n_Consultá condiciones con un asesor._"
+        },
+        {
+            "keywords": [
+                "stock",
+                "hay",
+                "tienen",
+                "disponible",
+                "producto"
+            ],
+            "answer": "📦 **Consultas de Stock:**\n\nEl stock varía según demanda. En este modo offline no veo el inventario en tiempo real.\n\n_Si buscás algo específico, escribí el nombre o código del producto y te respondo en cuanto recupere conexión._"
+        },
+        {
+            "keywords": [
+                "asesor",
+                "humano",
+                "persona",
+                "hablar",
+                "alguien",
+                "contacto",
+                "telefono",
+                "whatsapp"
+            ],
+            "answer": "👤 **Contacto Directo:**\n\nEntendido. Necesitás hablar con un asesor.\n\n👉 Avisanos tu consulta y te contactamos a la brevedad.\nO aguardá que en cuanto recupere conexión te atiendo personalmente."
+        },
+        {
+            "keywords": [
+                "ayuda",
+                "help",
+                "soporte",
+                "menu"
+            ],
+            "answer": "🆘 **Menú de Ayuda:**\n\nProbá preguntando sobre:\n• **Herramientas** (eléctricas y manuales)\n• **Fijaciones** (tornillos, tarugos, anclajes)\n• **Electricidad y Plomería**\n• **Pinturas**\n• **Formas de Pago y Envíos**\n\n_O escribí 'asesor' si nada de esto te sirve._"
+        },
+        {
+            "keywords": [
+                "reparacion",
+                "arreglo",
+                "tecnico",
+                "service",
+                "instalacion"
+            ],
+            "answer": "🛠️ **Servicio Técnico / Instalación:**\n\nNos dedicamos a la **venta de productos**. Para instalaciones o reparaciones, podemos orientarte con los materiales correctos.\n\n_Consultá con un asesor si necesitás orientación técnica._"
+        },
+        {
+            "keywords": [
+                "gracias",
+                "chau",
+                "listo",
+                "ok",
+                "nos vemos",
+                "perfecto",
+                "dale"
+            ],
+            "answer": "👋 **¡Gracias a vos!**\n\nQuedo a tu disposición.\nCualquier consulta, estamos aquí. ¡Que tengas un excelente día!"
+        }
+    ],
+    "default_response": "Disculpa, en este momento tengo conectividad limitada y no entendí tu pregunta. 🙇‍♂️\n\nProbá consultando por:\n• **Herramientas**\n• **Fijaciones**\n• **Pinturas**\n• **Electricidad / Plomería**\n• **Formas de Pago y Envíos**\n\nO escribí **'asesor'** para hablar con un humano."
+}

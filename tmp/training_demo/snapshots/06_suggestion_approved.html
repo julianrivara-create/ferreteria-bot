@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Suggestion Detail</title>
+    <style>
+      :root {
+        --bg: #f5f1e8;
+        --paper: #fffdf9;
+        --panel: #f8f4ec;
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --line: #d6cfc1;
+        --accent: #9a3412;
+        --accent-soft: #f97316;
+        --good: #166534;
+        --warn: #a16207;
+        --bad: #b91c1c;
+        --shadow: 0 10px 30px rgba(31, 41, 55, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: radial-gradient(circle at top left, #fff7ed, var(--bg) 45%); color: var(--ink); font-family: Georgia, "Times New Roman", serif; }
+      .shell { max-width: 1500px; margin: 0 auto; padding: 24px; }
+      .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 16px; }
+      .title { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+      .subtitle { color: var(--muted); font-size: 14px; }
+      .nav { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; }
+      .nav a { text-decoration: none; color: var(--ink); padding: 10px 14px; background: rgba(255,255,255,0.55); border: 1px solid var(--line); border-radius: 999px; }
+      .nav a.is-active { border-color: rgba(249,115,22,0.4); color: var(--accent); background: rgba(249,115,22,0.08); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.08); }
+      .nav a:hover { border-color: var(--accent-soft); color: var(--accent); }
+      .card { background: var(--paper); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
+      .card-pad { padding: 18px; }
+      .page-hero { display: grid; gap: 12px; padding: 22px; border-radius: 24px; background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255,247,237,0.96)); border: 1px solid rgba(154, 52, 18, 0.12); box-shadow: var(--shadow); margin-bottom: 18px; }
+      .page-hero h1, .page-hero h2 { margin: 0; font-size: 28px; }
+      .page-hero .lead { color: var(--muted); line-height: 1.55; max-width: 900px; }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+      .hero-note { padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.72); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+      .grid-3 { display: grid; grid-template-columns: 280px minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .stack { display: grid; gap: 18px; }
+      .stack-sm { display: grid; gap: 10px; }
+      .summary-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 16px; }
+      .section-title { font-size: 18px; font-weight: 700; margin: 0 0 8px; }
+      .muted { color: var(--muted); }
+      .help { color: var(--muted); font-size: 13px; line-height: 1.45; }
+      .chip { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--line); background: #fff; }
+      .chip.good { color: var(--good); border-color: rgba(22, 101, 52, 0.25); background: rgba(22, 101, 52, 0.08); }
+      .chip.warn { color: var(--warn); border-color: rgba(161, 98, 7, 0.25); background: rgba(161, 98, 7, 0.08); }
+      .chip.bad { color: var(--bad); border-color: rgba(185, 28, 28, 0.25); background: rgba(185, 28, 28, 0.08); }
+      .chip.accent { color: var(--accent); border-color: rgba(154, 52, 18, 0.25); background: rgba(154, 52, 18, 0.08); }
+      .metric { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+      .metric strong { display: block; font-size: 22px; }
+      .metric span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+      .session-link { display: block; padding: 12px; border: 1px solid var(--line); border-radius: 16px; text-decoration: none; color: inherit; margin-bottom: 10px; background: #fff; }
+      .session-link:hover, .session-link.active { border-color: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.15); }
+      .workflow-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+      .workflow-card h3 { margin: 0; font-size: 17px; }
+      .workflow-list { display: grid; gap: 10px; }
+      .workflow-list .session-link { margin-bottom: 0; }
+      .step-card { display: grid; gap: 8px; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255,255,255,0.72); }
+      .step-number { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 999px; background: rgba(154, 52, 18, 0.1); color: var(--accent); font-weight: 700; }
+      .preview-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+      .preview-box { padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
+      .preview-box.before { background: #faf7f1; }
+      .preview-box.after { background: rgba(22, 101, 52, 0.06); border-color: rgba(22, 101, 52, 0.18); }
+      .chat { display: grid; gap: 14px; }
+      .bubble { border-radius: 18px; padding: 14px 16px; border: 1px solid var(--line); background: #fff; }
+      .bubble.user { background: #fffaf4; margin-left: 50px; }
+      .bubble.assistant { background: #fcfcfb; margin-right: 50px; }
+      .bubble .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      form { display: grid; gap: 10px; }
+      input, select, textarea, button { width: 100%; border-radius: 12px; border: 1px solid var(--line); padding: 10px 12px; font: inherit; background: #fff; color: var(--ink); }
+      textarea { min-height: 100px; resize: vertical; }
+      label.inline-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+      label.inline-toggle input { width: auto; }
+      button { width: auto; background: var(--ink); color: #fff; border: none; cursor: pointer; }
+      button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+      .danger { background: var(--bad); }
+      .warning { background: var(--warn); }
+      .accent-btn { background: var(--accent); }
+      .panel-soft { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+      .form-grid { display: grid; gap: 12px; }
+      .form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+      .domain-panel { display: none; }
+      .domain-panel.is-active { display: grid; gap: 12px; }
+      .callout { padding: 14px; border-radius: 16px; border: 1px solid rgba(154, 52, 18, 0.18); background: rgba(154, 52, 18, 0.06); }
+      .callout.good { border-color: rgba(22, 101, 52, 0.18); background: rgba(22, 101, 52, 0.06); }
+      .callout.warn { border-color: rgba(161, 98, 7, 0.2); background: rgba(161, 98, 7, 0.06); }
+      .review-target { border-color: rgba(249,115,22,0.45); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.12); }
+      .review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .review-actions a { text-decoration: none; }
+      .caption { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+      details.technical { border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 12px 14px; }
+      details.technical summary { cursor: pointer; font-weight: 700; color: var(--ink); }
+      .field-block { display: grid; gap: 8px; }
+      .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+      a { color: var(--accent); }
+      .empty { padding: 28px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 18px; background: rgba(255,255,255,0.6); }
+      .error { color: var(--bad); background: rgba(185,28,28,0.08); border: 1px solid rgba(185,28,28,0.16); border-radius: 14px; padding: 12px 14px; }
+      .progress { height: 10px; background: #ebe3d5; border-radius: 999px; overflow: hidden; }
+      .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); }
+      @media (max-width: 1180px) { .grid-3 { grid-template-columns: 1fr; } .bubble.user, .bubble.assistant { margin: 0; } }
+      @media (max-width: 860px) { .grid-2, .form-grid.cols-2, .preview-grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="topbar">
+        <div>
+          <div class="title">Suggestion Detail</div>
+          <div class="subtitle">Conversational training console for reviewed bot improvement.</div>
+        </div>
+        <div class="row">
+          <span class="chip accent">Internal operator surface</span>
+          <span class="chip">Safe review-before-apply workflow</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/ops/ferreteria/training" class="">Workflow</a>
+        <a href="/ops/ferreteria/training/sandbox" class="">Sandbox</a>
+        <a href="/ops/ferreteria/training/sessions" class="">Session History</a>
+        <a href="/ops/ferreteria/training/cases" class="">Cases</a>
+        <a href="/ops/ferreteria/training/suggestions" class="">Suggestions</a>
+        <a href="/ops/ferreteria/training/usage" class="">Usage</a>
+      </nav>
+      
+
+
+<div class="page-hero">
+  <div class="caption">Suggestion review</div>
+  <h1>Suggestion Detail</h1>
+  <div class="lead">This is the approval surface for a structured training change. Review the operator-facing effect first, then the before/after preview, and only then the technical payload if you need to verify the rule shape.</div>
+  <div class="hero-actions">
+    <span class="chip accent">Clarification question fix</span>
+    <span class="chip good">approved</span>
+    <span class="hero-note">Next action: Apply to live knowledge.</span>
+  </div>
+</div>
+<div class="grid-2">
+  <div class="card card-pad">
+    <h2 class="section-title">Suggested change</h2>
+    <div class="row">
+      <span class="chip accent">Clarification question fix</span>
+      <span class="chip good">approved</span>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <a class="chip accent" href="/ops/ferreteria/training">Back to workflow</a>
+      <a class="chip" href="/ops/ferreteria/training/cases/1b18263c27f942058d577b25ffcf66f4">Open source case</a>
+      
+      <a class="chip" href="/ops/ferreteria/training/sandbox?session_id=training:39108979ae684fdcab55eb62592f5c15&review_message_id=673d13c55aa2478187316a63155a21f7">Open source transcript</a>
+      
+    </div>
+    <p class="muted">Ask the surface first for mecha requests</p>
+    <div class="callout stack-sm" style="margin-top:12px;">
+      <div><strong>What this change does</strong></div>
+      <div>Change the first clarification for &#39;mecha&#39; to &#39;¿Para pared, hormigón o cerámica?&#39;.</div>
+      <div class="help">Active clarification prompts will change after apply.</div>
+    </div>
+    <div class="summary-grid" style="margin-top:14px;">
+      <div class="metric"><span>Affected area</span><strong style="font-size:18px;">Blocked quote continuation and first clarification</strong></div>
+      <div class="metric"><span>Operator-visible effect</span><strong style="font-size:18px;">The bot should ask the right first question earlier and more consistently.</strong></div>
+      <div class="metric"><span>Review focus</span><strong style="font-size:18px;">Check the first question, required details, and whether the order matches safe quoting behavior.</strong></div>
+    </div>
+    <div class="preview-grid" style="margin-top:14px;">
+      <div class="preview-box before">
+        <div class="caption">Before</div>
+        <div style="margin-top:6px;">&#39;mecha&#39; currently asks: ¿Para madera, metal, hormigón o cerámica?.</div>
+      </div>
+      <div class="preview-box after">
+        <div class="caption">After</div>
+        <div style="margin-top:6px;">It will ask &#39;¿Para pared, hormigón o cerámica?&#39; first.</div>
+      </div>
+    </div>
+    
+    <div class="metric">
+      <span>Source case</span>
+      <strong style="font-size:18px;">Necesito mecha para pared</strong>
+      <div class="muted">Te paso una mecha estándar de 8 mm para eso.</div>
+      <div class="muted" style="margin-top:8px;">Failure tag: Should have asked a clarification</div>
+    </div>
+    
+    <details class="technical" style="margin-top:14px;">
+      <summary>Technical payload</summary>
+      <pre style="white-space:pre-wrap; background:#faf7f1; padding:14px; border-radius:16px; border:1px solid #d6cfc1; margin-top:10px;">{
+  &#34;blocked_if_missing&#34;: [
+    &#34;surface&#34;
+  ],
+  &#34;examples_by_dimension&#34;: {
+    &#34;surface&#34;: [
+      &#34;pared&#34;,
+      &#34;hormigón&#34;,
+      &#34;cerámica&#34;
+    ]
+  },
+  &#34;family&#34;: &#34;mecha&#34;,
+  &#34;prompt&#34;: &#34;Antes de pasarte una mecha, ¿la necesitás para pared, hormigón o cerámica?&#34;,
+  &#34;question_order&#34;: [
+    &#34;surface&#34;,
+    &#34;size&#34;
+  ],
+  &#34;required_dimensions&#34;: [
+    &#34;surface&#34;
+  ],
+  &#34;short_prompt&#34;: &#34;¿Para pared, hormigón o cerámica?&#34;
+}</pre>
+    </details>
+  </div>
+  <div class="stack">
+    <div class="card card-pad">
+      <h2 class="section-title">Decision</h2>
+      <div class="help" style="margin-bottom:10px;">
+        Draft suggestions can be approved or rejected. Approved suggestions are still not live until someone applies them to active knowledge.
+      </div>
+      
+      
+        <form method="post">
+          <input type="hidden" name="action" value="apply">
+          <input type="text" name="reason" placeholder="Why this should go live now">
+          <button type="submit" class="warning">Apply to active knowledge</button>
+        </form>
+      
+      
+      
+    </div>
+    <div class="card card-pad">
+      <h2 class="section-title">Approval History</h2>
+      
+      <div class="session-link">
+        <strong>approve</strong>
+        <div class="muted">rocio · 2026-03-18T15:50:25</div>
+        <div>The clarification is safer than resolving early.</div>
+      </div>
+      
+    </div>
+  </div>
+</div>
+
+
+    </div>
+  </body>
+</html>

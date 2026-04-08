@@ -1,0 +1,6 @@
+terms:
+  - term: herramienta
+    reason: demasiado amplio
+    redirect_prompt: Decime qué herramienta necesitás o para qué uso es.
+    family_hint: null
+

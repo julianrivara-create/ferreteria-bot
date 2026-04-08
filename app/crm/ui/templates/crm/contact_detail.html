@@ -1,0 +1,72 @@
+{% extends "crm/layout.html" %}
+{% block content %}
+<div class="header">
+  <div>
+    <h1>Contact Detail</h1>
+    <div class="meta mono" id="contact-id">{{ contact_id }}</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div id="contact"></div>
+</div>
+<div class="panel">
+  <h3>Timeline</h3>
+  <div id="timeline"></div>
+</div>
+<div class="panel">
+  <h3>Deals</h3>
+  <div id="deals"></div>
+</div>
+<div class="panel">
+  <h3>Tasks</h3>
+  <div id="tasks"></div>
+</div>
+
+<script>
+  const contactId = "{{ contact_id }}";
+
+  function asTable(headers, rows) {
+    const head = headers.map((h) => `<th>${h}</th>`).join("");
+    const body = rows.map((r) => `<tr>${r.map((c) => `<td>${c ?? ""}</td>`).join("")}</tr>`).join("");
+    return `<div class="table-wrapper"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  (async function init() {
+    const res = await window.crmFetch(`/contacts/${contactId}`);
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById("contact").innerHTML = `<div class="error">${data.error || "Failed"}</div>`;
+      return;
+    }
+
+    document.getElementById("contact").innerHTML = asTable(
+      ["Name", "Phone", "Email", "Channel", "Score", "Last Activity"],
+      [[
+        data.contact.name,
+        data.contact.phone,
+        data.contact.email,
+        data.contact.source_channel,
+        data.contact.score,
+        data.contact.last_activity_at,
+      ]]
+    );
+
+    document.getElementById("timeline").innerHTML = asTable(
+      ["At", "Channel", "Direction", "Body"],
+      (data.timeline || []).map((m) => [m.created_at, m.channel, m.direction, m.body])
+    );
+
+    document.getElementById("deals").innerHTML = asTable(
+      ["Title", "Stage", "Status", "Amount", "Score"],
+      (data.deals || []).map((d) => [d.title, d.stage_id, d.status, d.amount_estimated, d.score])
+    );
+
+    document.getElementById("tasks").innerHTML = asTable(
+      ["Title", "Status", "Priority", "Due"],
+      (data.tasks || []).map((t) => [t.title, t.status, t.priority, t.due_at])
+    );
+  })();
+</script>
+{% endblock %}

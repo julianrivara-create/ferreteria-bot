@@ -1,0 +1,126 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if suggestion %}
+<div class="page-hero">
+  <div class="caption">Detalle expandido</div>
+  <h1>Detalle del cambio</h1>
+  <div class="lead">Esta es la vista completa para revisar un cambio con más detalle. Para el uso diario, la activación rápida vive en <strong>Cambios listos</strong>.</div>
+  <div class="hero-actions">
+    <span class="chip accent">{{ suggestion.domain_label }}</span>
+    <span class="chip {% if suggestion.status == 'approved' %}good{% elif suggestion.status == 'rejected' %}bad{% elif suggestion.status == 'applied' %}warn{% else %}accent{% endif %}">{{ suggestion.status_label }}</span>
+    <span class="hero-note">Siguiente paso: {{ suggestion.next_action_label }}.</span>
+    <a class="chip" href="/ops/ferreteria/training/suggestions?queue=approved">Volver a cambios listos</a>
+  </div>
+</div>
+<div class="grid-2">
+  <div class="card card-pad">
+    <h2 class="section-title">Cambio propuesto</h2>
+    <div class="row">
+      <span class="chip accent">{{ suggestion.domain_label }}</span>
+      <span class="chip {% if suggestion.status == 'approved' %}good{% elif suggestion.status == 'rejected' %}bad{% else %}accent{% endif %}">{{ suggestion.status_label }}</span>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <a class="chip accent" href="/ops/ferreteria/training">Volver al flujo simple</a>
+      {% if suggestion.case_url %}<a class="chip" href="{{ suggestion.case_url }}">Abrir caso de origen</a>{% endif %}
+      {% if suggestion.review and suggestion.review.session_id and suggestion.review.bot_message_id %}
+      <a class="chip" href="/ops/ferreteria/training/sandbox?session_id={{ suggestion.review.session_id }}&review_message_id={{ suggestion.review.bot_message_id }}">Abrir conversación original</a>
+      {% endif %}
+    </div>
+    <p class="muted">{{ suggestion.summary or 'No se cargó un resumen.' }}</p>
+    <div class="callout stack-sm" style="margin-top:12px;">
+      <div><strong>Qué cambia</strong></div>
+      <div>{{ suggestion.human_summary }}</div>
+      <div class="help">{{ suggestion.impact_summary }}</div>
+    </div>
+    <div class="summary-grid" style="margin-top:14px;">
+      <div class="metric"><span>Área afectada</span><strong style="font-size:18px;">{{ suggestion.semantic_review.affected_area }}</strong></div>
+      <div class="metric"><span>Efecto esperado</span><strong style="font-size:18px;">{{ suggestion.semantic_review.operator_effect }}</strong></div>
+      <div class="metric"><span>En qué fijarse</span><strong style="font-size:18px;">{{ suggestion.semantic_review.review_focus }}</strong></div>
+    </div>
+    <div class="preview-grid" style="margin-top:14px;">
+      <div class="preview-box before">
+        <div class="caption">{{ suggestion.before_after_preview.before_label }}</div>
+        <div style="margin-top:6px;">{{ suggestion.before_after_preview.before_text }}</div>
+      </div>
+      <div class="preview-box after">
+        <div class="caption">{{ suggestion.before_after_preview.after_label }}</div>
+        <div style="margin-top:6px;">{{ suggestion.before_after_preview.after_text }}</div>
+      </div>
+    </div>
+    {% if suggestion.review %}
+    <div class="metric">
+      <span>Caso de origen</span>
+      <strong style="font-size:18px;">{{ suggestion.review.user_input or '-' }}</strong>
+      <div class="muted">{{ suggestion.review.bot_response or '-' }}</div>
+      <div class="muted" style="margin-top:8px;">Problema principal: {{ suggestion.review.failure_tag_label if suggestion.review.failure_tag_label and suggestion.review.failure_tag_label != '-' else suggestion.review.review_label_text }}</div>
+    </div>
+    {% endif %}
+    <details class="technical" style="margin-top:14px;">
+      <summary>Detalle técnico</summary>
+      <pre style="white-space:pre-wrap; background:var(--surface-alt); padding:14px; border-radius:var(--r-lg); border:1px solid var(--border); margin-top:10px; font-size:12px; overflow-x:auto;">{{ suggestion.technical_payload_pretty }}</pre>
+    </details>
+  </div>
+  <div class="stack">
+    <div class="card card-pad">
+      <h2 class="section-title">Cómo decidir</h2>
+      <div class="stack-sm">
+        <div class="panel-soft">
+          <strong>Aprobá si</strong>
+          <div class="help">El cambio es claro, acotado y el antes/después refleja lo que esperás ver en el bot.</div>
+        </div>
+        <div class="panel-soft">
+          <strong>Activá si</strong>
+          <div class="help">Además de estar bien planteado, ya revisaste que conviene mover el comportamiento en vivo ahora.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card card-pad">
+      <h2 class="section-title">Decisión</h2>
+      <div class="help" style="margin-bottom:10px;">
+        Los borradores se pueden aprobar o rechazar. Aunque algo esté aprobado, no queda activo hasta que alguien lo active sobre el conocimiento en uso.
+      </div>
+      {% if suggestion.status == 'draft' %}
+        <form method="post">
+          <input type="hidden" name="action" value="approve">
+          <input type="text" name="reason" placeholder="Por qué este cambio está listo para aprobarse">
+          <button type="submit" class="accent-btn">Aprobar</button>
+        </form>
+        <form method="post">
+          <input type="hidden" name="action" value="reject">
+          <input type="text" name="reason" placeholder="Por qué este cambio no debería avanzar">
+          <button type="submit" class="danger">Rechazar</button>
+        </form>
+      {% endif %}
+      {% if suggestion.status == 'approved' %}
+        <form method="post">
+          <input type="hidden" name="action" value="apply">
+          <input type="text" name="reason" placeholder="Por qué conviene activarlo ahora">
+          <button type="submit" class="warning">Activar cambio</button>
+        </form>
+      {% endif %}
+      {% if suggestion.status == 'rejected' %}
+        <div class="empty">Las correcciones rechazadas quedan en el historial, pero no se pueden activar.</div>
+      {% endif %}
+      {% if suggestion.status == 'applied' %}
+        <div class="empty">Esta corrección ya está activa.</div>
+      {% endif %}
+    </div>
+    <div class="card card-pad">
+      <h2 class="section-title">Historial de decisiones</h2>
+      {% for approval in suggestion.approvals %}
+      <div class="session-link">
+        <strong>{{ approval.action_label }}</strong>
+        <div class="muted">{{ approval.acted_by or '-' }} · {{ approval.created_at }}</div>
+        <div>{{ approval.reason or '-' }}</div>
+      </div>
+      {% else %}
+      <div class="empty">Todavía no hay historial de decisiones.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="empty">No se encontró la corrección.</div>
+{% endif %}
+{% endblock %}

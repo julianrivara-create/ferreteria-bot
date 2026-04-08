@@ -1,0 +1,9 @@
+{
+  "brand_name": "Ferreteria Central",
+  "tagline": "Herramientas y materiales para obra y hogar",
+  "hero_title": "Ferreteria Central",
+  "hero_subtitle": "Bot de ventas por CLI y WhatsApp, sin frontend web",
+  "accent_color": "#b45309",
+  "secondary_color": "#1f2937",
+  "currency_symbol": "$"
+}

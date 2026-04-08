@@ -1,0 +1,82 @@
+tenant_name: Atelier
+base_url: https://atelier-technology.up.railway.app
+health_path: /api/health
+db_url_env_key: DATABASE_URL
+
+checks_enabled:
+  http: true
+  db: true
+  logs: true
+  metrics: true
+
+thresholds:
+  http_timeout_ms: 5000
+  max_errors_4h: 10
+
+email:
+  smtp_host_env_key: SMTP_HOST
+  smtp_port_env_key: SMTP_PORT
+  smtp_user_env_key: SMTP_USER
+  smtp_pass_env_key: SMTP_PASS
+  from_addr_env_key: SMTP_FROM
+  to_addrs:
+    - julianrivara@gmail.com
+  subject_prefix: "[ATELIER-MAINT]"
+
+railway:
+  project_id: e37a825d-9961-4d6d-8a5d-fcb110ade24d
+  environment_id: 8ab37bbb-0ca1-4404-ad15-59ee5d13885c
+  service_name: atelier-bot
+  service_id: e5e83f96-9eec-4edf-a52c-93b04da9c351
+  worker_service_id: 87d0e4e9-46b8-4b6f-bc9d-7f3154d22e66
+  log_lookback_hours: 4
+  log_max_lines: 2000
+  log_max_bytes: 2097152 # 2MB
+  log_dedupe_bucket_seconds: 30
+  metrics_enabled: true
+  metrics_window_minutes: 10
+  metrics_step_seconds: 60
+  metrics_thresholds:
+    cpu_pct_warn: 70
+    cpu_pct_fail: 90
+    mem_pct_warn: 80
+    mem_pct_fail: 95
+    log_pulls_per_day_warn: 50
+    log_pulls_per_day_fail: 100
+    log_bytes_per_day_warn: 10485760 # 10MB
+    log_bytes_per_day_fail: 20971520 # 20MB
+  watchdog_interval_minutes: 60
+
+remediation:
+  enabled: false
+  dry_run: true
+  max_restarts_per_day: 3
+  max_redeploys_per_day: 1
+  restart_cooldown_minutes: 30
+  redeploy_cooldown_minutes: 180
+
+watchdog:
+  stale_warn_minutes: 300
+  stale_fail_minutes: 420
+  fail_cooldown_minutes: 45
+  warn_cooldown_minutes: 240
+  auto_recover_on_fail: false
+
+dependency:
+  dependency_circuit_fail_threshold: 3
+  dependency_circuit_open_minutes: 15
+
+alerts:
+  dependency_cooldown_minutes: 120
+  send_recovery: true
+
+custom_checks:
+  extra_log_patterns:
+    - name: "DB Connection Pool Exhausted"
+      regex: "connection limit exceeded"
+      severity: FAIL
+      max_count_4h: 3
+    - name: "MercadoPago Webhook Error"
+      regex: "MP Webhook Error"
+      severity: WARN
+      max_count_4h: 5

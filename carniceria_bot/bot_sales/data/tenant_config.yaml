@@ -1,0 +1,89 @@
+# Tenant Configuration
+# This file defines the "personality" and business context for each bot instance
+
+# Store Identity
+store_name: "AtelierTechnology"
+store_description: "Apple Reseller Premium"
+store_type: "tecnología"
+country: "Argentina"
+
+# Personality & Voice
+personality_style: "Argentino informal (vos, che, dale, etc.)"
+emojis: "📱 💳 ✅ 🚚 💻"
+target_audience: "Tech enthusiasts y compradores de Apple"
+
+# Product Categories (from catalog)
+product_categories:
+  - iPhone
+  - MacBook
+  - iPad
+  - AirPods
+  - PlayStation
+  - Apple Watch
+
+# Cross-sell Rules
+# Format: When customer buys from category X, offer products from category Y with Z% discount
+cross_sell_rules:
+  - source_category: iPhone
+    target_category: AirPods
+    discount_percent: 10
+    reason: "para tu iPhone"
+  
+  - source_category: MacBook
+    target_category: AirPods
+    discount_percent: 10
+    reason: "para tu Mac"
+  
+  - source_category: iPad
+    target_category: AirPods
+    discount_percent: 10
+    reason: "para tu iPad"
+  
+  - source_category: PlayStation
+    target_category: PlayStation
+    target_filter: "Controller"  # Look for products with "Controller" in model name
+    discount_percent: 5
+    reason: "para jugar de a dos"
+
+# Comparison Feature Keys (attributes to compare for this store)
+comparison_features:
+  - storage_gb
+  - color
+  - generation
+  - price_ars
+  - price_usd
+  - category
+  - camera_mp  # if present in catalog
+
+# Business Rules
+enable_upselling: true
+enable_crossselling: true
+enable_bundles: true
+hold_minutes: 30
+
+# Validation Rules
+required_reservation_fields:
+  - nombre
+  - contacto
+  - email
+
+# Anti-hallucination: Placeholder Detection
+placeholder_names:
+  - "juan"
+  - "juan perez"
+  - "ejemplo"
+  - "usuario"
+  - "cliente"
+  - "example"
+  - "test"
+
+placeholder_phones:
+  - "123456"
+  - "1111111"
+  - "0000000"
+
+placeholder_emails:
+  - "ejemplo"
+  - "test"
+  - "@test"
+  - "@example"

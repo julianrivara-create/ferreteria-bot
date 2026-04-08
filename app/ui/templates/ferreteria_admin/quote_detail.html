@@ -1,0 +1,131 @@
+{% extends "ferreteria_admin/base.html" %}
+{% block content %}
+<h1>Quote detail</h1>
+{% if not quote %}
+<p>Quote not found.</p>
+{% else %}
+<p><strong>ID:</strong> {{ quote.id }}</p>
+<p><strong>Status:</strong> {{ quote.status }} | <strong>Customer:</strong> {{ quote.customer_ref or "-" }} | <strong>Channel:</strong> {{ quote.channel }}</p>
+<p><strong>Total:</strong> {{ quote.resolved_total_amount or "-" }} | <strong>Accepted:</strong> {{ quote.accepted_at or "-" }}</p>
+
+<h2>Automation</h2>
+<p>
+  <strong>State:</strong> {{ quote.automation_state or "manual_only" }}
+  | <strong>Reason:</strong> {{ quote.automation_reason or "-" }}
+  | <strong>Last evaluated:</strong> {{ quote.automation_updated_at or "-" }}
+</p>
+<p>
+  <strong>Last auto follow-up:</strong> {{ quote.last_auto_followup_at or "-" }}
+  | <strong>Send count:</strong> {{ quote.auto_followup_count or 0 }}
+</p>
+{% if quote.automation_context %}
+<p><strong>Decision summary:</strong> {{ quote.automation_context.decision_summary or "-" }}</p>
+<p><strong>Risk flags:</strong> {{ (quote.automation_context.risk_flags or [])|join(", ") or "-" }}</p>
+{% endif %}
+
+<h2>Lines</h2>
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Requested</th>
+      <th>Status</th>
+      <th>Selected</th>
+      <th>Confidence</th>
+      <th>Clarification</th>
+      <th>Substitute</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for line in quote.lines %}
+    <tr>
+      <td>{{ line.line_number }}</td>
+      <td>{{ line.source_text }} (qty {{ line.requested_qty }})</td>
+      <td>{{ line.line_status }}</td>
+      <td>{{ line.selected_name or "-" }}</td>
+      <td>{{ line.confidence_score or "-" }}</td>
+      <td>{{ line.clarification_prompt or "-" }}</td>
+      <td>{{ "yes" if line.selected_via_substitute else "no" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Actions</h2>
+<form method="post" class="inline">
+  <input type="hidden" name="action" value="claim">
+  <button type="submit">Claim</button>
+</form>
+<form method="post" class="inline">
+  <input type="hidden" name="action" value="status">
+  <select name="status">
+    <option value="under_internal_review">under_internal_review</option>
+    <option value="revision_requested">revision_requested</option>
+    <option value="ready_for_followup">ready_for_followup</option>
+    <option value="closed_completed">closed_completed</option>
+    <option value="closed_cancelled">closed_cancelled</option>
+  </select>
+  <button type="submit">Update status</button>
+</form>
+<form method="post">
+  <input type="hidden" name="action" value="note">
+  <label>Operator note</label><br>
+  <textarea name="note" style="min-height:120px;"></textarea><br>
+  <button type="submit">Add note</button>
+</form>
+
+<h2>Automation actions</h2>
+<form method="post" class="inline">
+  <input type="hidden" name="action" value="automation_evaluate">
+  <button type="submit">Evaluate automation</button>
+</form>
+<form method="post" class="inline">
+  <input type="hidden" name="action" value="automation_send">
+  <button type="submit">Send auto follow-up</button>
+</form>
+<form method="post" class="inline">
+  <input type="hidden" name="action" value="automation_reset">
+  <button type="submit">Reset to manual</button>
+</form>
+<form method="post">
+  <input type="hidden" name="action" value="automation_block">
+  <label>Automation block reason</label><br>
+  <input type="text" name="automation_reason" placeholder="operator_blocked"><br>
+  <button type="submit">Block automation</button>
+</form>
+
+<h2>Handoffs</h2>
+<table>
+  <thead><tr><th>Destination</th><th>Status</th><th>Claimed by</th><th>Updated</th></tr></thead>
+  <tbody>
+    {% for handoff in quote.handoffs %}
+    <tr>
+      <td>{{ handoff.destination_type }}: {{ handoff.destination_ref or "-" }}</td>
+      <td>{{ handoff.status }}</td>
+      <td>{{ handoff.claimed_by or "-" }}</td>
+      <td>{{ handoff.updated_at }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">No handoffs yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Events</h2>
+<table>
+  <thead><tr><th>When</th><th>Type</th><th>Actor</th><th>Payload</th></tr></thead>
+  <tbody>
+    {% for event in quote.events %}
+    <tr>
+      <td>{{ event.created_at }}</td>
+      <td>{{ event.event_type }}</td>
+      <td>{{ event.actor_type }} {{ event.actor_ref or "" }}</td>
+      <td><pre>{{ event.payload }}</pre></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">No events.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

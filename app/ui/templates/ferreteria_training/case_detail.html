@@ -1,0 +1,352 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if case %}
+<div class="page-hero">
+  <div class="caption">Vista avanzada</div>
+  <h1>Ajuste fino del caso</h1>
+  <div class="lead">Esta pantalla queda para cuando querés revisar el caso con más detalle o tocar la corrección recomendada manualmente. El flujo simple del día a día sigue viviendo en <strong>Hablar con el bot</strong>.</div>
+  <div class="hero-actions">
+    <span class="chip accent">{{ case.workflow_label }}</span>
+    <span class="chip {% if case.regression_workflow_key == 'exported' %}good{% elif case.regression_workflow_key == 'candidate_ready' %}warn{% else %}accent{% endif %}">{{ case.regression_workflow_label }}</span>
+    <span class="hero-note">Siguiente paso: {{ case.next_action_label }}.</span>
+    <a class="chip" href="/ops/ferreteria/training">Volver al flujo simple</a>
+  </div>
+</div>
+<div class="grid-2">
+  <div class="stack">
+    <div class="card card-pad">
+      <h2 class="section-title">Resumen de la conversación</h2>
+      <div class="metric"><span>Mensaje del cliente</span><strong style="font-size:18px;">{{ case.user_input or '-' }}</strong></div>
+      <div class="metric" style="margin-top:12px;"><span>Respuesta del bot</span><strong style="font-size:18px;">{{ case.bot_response or '-' }}</strong></div>
+      <div class="row" style="margin-top:12px;">
+        <span class="chip accent">{{ case.route_source_label or 'Sin dato' }}</span>
+        <span class="chip">{{ case.review_label_text }}</span>
+        {% if case.failure_tag_label and case.failure_tag_label != '-' %}<span class="chip warn">{{ case.failure_tag_label }}</span>{% endif %}
+        <span class="chip">{{ format_cost(case.estimated_cost_micros) }}</span>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <a class="chip accent" href="/ops/ferreteria/training">Volver al inicio</a>
+        {% if case.source_sandbox_url %}<a class="chip" href="{{ case.source_sandbox_url }}">Abrir conversación original</a>{% endif %}
+        <a class="chip" href="/ops/ferreteria/training/suggestions">Abrir cola de correcciones</a>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <h2 class="section-title">Resumen de la revisión</h2>
+      <div class="stack-sm">
+        <div class="panel-soft">
+          <strong>Qué tendría que haber hecho el bot</strong>
+          <div class="help">{{ case.expected_answer or 'No se registró una respuesta esperada.' }}</div>
+        </div>
+        <div class="panel-soft">
+          <strong>Qué estuvo mal</strong>
+          <div class="help">{{ case.what_was_wrong or 'No se registraron notas sobre el problema.' }}</div>
+        </div>
+        <div class="panel-soft">
+          <strong>Problema principal</strong>
+          <div class="help">{{ case.failure_tag_label if case.failure_tag_label != '-' else 'No se registró un problema principal.' }}</div>
+        </div>
+        <div class="form-grid cols-2">
+          <div class="panel-soft">
+            <strong>Motivo específico</strong>
+            <div class="help">{{ case.failure_detail_label if case.failure_detail_label != '-' else 'No se registró un motivo específico.' }}</div>
+          </div>
+          <div class="panel-soft">
+            <strong>Primera acción esperada</strong>
+            <div class="help">{{ case.expected_behavior_label if case.expected_behavior_label != '-' else 'No se registró una acción esperada.' }}</div>
+          </div>
+        </div>
+        <div class="form-grid cols-2">
+          <div class="panel-soft">
+            <strong>Aclaración faltante</strong>
+            <div class="help">{{ case.missing_clarification or 'No se registró una aclaración faltante.' }}{% if case.clarification_dimension_label and case.clarification_dimension_label != '-' %} · Primer dato: {{ case.clarification_dimension_label }}{% endif %}</div>
+          </div>
+          <div class="panel-soft">
+            <strong>Familia / producto sugeridos</strong>
+            <div class="help">{{ case.suggested_family or '-' }}{% if case.suggested_canonical_product %} · {{ case.suggested_canonical_product }}{% endif %}</div>
+          </div>
+        </div>
+        {% if case.operator_notes %}
+        <div class="panel-soft">
+          <strong>Notas del operador</strong>
+          <div class="help">{{ case.operator_notes }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <h2 class="section-title">Cobertura futura</h2>
+      <div class="callout stack-sm" style="margin-bottom:12px;">
+        <div><strong>{{ case.regression_workflow_label }}</strong></div>
+        <div class="help">{{ case.regression_next_action }}</div>
+        <div class="help">Cobertura actual: <strong>{{ case.coverage_label }}</strong>.</div>
+        <div class="help">Usá corrección + caso futuro cuando quieras cambiar el comportamiento en vivo y además dejar el ejemplo protegido. Usá solo caso futuro cuando todavía no convenga tocar el comportamiento en vivo.</div>
+      </div>
+      <form method="post">
+        <input type="hidden" name="action" value="create_regression_candidate">
+        <input type="hidden" name="user_input" value="{{ case.user_input or '' }}">
+        <input type="hidden" name="expected_answer" value="{{ case.expected_answer or case.bot_response or '' }}">
+        <input type="hidden" name="route_source" value="{{ case.route_source or '' }}">
+        <button type="submit" class="accent-btn">Crear caso futuro</button>
+      </form>
+      <form method="post">
+        <input type="hidden" name="action" value="export_regression">
+        <button type="submit" class="secondary">Exportar caso futuro</button>
+      </form>
+      {% if case.regression_candidates %}
+      <div class="table-wrap" style="margin-top:14px;">
+      <table>
+        <thead><tr><th>Caso</th><th>Estado</th><th>Creado</th></tr></thead>
+        <tbody>
+          {% for candidate in case.regression_candidates %}
+          <tr><td>{{ candidate.fixture_name }}</td><td>{{ candidate.status_label }}</td><td>{{ candidate.created_at }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endif %}
+      {% if case.exports %}
+      <div class="table-wrap" style="margin-top:14px;">
+      <table>
+        <thead><tr><th>Archivo</th><th>Formato</th><th>Creado</th></tr></thead>
+        <tbody>
+          {% for export in case.exports %}
+          <tr><td>{{ export.fixture_name }}</td><td>{{ export.export_format_label }}</td><td>{{ export.created_at }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card card-pad">
+      <h2 class="section-title">Ajustar la corrección recomendada</h2>
+      <div class="panel-soft stack-sm" style="margin-bottom:12px;">
+        <div><strong>Trabajo actual</strong></div>
+        <div class="help">Esta es la vista detallada. Usala cuando el borrador automático del flujo simple necesita un ajuste manual o cuando querés crear una corrección más específica.</div>
+        <div class="help">Si dudás, preferí un cambio chico y seguro antes que una regla grande.</div>
+      </div>
+      <div class="stack-sm" style="margin-bottom:12px;">
+        <div class="step-card">
+          <div class="row"><span class="step-number">1</span><strong>Qué pasó</strong></div>
+          <div class="help">Tomá como base el resumen de revisión de la izquierda. Ahí está el problema principal y la acción esperada.</div>
+        </div>
+        <div class="step-card">
+          <div class="row"><span class="step-number">2</span><strong>Qué tendría que haber hecho el bot</strong></div>
+          <div class="help">Primero elegí el diagnóstico en lenguaje simple. Con eso te recomendamos el tipo de corrección más seguro.</div>
+        </div>
+        <div class="step-card">
+          <div class="row"><span class="step-number">3</span><strong>Armar la corrección</strong></div>
+          <div class="help">Solo quedan en pantalla los campos necesarios para este tipo de corrección. Guardar todavía crea un borrador, no un cambio activo.</div>
+        </div>
+      </div>
+      <form method="post" id="suggestion-form">
+        <input type="hidden" name="action" value="create_suggestion">
+        <div class="field-block">
+          <label>¿Qué tipo de problema hubo acá?</label>
+          <select name="problem_type" id="problem-type-select" data-problem-type-select>
+            {% for item in problem_type_choices %}
+            <option value="{{ item.key }}" {% if selected_problem_type == item.key %}selected{% endif %}>{{ item.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="callout stack-sm" id="problem-type-hint">
+          <div><strong>{{ problem_type_hint.label }}</strong></div>
+          <div class="help">{{ problem_type_hint.help }}</div>
+          <div class="help">Corrección recomendada: <strong>{{ problem_type_hint.recommended_domain_label }}</strong>{% if problem_type_hint.alternative_labels %}. Otras opciones posibles: {{ problem_type_hint.alternative_labels|join(', ') }}{% endif %}.</div>
+        </div>
+        <div class="form-grid cols-2">
+          <div class="field-block">
+            <label>Tipo de corrección</label>
+            <select name="domain" id="suggestion-domain" data-domain-select>
+              {% for domain in domains %}<option value="{{ domain }}" {% if recommended_domain == domain %}selected{% endif %}>{{ domain_labels.get(domain, domain) }}</option>{% endfor %}
+            </select>
+          <div class="help">Es la clase de corrección que se va a revisar y, si corresponde, activar más adelante.</div>
+        </div>
+        <div class="field-block">
+          <label>Resumen del cambio</label>
+          <input type="text" name="summary" data-summary-field value="{{ authoring_defaults.summary_by_domain.get(recommended_domain, '') }}" placeholder="¿Qué cambio querés revisar?">
+        </div>
+      </div>
+      <div class="form-grid cols-2">
+        <div class="field-block">
+          <label>Término o frase del cliente</label>
+          <input type="text" name="repeated_term" data-prefill-field value="{{ authoring_defaults.repeated_term }}">
+        </div>
+        <div class="field-block">
+          <label>Mensaje original del cliente</label>
+          <input type="text" name="source_message" data-prefill-field value="{{ authoring_defaults.source_message }}">
+        </div>
+      </div>
+        {% include "ferreteria_training/_suggestion_fields.html" %}
+        <div class="callout stack-sm" id="draft-preview-box">
+          <div><strong>Antes de guardar este borrador</strong></div>
+          <div class="help">Diagnóstico del problema: <span data-preview-problem>{{ problem_type_hint.label }}</span></div>
+          <div class="help">Tipo de corrección recomendado: <span data-preview-domain>{{ problem_type_hint.recommended_domain_label }}</span></div>
+          <div class="help" data-preview-guidance>Acción esperada del bot: {{ authoring_defaults.expected_behavior_label if authoring_defaults.expected_behavior_label != '-' else 'Usá el resumen de revisión para confirmar el siguiente paso más seguro.' }}</div>
+          <div class="help" data-preview-impact>Esto va a crear un borrador para revisar. No cambia el conocimiento activo hasta que alguien lo apruebe y lo active.</div>
+        </div>
+        <button type="submit" class="accent-btn">Guardar borrador</button>
+      </form>
+    </div>
+
+    <div class="card card-pad">
+      <h2 class="section-title">Correcciones vinculadas</h2>
+      <div class="help" style="margin-bottom:10px;">Acá quedan visibles todas las correcciones de este caso para que sepas si todavía está solo revisado, si ya tiene borrador o si el cambio ya quedó activo.</div>
+      {% for suggestion in case.suggestions %}
+      <div class="session-link">
+        <div class="row" style="justify-content:space-between;">
+          <a href="/ops/ferreteria/training/suggestions/{{ suggestion.id }}"><strong>{{ suggestion.domain_label }}</strong></a>
+          <span class="chip {% if suggestion.status == 'approved' %}good{% elif suggestion.status == 'rejected' %}bad{% elif suggestion.status == 'applied' %}warn{% else %}accent{% endif %}">{{ suggestion.status_label }}</span>
+        </div>
+        <div>{{ suggestion.human_summary }}</div>
+        <div class="muted">{{ suggestion.summary or suggestion.impact_summary }}</div>
+      </div>
+      {% else %}
+      <div class="empty">Todavía no hay correcciones creadas para este caso.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const problemTypeSelect = document.querySelector('[data-problem-type-select]');
+    const domainSelect = document.querySelector('[data-domain-select]');
+    const panels = Array.from(document.querySelectorAll('.domain-panel'));
+    const hint = document.getElementById('problem-type-hint');
+    const previewProblem = document.querySelector('[data-preview-problem]');
+    const previewDomain = document.querySelector('[data-preview-domain]');
+    const previewGuidance = document.querySelector('[data-preview-guidance]');
+    const previewImpact = document.querySelector('[data-preview-impact]');
+    const problemTypeMap = {{ problem_type_choices | tojson }};
+    const defaultsByDomain = {{ authoring_defaults | tojson }};
+    const domainGuidance = {
+      synonym: 'Empezá con el término correcto, la familia y las formas reales en las que lo dicen los clientes.',
+      unresolved_term_mapping: 'Usalo cuando la frase sigue apareciendo sin resolverse y todavía conviene mapearla de forma bien acotada.',
+      faq: 'Tomá el mensaje revisado como pregunta y dejá una respuesta corta, estable y fácil de reutilizar.',
+      clarification_rule: 'Empezá por la familia, la primera pregunta corta y el dato que sí o sí hace falta pedir antes de avanzar.',
+      family_rule: 'Empezá por la familia correcta, los términos que la disparan y el mínimo de datos necesarios.',
+      blocked_term: 'Usá el término amplio, explicá por qué no conviene responderlo todavía y sumá la pregunta más segura.',
+      complementary_rule: 'Partí del producto base ya resuelto y agregá solo complementos conservadores.',
+      substitute_rule: 'Empezá por la familia de origen, los destinos permitidos y las compatibilidades que sí o sí deben cumplirse.',
+      language_pattern: 'Usá la frase exacta del cliente y el valor normalizado que el bot debería interpretar.',
+      test_case_only: 'Usalo cuando querés guardar el aprendizaje como cobertura futura sin tocar el conocimiento activo.'
+    };
+    if (!domainSelect || !panels.length) return;
+
+    function markDirty(event) {
+      event.target.dataset.dirty = 'true';
+    }
+
+    Array.from(document.querySelectorAll('#suggestion-form input, #suggestion-form textarea, #suggestion-form select')).forEach((field) => {
+      if (!field.matches('[data-problem-type-select], [data-domain-select]')) {
+        field.addEventListener('input', markDirty);
+        field.addEventListener('change', markDirty);
+      }
+    });
+
+    function applyValue(name, value) {
+      const field = document.querySelector(`#suggestion-form [name="${name}"]`);
+      if (!field || value === undefined || value === null) return;
+      if (field.dataset.dirty === 'true' && field.value) return;
+      field.value = value;
+    }
+
+    function applyDomainDefaults(domain) {
+      if (!defaultsByDomain) return;
+      const summaryField = document.querySelector('[data-summary-field]');
+      if (summaryField && summaryField.dataset.dirty !== 'true') {
+        summaryField.value = (defaultsByDomain.summary_by_domain || {})[domain] || '';
+      }
+      applyValue('repeated_term', defaultsByDomain.repeated_term || '');
+      applyValue('source_message', defaultsByDomain.source_message || '');
+      if (domain === 'synonym' || domain === 'unresolved_term_mapping') {
+        applyValue('canonical', defaultsByDomain.canonical || '');
+        applyValue('family', defaultsByDomain.family || '');
+        applyValue('aliases', defaultsByDomain.aliases || '');
+      } else if (domain === 'faq') {
+        applyValue('faq_question', defaultsByDomain.faq_question || '');
+        applyValue('faq_answer', defaultsByDomain.faq_answer || '');
+      } else if (domain === 'clarification_rule') {
+        applyValue('family', defaultsByDomain.family || '');
+        applyValue('clarification_short_prompt', defaultsByDomain.clarification_short_prompt || '');
+        applyValue('clarification_prompt', defaultsByDomain.clarification_prompt || '');
+        applyValue('required_dimensions', defaultsByDomain.required_dimensions || '');
+        applyValue('question_order', defaultsByDomain.question_order || '');
+        applyValue('blocked_if_missing', defaultsByDomain.blocked_if_missing || '');
+      } else if (domain === 'family_rule') {
+        applyValue('family', defaultsByDomain.family || '');
+        applyValue('match_terms', defaultsByDomain.match_terms || '');
+        applyValue('required_dimensions', defaultsByDomain.required_dimensions || '');
+      } else if (domain === 'blocked_term') {
+        applyValue('blocked_term', defaultsByDomain.repeated_term || '');
+        applyValue('blocked_reason', defaultsByDomain.blocked_reason || '');
+        applyValue('blocked_redirect_prompt', defaultsByDomain.clarification_prompt || '');
+        applyValue('family', defaultsByDomain.family || '');
+      } else if (domain === 'language_pattern') {
+        applyValue('language_key', defaultsByDomain.language_key || '');
+        applyValue('language_value', defaultsByDomain.language_value || '');
+      } else if (domain === 'test_case_only') {
+        applyValue('user_input', defaultsByDomain.source_message || '');
+        applyValue('expected_answer', defaultsByDomain.faq_answer || '');
+      }
+    }
+
+    function syncPanels() {
+      const selected = domainSelect.value;
+      panels.forEach((panel) => {
+        const domains = (panel.dataset.domain || '').split(/\s+/).filter(Boolean);
+        panel.classList.toggle('is-active', domains.includes(selected));
+      });
+      applyDomainDefaults(selected);
+    }
+
+    function syncProblemType() {
+      if (!problemTypeSelect) return;
+      const selected = problemTypeMap.find((item) => item.key === problemTypeSelect.value) || problemTypeMap[problemTypeMap.length - 1];
+      if (!selected) return;
+      domainSelect.value = selected.recommended_domain;
+      if (hint) {
+        hint.innerHTML = `
+          <div><strong>${selected.label}</strong></div>
+          <div class="help">${selected.help}</div>
+          <div class="help">Corrección recomendada: <strong>${selected.recommended_domain_label}</strong>${selected.alternative_labels.length ? `. Otras opciones posibles: ${selected.alternative_labels.join(', ')}` : ''}.</div>
+        `;
+      }
+      if (previewProblem) previewProblem.textContent = selected.label;
+      syncPanels();
+      syncDraftPreview();
+    }
+
+    function syncDraftPreview() {
+      const selectedLabel = domainSelect.options[domainSelect.selectedIndex] ? domainSelect.options[domainSelect.selectedIndex].textContent : domainSelect.value;
+      if (previewDomain) previewDomain.textContent = selectedLabel;
+      if (previewGuidance) previewGuidance.textContent = domainGuidance[domainSelect.value] || 'Usá el resumen de revisión para confirmar el siguiente paso más seguro.';
+      if (previewImpact) {
+        previewImpact.textContent = domainSelect.value === 'test_case_only'
+          ? 'Esto va a crear un borrador solo para guardar el caso como cobertura futura. No cambia el conocimiento activo.'
+          : 'Esto va a crear un borrador para revisión. No cambia el conocimiento activo hasta que alguien lo apruebe y lo active.';
+      }
+    }
+
+    domainSelect.addEventListener('change', function () {
+      syncPanels();
+      syncDraftPreview();
+    });
+    if (problemTypeSelect) {
+      problemTypeSelect.addEventListener('change', syncProblemType);
+    }
+    syncPanels();
+    syncDraftPreview();
+    syncProblemType();
+  })();
+</script>
+{% else %}
+<div class="empty">No se encontró el caso de entrenamiento.</div>
+{% endif %}
+{% endblock %}

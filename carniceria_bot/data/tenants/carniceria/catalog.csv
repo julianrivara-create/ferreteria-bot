@@ -1,0 +1,16 @@
+SKU,Category,Model,StockQty,PriceARS,Description
+VAC-KG,Cortes Vacunos,Vacío (kg),15,9500,Corte jugoso ideal para parilla
+ASA-KG,Cortes Vacunos,Asado de Tira (kg),20,8800,Costilla cortada ancha
+MAT-KG,Cortes Vacunos,Matambre (kg),10,9200,Ideal para hacer al libro o tiernizado
+ENT-KG,Cortes Vacunos,Entraña (kg),5,12000,La preferida de los asadores
+POL-ENT,Pollo,Pollo Entero (u),12,5500,Pollo de campo aprox 2.2kg
+PAT-MUS,Pollo,Pata y Muslo (kg),15,3200,Super frescas
+SUP-KG,Pollo,Supremas de Pollo (kg),10,7500,Limpias listas para empanar
+BOND-KG,Cerdo,Bondiola (kg),8,8500,Ideal para parrilla o horno
+PECH-KG,Cerdo,Pechito con Manta (kg),10,7800,Corte muy sabroso
+CHO-PZ,Elaborados,Chorizo Bombón (u),50,1200,Elaboración propia 100% cerdo
+MOR-PZ,Elaborados,Morcilla (u),30,1100,Muy cremosa
+CHI-KG,Achuras,Chinchulines (kg),10,4500,Bien crocantes
+RIÑ-KG,Achuras,Riñoncitos (kg),5,3800,Finos
+MIL-VAC,Elaborados,Milanesas de Carne (kg),20,8200,Rebozado premium
+MIL-POL,Elaborados,Milanesas de Pollo (kg),20,7200,Pechuga fileteada a mano

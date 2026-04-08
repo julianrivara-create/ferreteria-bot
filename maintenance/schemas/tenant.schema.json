@@ -1,0 +1,304 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "tenant_name": {
+      "type": "string"
+    },
+    "base_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "health_path": {
+      "type": "string"
+    },
+    "db_url_env_key": {
+      "type": "string"
+    },
+    "checks_enabled": {
+      "type": "object",
+      "properties": {
+        "http": {
+          "type": "boolean"
+        },
+        "db": {
+          "type": "boolean"
+        },
+        "logs": {
+          "type": "boolean"
+        },
+        "metrics": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "http",
+        "db",
+        "logs"
+      ]
+    },
+    "thresholds": {
+      "type": "object",
+      "properties": {
+        "http_timeout_ms": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "max_errors_4h": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "http_warn_latency_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "db_warn_latency_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "email": {
+      "type": "object",
+      "properties": {
+        "smtp_host_env_key": {
+          "type": "string"
+        },
+        "smtp_port_env_key": {
+          "type": "string"
+        },
+        "smtp_user_env_key": {
+          "type": "string"
+        },
+        "smtp_pass_env_key": {
+          "type": "string"
+        },
+        "from_addr_env_key": {
+          "type": "string"
+        },
+        "to_addrs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "subject_prefix": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "smtp_host_env_key",
+        "smtp_port_env_key",
+        "smtp_user_env_key",
+        "smtp_pass_env_key",
+        "from_addr_env_key",
+        "to_addrs"
+      ]
+    },
+    "railway": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string"
+        },
+        "environment_id": {
+          "type": "string"
+        },
+        "service_name": {
+          "type": "string"
+        },
+        "service_id": {
+          "type": "string"
+        },
+        "worker_service_id": {
+          "type": "string"
+        },
+        "log_lookback_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 4
+        },
+        "log_max_lines": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "log_max_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1048576
+        },
+        "log_dedupe_bucket_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 30
+        },
+        "metrics_enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "metrics_window_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        },
+        "metrics_step_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 60
+        },
+        "metrics_thresholds": {
+          "type": "object",
+          "properties": {
+            "cpu_pct_warn": {
+              "type": "integer"
+            },
+            "cpu_pct_fail": {
+              "type": "integer"
+            },
+            "mem_pct_warn": {
+              "type": "integer"
+            },
+            "mem_pct_fail": {
+              "type": "integer"
+            },
+            "log_pulls_per_day_warn": {
+              "type": "integer"
+            },
+            "log_pulls_per_day_fail": {
+              "type": "integer"
+            },
+            "log_bytes_per_day_warn": {
+              "type": "integer"
+            },
+            "log_bytes_per_day_fail": {
+              "type": "integer"
+            }
+          }
+        },
+        "watchdog_interval_minutes": {
+          "type": "integer",
+          "default": 60
+        }
+      }
+    },
+    "remediation": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        },
+        "max_restarts_per_day": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_redeploys_per_day": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "restart_cooldown_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "redeploy_cooldown_minutes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "watchdog": {
+      "type": "object",
+      "properties": {
+        "stale_warn_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "stale_fail_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fail_cooldown_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warn_cooldown_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "auto_recover_on_fail": {
+          "type": "boolean"
+        }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "properties": {
+        "dependency_circuit_fail_threshold": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "dependency_circuit_open_minutes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "alerts": {
+      "type": "object",
+      "properties": {
+        "dependency_cooldown_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "send_recovery": {
+          "type": "boolean"
+        }
+      }
+    },
+    "custom_checks": {
+      "type": "object",
+      "properties": {
+        "extra_log_patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "regex": {
+                "type": "string"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "WARN",
+                  "FAIL"
+                ]
+              },
+              "max_count_4h": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "regex",
+              "severity",
+              "max_count_4h"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "tenant_name",
+    "base_url",
+    "checks_enabled",
+    "email"
+  ]
+}

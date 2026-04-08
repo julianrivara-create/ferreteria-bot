@@ -1,0 +1,24 @@
+id: default_tenant
+slug: default
+business:
+  name: Default Store
+  description: Tienda multi-industria
+  industry: generic
+  language: es
+  currency: ARS
+  country: AR
+  tone: informal
+  visible_categories:
+    - General
+personality:
+  tone: Argentino informal (vos, che, dale, etc.)
+  emojis: "🛍️ 💳 ✅ 🚚"
+communication:
+  whatsapp_numbers:
+    - "whatsapp:+14155238886"
+cross_sell_rules: []
+paths:
+  db: data/default_store.db
+  catalog: data/tenants/default/catalog.csv
+  policies: data/tenants/default/policies.md
+  branding: data/tenants/default/branding.json

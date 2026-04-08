@@ -1,0 +1,73 @@
+SKU,Category,Model,StorageGB,Color,StockQty,PriceARS
+IP15-128-BLK,iPhone,iPhone 15,128,Black,4,1200000
+IP15-128-BLU,iPhone,iPhone 15,128,Blue,2,1200000
+IP15-128-PNK,iPhone,iPhone 15,128,Pink,1,1200000
+IP15-256-BLK,iPhone,iPhone 15,256,Black,2,1350000
+IP15-256-BLU,iPhone,iPhone 15,256,Blue,1,1350000
+IP15-512-BLK,iPhone,iPhone 15,512,Black,1,1500000
+
+IP15P-128-NAT,iPhone,iPhone 15 Pro,128,Natural Titanium,2,1600000
+IP15P-256-NAT,iPhone,iPhone 15 Pro,256,Natural Titanium,2,1800000
+IP15P-256-BTI,iPhone,iPhone 15 Pro,256,Black Titanium,1,1800000
+IP15P-512-NAT,iPhone,iPhone 15 Pro,512,Natural Titanium,1,2000000
+IP15P-1024-NAT,iPhone,iPhone 15 Pro,1024,Natural Titanium,1,2300000
+
+IP15PM-256-NAT,iPhone,iPhone 15 Pro Max,256,Natural Titanium,1,2000000
+IP15PM-256-BTI,iPhone,iPhone 15 Pro Max,256,Black Titanium,0,2000000
+IP15PM-512-NAT,iPhone,iPhone 15 Pro Max,512,Natural Titanium,1,2200000
+IP15PM-1024-NAT,iPhone,iPhone 15 Pro Max,1024,Natural Titanium,0,2600000
+
+IP16-128-BLK,iPhone,iPhone 16,128,Black,4,1400000
+IP16-128-PNK,iPhone,iPhone 16,128,Pink,3,1400000
+IP16-128-BLU,iPhone,iPhone 16,128,Blue,2,1400000
+IP16-256-BLK,iPhone,iPhone 16,256,Black,2,1550000
+IP16-256-PNK,iPhone,iPhone 16,256,Pink,1,1550000
+IP16-512-BLK,iPhone,iPhone 16,512,Black,1,1700000
+
+IP16P-128-NAT,iPhone,iPhone 16 Pro,128,Natural Titanium,2,1800000
+IP16P-256-NAT,iPhone,iPhone 16 Pro,256,Natural Titanium,2,2000000
+IP16P-256-BLK,iPhone,iPhone 16 Pro,256,Black,1,2000000
+IP16P-256-BTI,iPhone,iPhone 16 Pro,256,Black Titanium,2,2000000
+IP16P-512-NAT,iPhone,iPhone 16 Pro,512,Natural Titanium,1,2300000
+IP16P-1024-NAT,iPhone,iPhone 16 Pro,1024,Natural Titanium,1,2700000
+
+IP16PM-256-NAT,iPhone,iPhone 16 Pro Max,256,Natural Titanium,1,2300000
+IP16PM-256-BTI,iPhone,iPhone 16 Pro Max,256,Black Titanium,1,2300000
+IP16PM-512-NAT,iPhone,iPhone 16 Pro Max,512,Natural Titanium,1,2600000
+IP16PM-1024-NAT,iPhone,iPhone 16 Pro Max,1024,Natural Titanium,0,3000000
+
+MBA-M2-256-SIL,MacBook,MacBook Air M2,256,Silver,5,1800000
+MBA-M2-256-GRY,MacBook,MacBook Air M2,256,Space Gray,4,1800000
+MBA-M2-512-SIL,MacBook,MacBook Air M2,512,Silver,3,2100000
+MBA-M3-256-SIL,MacBook,MacBook Air M3,256,Silver,6,2200000
+MBA-M3-256-GRY,MacBook,MacBook Air M3,256,Space Gray,4,2200000
+MBA-M3-512-SIL,MacBook,MacBook Air M3,512,Silver,3,2500000
+
+MBP-M3-512-SIL,MacBook,MacBook Pro 14 M3,512,Silver,3,3500000
+MBP-M3-512-GRY,MacBook,MacBook Pro 14 M3,512,Space Gray,2,3500000
+MBP-M3-1TB-SIL,MacBook,MacBook Pro 14 M3,1024,Silver,2,4000000
+MBP-M3MAX-1TB-BLK,MacBook,MacBook Pro 16 M3 Max,1024,Space Black,1,5500000
+MBP-M3PRO-512-SIL,MacBook,MacBook Pro 16 M3 Pro,512,Silver,2,4500000
+
+IPAD-10-64-BLU,iPad,iPad 10th Gen,64,Blue,5,700000
+IPAD-10-64-PNK,iPad,iPad 10th Gen,64,Pink,4,700000
+IPAD-10-256-BLU,iPad,iPad 10th Gen,256,Blue,3,850000
+IPAD-AIR-128-BLU,iPad,iPad Air 11,128,Blue,4,1100000
+IPAD-AIR-256-BLU,iPad,iPad Air 11,256,Blue,3,1300000
+IPAD-AIR-256-PUR,iPad,iPad Air 11,256,Purple,2,1300000
+IPAD-PRO-256-GRY,iPad,iPad Pro 11,256,Space Gray,3,1600000
+IPAD-PRO-512-GRY,iPad,iPad Pro 11,512,Space Gray,2,1900000
+IPAD-PRO-512-SIL,iPad,iPad Pro 12.9,512,Silver,2,2200000
+IPAD-PRO-1TB-GRY,iPad,iPad Pro 12.9,1024,Space Gray,1,2600000
+
+AIRPODS-2,AirPods,AirPods 2nd Gen,0,White,12,220000
+AIRPODS-3,AirPods,AirPods 3rd Gen,0,White,10,350000
+AIRPODS-PRO-2,AirPods,AirPods Pro 2nd Gen,0,White,8,450000
+AIRPODS-MAX-SIL,AirPods,AirPods Max,0,Silver,3,850000
+AIRPODS-MAX-GRY,AirPods,AirPods Max,0,Space Gray,2,850000
+
+PS5-DISC-WHT,PlayStation,PlayStation 5,825,White,3,950000
+PS5-DIGITAL-WHT,PlayStation,PlayStation 5 Digital,825,White,4,850000
+PS5-CTRL-WHT,PlayStation,DualSense Controller,0,White,10,120000
+PS5-CTRL-BLK,PlayStation,DualSense Controller,0,Black,8,120000
+PS5-CTRL-RED,PlayStation,DualSense Controller,0,Red,6,130000

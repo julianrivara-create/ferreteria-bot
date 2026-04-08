@@ -1,0 +1,62 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+<div class="stack">
+  <div class="page-hero">
+    <div class="caption">Uso y costos</div>
+    <h1>Uso del entrenamiento</h1>
+    <div class="lead">Acá podés ver el consumo de tokens y el costo estimado del sandbox para entender cuánto trabajo asistido por modelo se está usando en las pruebas. Es una vista utilitaria, no hace falta abrirla para revisar o corregir casos todos los días.</div>
+  </div>
+  <div class="card card-pad">
+    <h2 class="section-title">Resumen de uso</h2>
+    <div class="grid-2">
+      <div class="metric"><span>Último costo diario</span><strong>{{ format_cost(daily_usage[0].estimated_cost_micros if daily_usage else 0) }}</strong></div>
+      <div class="metric"><span>Último costo mensual</span><strong>{{ format_cost(monthly_usage[0].estimated_cost_micros if monthly_usage else 0) }}</strong></div>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <h2 class="section-title">Totales por día</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Día</th><th>Tokens</th><th>Mensajes</th><th>Costo</th></tr></thead>
+      <tbody>
+        {% for row in daily_usage %}
+        <tr><td>{{ row.period_key }}</td><td>{{ row.total_tokens }}</td><td>{{ row.message_count }}</td><td>{{ format_cost(row.estimated_cost_micros) }}</td></tr>
+        {% else %}
+        <tr><td colspan="4">Todavía no hay uso registrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <h2 class="section-title">Totales por sesión</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Sesión</th><th>Tokens</th><th>Mensajes</th><th>Costo</th></tr></thead>
+      <tbody>
+        {% for row in session_usage %}
+        <tr><td>{{ row.session_id }}</td><td>{{ row.total_tokens }}</td><td>{{ row.message_count }}</td><td>{{ format_cost(row.estimated_cost_micros) }}</td></tr>
+        {% else %}
+        <tr><td colspan="4">Todavía no hay métricas por sesión.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <h2 class="section-title">Distribución por modelo</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Modelo</th><th>Respuestas del bot</th><th>Tokens</th><th>Costo</th></tr></thead>
+      <tbody>
+        {% for row in model_distribution %}
+        <tr><td>{{ row.model_name }}</td><td>{{ row.turns }}</td><td>{{ row.total_tokens }}</td><td>{{ format_cost(row.estimated_cost_micros) }}</td></tr>
+        {% else %}
+        <tr><td colspan="4">Todavía no hay uso por modelo registrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

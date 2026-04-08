@@ -1,0 +1,69 @@
+tenants:
+- id: default_tenant
+  slug: default
+  name: Default Store
+  profile_path: data/tenants/default/profile.yaml
+  phone_numbers:
+  - whatsapp:+14155238886
+  db_file: data/default_store.db
+  catalog_file: data/tenants/default/catalog.csv
+  policies_file: data/tenants/default/policies.md
+  branding_file: data/tenants/default/branding.json
+  api_keys:
+    openai: ${OPENAI_API_KEY}
+    gemini: ${GEMINI_API_KEY}
+  features:
+    fraud_detection: true
+    sentiment_analysis: true
+- id: farmacia
+  slug: farmacia
+  name: Farmacia Demo
+  profile_path: data/tenants/farmacia/profile.yaml
+  phone_numbers:
+  - whatsapp:+5491111111111
+  db_file: data/farmacia.db
+  catalog_file: data/tenants/farmacia/catalog.csv
+  policies_file: data/tenants/farmacia/policies.md
+  branding_file: data/tenants/farmacia/branding.json
+  api_keys:
+    openai: ${OPENAI_API_KEY}
+    gemini: ${GEMINI_API_KEY}
+  features:
+    fraud_detection: true
+    sentiment_analysis: true
+- id: ropa
+  slug: ropa
+  name: Ropa Demo
+  profile_path: data/tenants/ropa/profile.yaml
+  phone_numbers:
+  - whatsapp:+5492222222222
+  db_file: data/ropa.db
+  catalog_file: data/tenants/ropa/catalog.csv
+  policies_file: data/tenants/ropa/policies.md
+  branding_file: data/tenants/ropa/branding.json
+  api_keys:
+    openai: ${OPENAI_API_KEY}
+    gemini: ${GEMINI_API_KEY}
+  features:
+    fraud_detection: true
+    sentiment_analysis: true
+- id: ferreteria
+  slug: ferreteria
+  name: Ferreteria Central
+  profile_path: data/tenants/ferreteria/profile.yaml
+  phone_numbers:
+  - whatsapp:+5493333333333
+  db_file: data/ferreteria.db
+  catalog_file: data/tenants/ferreteria/catalog.csv
+  policies_file: data/tenants/ferreteria/policies.md
+  branding_file: data/tenants/ferreteria/branding.json
+  whatsapp_phone_number_id: ${FERRETERIA_WHATSAPP_PHONE_NUMBER_ID}
+  admin_phone_number_id: ${FERRETERIA_ADMIN_PHONE_ID}
+  supported_channels:
+  - whatsapp
+  api_keys:
+    openai: ${OPENAI_API_KEY}
+    gemini: ${GEMINI_API_KEY}
+  features:
+    fraud_detection: true
+    sentiment_analysis: true

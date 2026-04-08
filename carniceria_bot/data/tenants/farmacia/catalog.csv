@@ -1,0 +1,4 @@
+sku,category,name,price,currency,stock,active_ingredient,brand,dosage,requires_prescription
+MED-001,Analgésicos,Ibuprofeno 400mg,450,ARS,120,Ibuprofeno,GenericoPharma,400mg,No
+MED-002,Antibióticos,Amoxicilina 500mg,1200,ARS,40,Amoxicilina,AntibioMax,500mg,Si
+COS-001,Cuidado Personal,Protector Solar FPS50,1800,ARS,70,,SunCare,,No

@@ -1,0 +1,72 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+<div class="page-hero">
+  <div class="caption">Historial de sesiones</div>
+  <h1>Sesiones de prueba</h1>
+  <div class="lead">Usá este historial cuando quieras volver a una conversación, ver cuánto ya fue revisado o comparar cómo fue avanzando el intercambio con el bot.</div>
+  <div class="hero-actions">
+    <a class="chip accent" href="/ops/ferreteria/training/sessions?queue=needs_review">Abrir sesiones pendientes</a>
+    <a class="chip" href="/ops/ferreteria/training/sandbox">Iniciar una nueva prueba</a>
+  </div>
+</div>
+<div class="card card-pad">
+  <h2 class="section-title">Sesiones</h2>
+  <div class="summary-grid">
+    <a class="session-link" href="/ops/ferreteria/training/sessions?queue=open">
+      <div class="caption">Sesiones abiertas</div>
+      <strong style="font-size:24px;">{{ workflow_counts.open_sessions }}</strong>
+    </a>
+    <a class="session-link" href="/ops/ferreteria/training/sessions?queue=needs_review">
+      <div class="caption">Pendientes de revisión</div>
+      <strong style="font-size:24px;">{{ workflow_counts.sessions_needing_review }}</strong>
+    </a>
+    <a class="session-link" href="/ops/ferreteria/training/sessions?queue=limit_reached">
+      <div class="caption">Con límite alcanzado</div>
+      <strong style="font-size:24px;">{{ workflow_counts.limit_reached_sessions }}</strong>
+    </a>
+  </div>
+  <form method="get" class="row" style="margin-bottom:16px;">
+    <select name="status">
+      <option value="">Todos los estados</option>
+      <option value="open">Abierta</option>
+      <option value="closed">Cerrada</option>
+      <option value="limit_reached">Límite alcanzado</option>
+      <option value="archived">Archivada</option>
+    </select>
+    <select name="mode_profile">
+      <option value="">Todos los perfiles</option>
+      <option value="cheap">Económico</option>
+      <option value="balanced">Balanceado</option>
+      <option value="rich">Completo</option>
+    </select>
+    <input type="text" name="operator" placeholder="Operador" value="{{ request.args.get('operator', '') }}">
+    <input type="text" name="model_name" placeholder="Modelo" value="{{ request.args.get('model_name', '') }}">
+    <button type="submit" class="secondary">Filtrar</button>
+  </form>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Sesión</th><th>Estado</th><th>Avance de revisión</th><th>Perfil</th><th>Modelo</th><th>Límite</th><th>Actualizado</th></tr>
+    </thead>
+    <tbody>
+      {% for session in sessions %}
+      <tr>
+        <td><a href="/ops/ferreteria/training/sandbox?session_id={{ session.id }}">{{ session.id.split(':')[-1] }}</a></td>
+        <td>{{ session.status_label }}</td>
+        <td>
+          {{ session.review_count }} / {{ session.assistant_turn_count }}
+          {% if session.needs_review %}<span class="chip warn">pendiente</span>{% endif %}
+        </td>
+        <td>{{ session.mode_profile_label }}</td>
+        <td>{{ session.model_name or '-' }}</td>
+        <td>{{ session.token_ceiling or '-' }}</td>
+        <td>{{ session.updated_at }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7">Todavía no hay sesiones de prueba.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

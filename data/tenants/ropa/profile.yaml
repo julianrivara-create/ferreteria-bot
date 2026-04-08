@@ -1,0 +1,26 @@
+id: ropa
+slug: ropa
+business:
+  name: Ropa Demo
+  description: Negocio del rubro clothing
+  industry: clothing
+  language: es
+  currency: ARS
+  country: AR
+  tone: informal
+  visible_categories:
+  - Calzado
+  - Pantalones
+  - Remeras
+personality:
+  tone: informal
+  emojis: ✅
+communication:
+  whatsapp_numbers:
+  - whatsapp:+5492222222222
+cross_sell_rules: []
+paths:
+  db: data/ropa.db
+  catalog: data/tenants/ropa/catalog.csv
+  policies: data/tenants/ropa/policies.md
+  branding: data/tenants/ropa/branding.json

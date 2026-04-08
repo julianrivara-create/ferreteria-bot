@@ -1,0 +1,310 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<div class="page-hero">
+  <div class="caption">Pruebas y revisión</div>
+  <h1>Sandbox de entrenamiento</h1>
+  <div class="lead">Usá este espacio aislado para probar conversaciones reales de ferretería y revisar exactamente la respuesta del bot que querés convertir en un caso. Nada de lo que hagas acá toca presupuestos reales, derivaciones ni sesiones en vivo.</div>
+  <div class="hero-actions">
+    <span class="hero-note">Buena práctica: revisá la primera respuesta del bot que desvió la conversación, no solo la última.</span>
+    <a class="chip" href="/ops/ferreteria/training/help">Ver guía rápida</a>
+    <a class="chip" href="/ops/ferreteria/training/cases?queue=needs_suggestion">Ir a casos pendientes</a>
+    {% if session %}<span class="chip {% if session.status == 'open' %}good{% elif session.status == 'limit_reached' %}warn{% else %}accent{% endif %}">{{ session.status_label }}</span>{% endif %}
+  </div>
+</div>
+<div class="card card-pad" style="margin-bottom:18px;">
+  <div class="row" style="justify-content:space-between; align-items:flex-start;">
+    <div>
+      <h2 class="section-title">Qué resolver en esta pantalla</h2>
+      <div class="help">Acá solo hay tres pasos: probar una conversación, elegir una respuesta del bot y guardarla como caso de entrenamiento.</div>
+    </div>
+    <span class="chip accent">Flujo principal</span>
+  </div>
+  <div class="grid-2" style="margin-top:12px;">
+    <div class="step-card">
+      <div class="row"><span class="step-number">1</span><strong>Probar</strong></div>
+      <div class="help">Escribí como un cliente real.</div>
+    </div>
+    <div class="step-card">
+      <div class="row"><span class="step-number">2</span><strong>Elegir respuesta</strong></div>
+      <div class="help">Marcá la primera respuesta del bot que se desvió.</div>
+    </div>
+    <div class="step-card">
+      <div class="row"><span class="step-number">3</span><strong>Guardar caso</strong></div>
+      <div class="help">Completá la revisión y pasá al caso para decidir la corrección.</div>
+    </div>
+    <div class="step-card">
+      <div class="row"><span class="step-number">4</span><strong>Seguir</strong></div>
+      <div class="help">Después vas a <strong>Casos</strong> o <strong>Correcciones</strong>, no hace falta seguir resolviendo todo acá.</div>
+    </div>
+  </div>
+</div>
+<div class="grid-3">
+  <div class="stack">
+    <div class="card card-pad">
+      <h2 class="section-title">Iniciar sesión</h2>
+      <div class="help" style="margin-bottom:10px;">Elegí un modo de uso, definí un límite si hace falta y empezá con una frase real de cliente.</div>
+      <form method="post">
+        <input type="hidden" name="action" value="start_session">
+        <div class="field-block">
+          <label>Modo de prueba</label>
+          <select name="mode_profile">
+            <option value="cheap">Económico</option>
+            <option value="balanced">Balanceado</option>
+            <option value="rich">Completo</option>
+          </select>
+        </div>
+        <div class="field-block">
+          <label>Límite de tokens para esta sesión</label>
+          <input type="number" name="token_ceiling" min="0" step="1" placeholder="Opcional">
+        </div>
+        <button type="submit" class="accent-btn">Iniciar sesión de prueba</button>
+      </form>
+    </div>
+    <div class="card card-pad">
+      <h2 class="section-title">Sesiones recientes</h2>
+      <div class="help" style="margin-bottom:10px;">Volvé a abrir una conversación reciente cuando quieras seguir revisando o comparar otra respuesta del mismo intercambio.</div>
+      {% for item in sessions %}
+        <a class="session-link {% if session and session.id == item.id %}active{% endif %}" href="/ops/ferreteria/training/sandbox?session_id={{ item.id }}">
+          <div class="row" style="justify-content:space-between;">
+            <strong>{{ item.id.split(':')[-1][:8] }}</strong>
+            <span class="chip {% if item.status == 'open' %}good{% elif item.status == 'limit_reached' %}warn{% else %}accent{% endif %}">{{ item.status_label }}</span>
+          </div>
+          <div class="muted">{{ item.mode_profile_label }} · {{ item.model_name or '-' }}</div>
+          <div class="muted">{{ item.updated_at }}</div>
+        </a>
+      {% else %}
+        <div class="empty">Iniciá una sesión y escribí un mensaje como si fueras un cliente real.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <h2 class="section-title" style="margin-bottom:4px;">Transcripción del sandbox</h2>
+          <div class="muted">Aislado de presupuestos, derivaciones y sesiones reales. Podés revisar cada respuesta del bot directamente desde la conversación.</div>
+        </div>
+        {% if session %}
+        <div class="row">
+          <form method="post">
+            <input type="hidden" name="action" value="reset_session">
+            <input type="hidden" name="session_id" value="{{ session.id }}">
+            <button type="submit" class="secondary">Reiniciar</button>
+          </form>
+          <form method="post">
+            <input type="hidden" name="action" value="close_session">
+            <input type="hidden" name="session_id" value="{{ session.id }}">
+            <button type="submit" class="secondary">Cerrar</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="chat" style="margin-top:18px;">
+        {% if session and session.messages %}
+          {% for message in session.messages %}
+            <div class="bubble {{ 'assistant' if message.role == 'assistant' else 'user' }} {% if message.is_selected_review_target %}review-target{% endif %}">
+              <div class="meta">
+                <strong>{{ 'bot' if message.role == 'assistant' else 'cliente' }}</strong>
+                {% if message.route_source %}<span class="chip accent">{{ message.route_source_label }}</span>{% endif %}
+                {% if message.model_name %}<span>{{ message.model_name }}</span>{% endif %}
+                {% if message.role == 'assistant' %}
+                  <span>{{ message.prompt_tokens }} / {{ message.completion_tokens }} / {{ message.total_tokens }} tok</span>
+                  <span>{{ format_cost(message.estimated_cost_micros) }}</span>
+                {% endif %}
+              </div>
+              <div>{{ message.content }}</div>
+              {% if message.role == 'assistant' %}
+              <div class="review-actions">
+                <a class="chip {% if message.is_selected_review_target %}accent{% endif %}" href="/ops/ferreteria/training/sandbox?session_id={{ session.id }}&review_message_id={{ message.id }}">
+                  {% if message.is_selected_review_target %}Estás revisando esta respuesta{% else %}Revisar esta respuesta{% endif %}
+                </a>
+                {% if message.case_id %}
+                <a class="chip good" href="/ops/ferreteria/training/cases/{{ message.case_id }}">Abrir caso guardado</a>
+                {% elif message.is_reviewed %}
+                <span class="chip good">Ya revisada</span>
+                {% else %}
+                <span class="chip warn">Pendiente de revisión</span>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty">Iniciá una sesión y mandá un mensaje realista para ver la conversación acá.</div>
+        {% endif %}
+      </div>
+
+      {% if session %}
+      <form method="post" style="margin-top:18px;">
+        <input type="hidden" name="action" value="send_message">
+        <input type="hidden" name="session_id" value="{{ session.id }}">
+        <textarea name="message" placeholder="Escribí como si fueras un cliente real. Ej: Necesito mecha para pared de 8 mm."></textarea>
+        <button type="submit" class="accent-btn">Enviar a la prueba</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card card-pad">
+      <h2 class="section-title">Uso y límites</h2>
+      {% if session %}
+        <div class="grid-2">
+          <div class="metric"><span>Modelo</span><strong>{{ session.model_name or '-' }}</strong></div>
+          <div class="metric"><span>Perfil</span><strong>{{ session.mode_profile_label }}</strong></div>
+          <div class="metric"><span>Tokens de la sesión</span><strong>{{ session.usage.total_tokens if session.usage else 0 }}</strong></div>
+          <div class="metric"><span>Costo estimado</span><strong>{{ format_cost(session.usage.estimated_cost_micros if session.usage else 0) }}</strong></div>
+        </div>
+        {% if session.status == 'limit_reached' %}
+        <div class="error" style="margin-top:14px;">Esta sesión llegó al límite de tokens. La conversación y la revisión siguen disponibles, pero se frenan las respuestas asistidas por modelo.</div>
+        {% endif %}
+        <div style="margin-top:14px;">
+          <div class="row" style="justify-content:space-between;">
+            <span class="muted">Límite</span>
+            <span class="muted">{{ session.token_ceiling or 'Sin límite' }}</span>
+          </div>
+          <div class="progress" style="margin-top:8px;">
+            {% set pct = (((session.usage.total_tokens if session.usage else 0) / session.token_ceiling) * 100) if session.token_ceiling else 0 %}
+            <span style="width: {{ pct if pct < 100 else 100 }}%;"></span>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty">Los tokens y el costo aparecen acá después de iniciar la primera sesión.</div>
+      {% endif %}
+    </div>
+
+    <div class="card card-pad">
+      <h2 class="section-title">Revisar una respuesta</h2>
+      {% if session and review_target_message %}
+      <div class="callout" style="margin-bottom:12px;">
+        <div class="caption">Respuesta del bot seleccionada</div>
+        <div style="margin-top:6px;">{{ review_target_message.content }}</div>
+        {% if review_target %}
+        <div class="help" style="margin-top:8px;">Esta respuesta ya tiene un caso guardado. Si volvés a guardar, se actualiza ese mismo caso.</div>
+        {% else %}
+        <div class="help" style="margin-top:8px;">Podés cambiar a cualquier respuesta del bot dentro de la conversación y guardar la corrección desde ahí.</div>
+        {% endif %}
+      </div>
+      <form method="post">
+        <input type="hidden" name="action" value="save_review">
+        <input type="hidden" name="session_id" value="{{ session.id }}">
+        <input type="hidden" name="bot_message_id" value="{{ review_target_message.id }}">
+        <label>¿Cómo estuvo esta respuesta?</label>
+        <select name="review_label">
+          <option value="correct" {% if review_target and review_target.review_label == 'correct' %}selected{% endif %}>Correcta</option>
+          <option value="partially_correct" {% if review_target and review_target.review_label == 'partially_correct' %}selected{% endif %}>Parcial</option>
+          <option value="incorrect" {% if review_target and review_target.review_label == 'incorrect' %}selected{% endif %}>Incorrecta</option>
+          <option value="unsafe" {% if review_target and review_target.review_label == 'unsafe' %}selected{% endif %}>Riesgosa</option>
+        </select>
+        <label>¿Qué salió mal?</label>
+        <select name="failure_tag" data-failure-tag>
+          <option value="">Elegí el problema principal</option>
+          {% for item in failure_tag_choices %}
+          <option value="{{ item.key }}" {% if review_target and review_target.failure_tag == item.key %}selected{% endif %}>{{ item.label }}</option>
+          {% endfor %}
+        </select>
+        <label>¿Qué pasó exactamente?</label>
+        <select name="failure_detail_tag" data-failure-detail>
+          <option value="">Elegí un motivo más concreto</option>
+          {% for group in failure_detail_choices %}
+            {% for item in group.options %}
+            <option value="{{ item.key }}" data-failure-group="{{ group.failure_tag }}" {% if review_target and review_target.failure_detail_tag == item.key %}selected{% endif %}>{{ item.label }}</option>
+            {% endfor %}
+          {% endfor %}
+        </select>
+        <label>¿Qué tendría que haber hecho primero?</label>
+        <select name="expected_behavior_tag" data-expected-behavior>
+          <option value="">Elegí la acción esperada del bot</option>
+          {% for item in expected_behavior_choices %}
+          <option value="{{ item.key }}" {% if review_target and review_target.expected_behavior_tag == item.key %}selected{% endif %}>{{ item.label }}</option>
+          {% endfor %}
+        </select>
+        <label>Si faltaba una aclaración, ¿qué dato importaba primero?</label>
+        <select name="clarification_dimension">
+          <option value="">No había un dato puntual</option>
+          {% for item in clarification_dimension_choices %}
+          <option value="{{ item.key }}" {% if review_target and review_target.clarification_dimension == item.key %}selected{% endif %}>{{ item.label }}</option>
+          {% endfor %}
+        </select>
+        <div class="panel-soft stack-sm">
+          <strong>Guía rápida para revisar</strong>
+          <div class="help" data-review-guidance>Primero elegí el problema principal, después el motivo específico y por último qué tendría que haber hecho el bot. Si completás bien esos campos, las notas libres pueden ser más cortas.</div>
+          <div class="help">Guardar este formulario crea o actualiza el caso de entrenamiento y te manda al detalle del caso para armar la corrección.</div>
+        </div>
+        <label>¿Qué tendría que haber hecho el bot?</label>
+        <textarea name="expected_answer">{{ review_target.expected_answer if review_target else '' }}</textarea>
+        <label>¿Qué estuvo mal?</label>
+        <textarea name="what_was_wrong">{{ review_target.what_was_wrong if review_target else '' }}</textarea>
+        <label>Aclaración faltante, si la hubo</label>
+        <textarea name="missing_clarification">{{ review_target.missing_clarification if review_target else '' }}</textarea>
+        <label>Producto o familia correctos, si los sabés</label>
+        <input type="text" name="suggested_family" value="{{ review_target.suggested_family if review_target else '' }}">
+        <label>Producto exacto, si lo sabés</label>
+        <input type="text" name="suggested_canonical_product" value="{{ review_target.suggested_canonical_product if review_target else '' }}">
+        <label>Notas del operador</label>
+        <textarea name="operator_notes">{{ review_target.operator_notes if review_target else '' }}</textarea>
+        <button type="submit" class="accent-btn">Guardar como caso de entrenamiento</button>
+      </form>
+      {% else %}
+      <div class="empty">La revisión aparece cuando el sandbox ya generó una respuesta del bot.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    const failureTag = document.querySelector('[data-failure-tag]');
+    const failureDetail = document.querySelector('[data-failure-detail]');
+    const behavior = document.querySelector('[data-expected-behavior]');
+    const guidance = document.querySelector('[data-review-guidance]');
+    const behaviorChoices = {{ expected_behavior_choices | tojson }};
+    if (!failureTag || !failureDetail) return;
+
+    function syncFailureDetail() {
+      const selected = failureTag.value;
+      Array.from(failureDetail.options).forEach((option) => {
+        if (!option.value) {
+          option.hidden = false;
+          return;
+        }
+        option.hidden = option.dataset.failureGroup !== selected;
+      });
+      if (failureDetail.selectedOptions.length && failureDetail.selectedOptions[0].hidden) {
+        failureDetail.value = '';
+      }
+    }
+
+    function syncGuidance() {
+      if (!guidance) return;
+      const selectedBehavior = behavior ? behaviorChoices.find((item) => item.key === behavior.value) : null;
+      const pieces = [];
+      if (failureTag.value) {
+        pieces.push('Problema principal: ' + failureTag.options[failureTag.selectedIndex].textContent + '.');
+      }
+      if (failureDetail.value) {
+        pieces.push('Motivo específico: ' + failureDetail.options[failureDetail.selectedIndex].textContent + '.');
+      }
+      if (selectedBehavior) {
+        pieces.push('Primera acción esperada del bot: ' + selectedBehavior.label + '. ' + selectedBehavior.help);
+      }
+      guidance.textContent = pieces.length
+        ? pieces.join(' ')
+        : 'Primero elegí el problema principal, después el motivo específico y por último qué tendría que haber hecho el bot. Si completás bien esos campos, las notas libres pueden ser más cortas.';
+    }
+
+    failureTag.addEventListener('change', function () {
+      syncFailureDetail();
+      syncGuidance();
+    });
+    if (behavior) {
+      behavior.addEventListener('change', syncGuidance);
+    }
+    failureDetail.addEventListener('change', syncGuidance);
+    syncFailureDetail();
+    syncGuidance();
+  })();
+</script>
+{% endblock %}

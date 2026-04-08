@@ -1,0 +1,32 @@
+id: default_tenant
+slug: default
+business:
+  name: AtelierTechnology
+  description: Apple Reseller Premium
+  industry: technology
+  language: es
+  currency: ARS
+  country: AR
+  tone: informal
+  visible_categories:
+    - iPhone
+    - MacBook
+    - iPad
+    - AirPods
+    - PlayStation
+personality:
+  tone: Argentino informal (vos, che, dale, etc.)
+  emojis: "📱 💳 ✅ 🚚"
+communication:
+  whatsapp_numbers:
+    - "whatsapp:+14155238886"
+cross_sell_rules:
+  - source_category: iPhone
+    target_category: AirPods
+    discount_percent: 10
+    reason: "complemento ideal para tu iPhone"
+paths:
+  db: data/iphone_store.db
+  catalog: data/tenants/default/catalog.csv
+  policies: data/tenants/default/policies.md
+  branding: data/tenants/default/branding.json

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Producto | Store</title>
+    <link rel="stylesheet" href="styles/style.css">
+    <link rel="stylesheet" href="styles/product.css">
+    <link rel="stylesheet" href="styles/product-additions.css">
+    <link rel="stylesheet" href="styles/enhancements.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="container nav-content">
+            <div class="logo">
+                <i class="fas fa-robot" style="color: var(--primary-color);"></i>
+                <span data-store-name>Store</span>
+            </div>
+            <div class="nav-links">
+                <a id="nav-home" href="index.html">Inicio</a>
+                <a href="#" class="cart-btn" onclick="toggleCart()">
+                    <span class="cart-icon">🛒</span>
+                    <span id="cart-count">0</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Product Detail Section -->
+    <section class="product-detail">
+        <div class="container">
+            <div class="breadcrumbs">
+                <a href="index.html">Inicio</a>
+                <span>/</span>
+                <span id="breadcrumb-category">Producto</span>
+                <span>/</span>
+                <span id="breadcrumb-model">Cargando...</span>
+            </div>
+            <div id="product-container" class="product-layout">
+                <!-- Loading state -->
+                <div class="loading-state">
+                    <p>Cargando producto...</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cart Drawer (Slide-over Panel) -->
+    <div id="cart-overlay" onclick="if(typeof cart !== 'undefined') cart.hideDrawer()"></div>
+    <div id="cart-drawer">
+        <div class="cart-header">
+            <h2>🛒 Mi Carrito</h2>
+            <button class="cart-close" onclick="if(typeof cart !== 'undefined') cart.hideDrawer()">×</button>
+        </div>
+        <div class="cart-items-container" id="cart-items-container">
+            <!-- Cart items render here -->
+        </div>
+        <div class="cart-footer">
+            <div class="cart-total-row">
+                <span>Total:</span>
+                <span id="cart-total">$0</span>
+            </div>
+            <button id="checkout-btn" onclick="if(typeof cart !== 'undefined') cart.initiateCheckout()">
+                Finalizar Compra por WhatsApp
+            </button>
+        </div>
+    </div>
+
+    <link rel="stylesheet" href="styles/cart.css">
+    <script src="scripts/cart.js"></script>
+    <script src="scripts/product-specs.js"></script>
+    <script src="scripts/related-products.js"></script>
+    <script src="scripts/product.js"></script>
+    <script>
+        (function () {
+            const params = new URLSearchParams(window.location.search);
+            const tenant = params.get('tenant') || 'default';
+            const home = document.getElementById('nav-home');
+            if (home) home.href = `index.html?tenant=${encodeURIComponent(tenant)}`;
+        })();
+    </script>
+</body>
+
+</html>

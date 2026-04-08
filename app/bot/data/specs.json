@@ -1,0 +1,62 @@
+{
+    "Taladro Percutor 13mm": {
+        "potencia": "710W",
+        "chuck": "13mm",
+        "velocidad": "0-3000 RPM",
+        "modos": ["Taladro", "Percutor"],
+        "peso": "1.8 kg",
+        "usos": ["Hormigón", "Madera", "Metal"]
+    },
+    "Amoladora 115mm": {
+        "potencia": "750W",
+        "disco": "115mm (4.5\")",
+        "velocidad": "11000 RPM",
+        "peso": "1.6 kg",
+        "usos": ["Corte", "Desbaste", "Pulido"]
+    },
+    "Amoladora 230mm": {
+        "potencia": "2000W",
+        "disco": "230mm (9\")",
+        "velocidad": "6500 RPM",
+        "peso": "5.2 kg",
+        "usos": ["Corte pesado", "Desbaste de hormigón"]
+    },
+    "Sierra Circular 7.25\"": {
+        "potencia": "1400W",
+        "hoja": "7.25\" (185mm)",
+        "corte_90": "66mm",
+        "corte_45": "47mm",
+        "peso": "3.8 kg",
+        "usos": ["Madera", "Tableros", "MDF"]
+    },
+    "Atornillador a Batería": {
+        "voltaje": "18V / 20V",
+        "torque_max": "60 Nm",
+        "velocidades": "2",
+        "chuck": "13mm",
+        "bateria": "Li-Ion 2Ah",
+        "usos": ["Tornillos", "Taladrado ligero", "Atornillado"]
+    },
+    "Rotomartillo SDS Plus": {
+        "potencia": "800W",
+        "energia_impacto": "2.5 J",
+        "modos": ["Taladro", "Rotomartillo", "Cincel"],
+        "peso": "2.8 kg",
+        "usos": ["Hormigón duro", "Mampostería", "Cincelado"]
+    },
+    "Lijadora Orbital": {
+        "potencia": "300W",
+        "orbitas": "14000 OPM",
+        "platina": "114 x 102mm",
+        "peso": "1.1 kg",
+        "usos": ["Madera", "Pintura", "Acabados"]
+    },
+    "Caladora": {
+        "potencia": "650W",
+        "velocidad": "500-3100 CPM",
+        "corte_madera": "100mm",
+        "corte_metal": "10mm",
+        "peso": "2.0 kg",
+        "usos": ["Curvas en madera", "Corte de metal", "Cerámico"]
+    }
+}

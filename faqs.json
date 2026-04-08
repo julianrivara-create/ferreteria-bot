@@ -1,0 +1,34 @@
+{
+  "preguntas_frecuentes": {
+    "envios": {
+      "pregunta": "Como manejan envios y retiros",
+      "respuesta": "Hacemos retiro por mostrador sin costo y envios en moto o transporte. La demora habitual es de 24 a 72 horas habiles segun zona.",
+      "keywords": ["envio", "envios", "retiro", "retirar", "moto", "transporte", "despacho"]
+    },
+    "pagos": {
+      "pregunta": "Que medios de pago aceptan",
+      "respuesta": "Aceptamos efectivo, transferencia, MercadoPago y tarjetas. Para operaciones grandes confirmamos la condicion comercial antes de cerrar.",
+      "keywords": ["pago", "pagos", "tarjeta", "transferencia", "mercadopago", "efectivo", "cuotas"]
+    },
+    "facturacion": {
+      "pregunta": "Hacen factura A o B",
+      "respuesta": "Si, podemos emitir factura A o B. Si necesitas factura A o una condicion especial, pasame los datos y lo confirmamos.",
+      "keywords": ["factura", "factura a", "factura b", "cuit", "afip"]
+    },
+    "cambios": {
+      "pregunta": "Como funcionan cambios y devoluciones",
+      "respuesta": "Aceptamos cambios dentro de 10 dias corridos con ticket o factura, siempre que el producto este sin uso y en su empaque original.",
+      "keywords": ["cambio", "cambios", "devolucion", "devoluciones", "devolver"]
+    },
+    "garantia": {
+      "pregunta": "Que garantia tienen las herramientas",
+      "respuesta": "Las herramientas y productos con garantia de fabricante respetan la cobertura oficial. Si hay una falla, te derivamos a postventa para resolverlo.",
+      "keywords": ["garantia", "falla", "postventa", "service", "servicio tecnico"]
+    },
+    "horario": {
+      "pregunta": "Cual es el horario de atencion",
+      "respuesta": "Atendemos de lunes a viernes de 8:00 a 18:00 y los sabados de 8:30 a 13:00.",
+      "keywords": ["horario", "abren", "atienden", "sabado", "lunes", "viernes"]
+    }
+  }
+}

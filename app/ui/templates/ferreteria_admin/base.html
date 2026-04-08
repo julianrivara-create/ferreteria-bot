@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>{{ title or "Ferreteria Admin" }}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; color: #1f2937; }
+      nav a { margin-right: 12px; }
+      table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+      th, td { border: 1px solid #d1d5db; padding: 8px; vertical-align: top; }
+      th { background: #f3f4f6; text-align: left; }
+      .muted { color: #6b7280; }
+      .error { color: #b91c1c; }
+      textarea { width: 100%; min-height: 420px; font-family: monospace; }
+      input, select, button { padding: 6px 8px; margin: 4px 0; }
+      form.inline { display: inline-block; margin-right: 8px; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="/ops/ferreteria/quotes">Quotes</a>
+      <a href="/ops/ferreteria/unresolved-terms">Unresolved terms</a>
+      <a href="/ops/ferreteria/knowledge/synonyms">Synonyms</a>
+      <a href="/ops/ferreteria/knowledge/clarifications">Clarifications</a>
+      <a href="/ops/ferreteria/knowledge/families">Families</a>
+      <a href="/ops/ferreteria/knowledge/blocked_terms">Blocked terms</a>
+      <a href="/ops/ferreteria/knowledge/complementary">Complementary</a>
+      <a href="/ops/ferreteria/knowledge/acceptance">Acceptance</a>
+      <a href="/ops/ferreteria/knowledge/faqs">FAQs</a>
+    </nav>
+    <hr>
+    {% block content %}{% endblock %}
+  </body>
+</html>

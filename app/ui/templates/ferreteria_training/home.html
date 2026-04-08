@@ -1,0 +1,311 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+{% if error %}<div class="error" style="margin-bottom:18px;">{{ error }}</div>{% endif %}
+{% if workspace_notice and workspace_notice.suggestion %}
+<div class="success-banner" style="margin-bottom:18px;">
+  <div><strong>Cambio en preparación</strong></div>
+  <div class="help" style="margin-top:6px;">Guardamos la enseñanza desde la conversación y dejamos un borrador recomendado listo para revisar más tarde.</div>
+  <div class="message-actions" style="margin-top:10px;">
+    <a class="chip accent" href="/ops/ferreteria/training/suggestions/{{ workspace_notice.suggestion.id }}">Abrir cambio</a>
+    {% if workspace_notice.case %}
+    <a class="chip" href="/ops/ferreteria/training/cases/{{ workspace_notice.case.id }}">Abrir vista avanzada</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="page-hero">
+  <div class="caption">A → B → C</div>
+  <h1>Hablar con el bot</h1>
+  <div class="lead">Esta es la pantalla principal. Primero probás una conversación, después marcás una respuesta con <strong>Esto estuvo mal</strong> y por último dejás un <strong>cambio en preparación</strong> para revisar o activar más tarde.</div>
+  <div class="hero-actions">
+    <span class="hero-note">Paso A: hablá con el bot. Paso B: enseñale qué tendría que haber hecho. Paso C: activá el cambio desde <strong>Cambios listos</strong>.</span>
+    <a class="chip accent" href="/ops/ferreteria/training/suggestions?queue=approved">Ir a cambios listos</a>
+    <a class="chip" href="/ops/ferreteria/training/tools">Abrir más herramientas</a>
+  </div>
+</div>
+
+<div class="summary-grid">
+  <div class="metric"><span>Para revisar ahora</span><strong>{{ workflow_counts.sessions_needing_review }}</strong></div>
+  <div class="metric"><span>Cambios en preparación</span><strong>{{ workflow_counts.draft_suggestions }}</strong></div>
+  <div class="metric"><span>Listos para activar</span><strong>{{ workflow_counts.approved_waiting_apply }}</strong></div>
+  <div class="metric"><span>Casos futuros por atender</span><strong>{{ workflow_counts.regression_attention }}</strong></div>
+</div>
+
+<div class="workspace-layout">
+  <div class="stack">
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between; align-items:flex-start;">
+        <div>
+          <h2 class="section-title" style="margin-bottom:4px;">Paso A. Probá una conversación</h2>
+          <div class="muted">Escribí como un cliente real. Cuando aparezca una respuesta del bot que no te convence, marcala desde la misma conversación.</div>
+        </div>
+        {% if session %}
+        <div class="row">
+          <span class="chip {% if session.status == 'open' %}good{% elif session.status == 'limit_reached' %}warn{% else %}accent{% endif %}">{{ session.status_label }}</span>
+          <span class="chip">{{ session.mode_profile_label }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if not session %}
+      <div class="panel-soft stack-sm" style="margin-top:16px;">
+        <strong>Empezá por acá</strong>
+        <div class="help">Abrí una sesión aislada y empezá a escribir como si fueras un cliente del local. Nada de lo que hagas acá toca conversaciones reales.</div>
+        <form method="post" style="margin-top:6px;">
+          <input type="hidden" name="action" value="start_session">
+          <div class="form-grid cols-2">
+            <div class="field-block">
+              <label>Modo de prueba</label>
+              <select name="mode_profile">
+                <option value="cheap">Económico</option>
+                <option value="balanced">Balanceado</option>
+                <option value="rich">Completo</option>
+              </select>
+            </div>
+            <div class="field-block">
+              <label>Límite de tokens (opcional)</label>
+              <input type="number" name="token_ceiling" min="0" step="1" placeholder="Opcional">
+            </div>
+          </div>
+          <button type="submit" class="accent-btn">Iniciar sesión de prueba</button>
+        </form>
+      </div>
+      {% else %}
+      <div class="chat" style="margin-top:18px;">
+        {% for message in session.messages %}
+        <div class="bubble {{ 'assistant' if message.role == 'assistant' else 'user' }} {% if message.is_selected_review_target %}review-target{% endif %}">
+          <div class="meta">
+            <strong>{{ 'bot' if message.role == 'assistant' else 'cliente' }}</strong>
+            {% if message.route_source %}<span class="chip accent">{{ message.route_source_label }}</span>{% endif %}
+            {% if message.model_name %}<span>{{ message.model_name }}</span>{% endif %}
+            {% if message.role == 'assistant' %}
+            <span>{{ message.prompt_tokens }} / {{ message.completion_tokens }} / {{ message.total_tokens }} tok</span>
+            <span>{{ format_cost(message.estimated_cost_micros) }}</span>
+            {% endif %}
+          </div>
+          <div>{{ message.content }}</div>
+          {% if message.role == 'assistant' %}
+          <div class="message-actions">
+            <a class="chip {% if message.is_selected_review_target %}accent{% endif %}" href="/ops/ferreteria/training?session_id={{ session.id }}&review_message_id={{ message.id }}">
+              {% if message.is_selected_review_target %}Estás enseñando sobre esta respuesta{% else %}Esto estuvo mal{% endif %}
+            </a>
+            {% if message.case_id %}
+            <a class="chip good" href="/ops/ferreteria/training/cases/{{ message.case_id }}">Abrir ajuste avanzado</a>
+            {% elif message.is_reviewed %}
+            <span class="chip good">Ya tiene una enseñanza guardada</span>
+            {% else %}
+            <span class="chip warn">Pendiente de revisión</span>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="empty">Todavía no hay mensajes. Escribí la primera consulta como si fueras un cliente real.</div>
+        {% endfor %}
+      </div>
+
+      <form method="post" style="margin-top:18px;">
+        <input type="hidden" name="action" value="send_message">
+        <input type="hidden" name="session_id" value="{{ session.id }}">
+        <textarea name="message" placeholder="Ejemplo: Necesito mecha para pared de 8 mm."></textarea>
+        <div class="row">
+          <button type="submit" class="accent-btn">Enviar al bot</button>
+        </div>
+      </form>
+      <div class="row" style="margin-top:10px;">
+        <form method="post">
+          <input type="hidden" name="action" value="reset_session">
+          <input type="hidden" name="session_id" value="{{ session.id }}">
+          <button type="submit" class="secondary">Reiniciar sesión</button>
+        </form>
+        <form method="post">
+          <input type="hidden" name="action" value="close_session">
+          <input type="hidden" name="session_id" value="{{ session.id }}">
+          <button type="submit" class="secondary">Cerrar sesión</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <h2 class="section-title" style="margin-bottom:4px;">Sesiones recientes</h2>
+          <div class="help">Volvé a una prueba anterior cuando quieras seguir enseñando desde la misma conversación.</div>
+        </div>
+        {% if sessions_needing_review %}
+        <span class="chip warn">{{ sessions_needing_review|length }} con respuestas pendientes</span>
+        {% endif %}
+      </div>
+      <div class="workflow-list" style="margin-top:14px;">
+        {% for item in sessions %}
+        <a class="session-link {% if session and session.id == item.id %}active{% endif %}" href="/ops/ferreteria/training?session_id={{ item.id }}">
+          <div class="row" style="justify-content:space-between;">
+            <strong>{{ item.id.split(':')[-1][:8] }}</strong>
+            <span class="chip {% if item.status == 'open' %}good{% elif item.status == 'limit_reached' %}warn{% else %}accent{% endif %}">{{ item.status_label }}</span>
+          </div>
+          <div class="muted">{{ item.mode_profile_label }} · {{ item.review_count }} revisadas de {{ item.assistant_turn_count }} respuestas del bot</div>
+        </a>
+        {% else %}
+        <div class="empty">Las sesiones que abras van a quedar listadas acá.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card card-pad">
+      <h2 class="section-title">Paso B. Enseñarle qué tendría que haber hecho</h2>
+      <div class="stack-sm">
+        <div class="step-card">
+          <div class="row"><span class="step-number">1</span><strong>Elegí la respuesta</strong></div>
+          <div class="help">En la conversación, marcá la primera respuesta del bot que se desvió.</div>
+        </div>
+        <div class="step-card">
+          <div class="row"><span class="step-number">2</span><strong>Explicalo en lenguaje simple</strong></div>
+          <div class="help">No hace falta elegir tipos técnicos. Contanos qué pasó y el sistema arma un borrador recomendado.</div>
+        </div>
+        <div class="step-card">
+          <div class="row"><span class="step-number">3</span><strong>Guardá el cambio en preparación</strong></div>
+          <div class="help">El cambio todavía no queda activo. Solo queda listo para revisar o ajustar.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <h2 class="section-title">Esto estuvo mal</h2>
+      {% if session and review_target_message %}
+      <div class="callout stack-sm" style="margin-bottom:12px;">
+        <div><strong>Respuesta elegida del bot</strong></div>
+        <div>{{ review_target_message.content }}</div>
+        <div class="help">Guardamos una enseñanza sobre esta respuesta puntual, no sobre toda la sesión.</div>
+      </div>
+      <form method="post">
+        <input type="hidden" name="action" value="save_simple_review">
+        <input type="hidden" name="session_id" value="{{ session.id }}">
+        <input type="hidden" name="bot_message_id" value="{{ review_target_message.id }}">
+        <div class="field-block">
+          <label>¿Qué estuvo mal?</label>
+          <select name="simple_choice" id="simple-choice-select" data-simple-choice>
+            {% for item in simple_teaching_choices %}
+            <option value="{{ item.key }}" {% if simple_defaults.choice == item.key %}selected{% endif %}>{{ item.label }}</option>
+            {% endfor %}
+          </select>
+          <div class="help" id="simple-choice-help">
+            {% for item in simple_teaching_choices %}
+              {% if simple_defaults.choice == item.key %}{{ item.help }}{% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        <div class="field-block">
+          <label>¿Qué tendría que haber hecho primero?</label>
+          <textarea name="simple_first_step" placeholder="Ejemplo: primero tendría que haber preguntado para qué superficie era.">{{ simple_defaults.first_step }}</textarea>
+        </div>
+        <div class="field-block">
+          <label>¿Qué debería responder o preguntar?</label>
+          <textarea name="simple_expected_answer" placeholder="Ejemplo: ¿La necesitás para pared, hormigón o cerámica?">{{ simple_defaults.expected_answer }}</textarea>
+        </div>
+        <div class="field-block">
+          <label>Explicación corta para el equipo</label>
+          <textarea name="simple_what_was_wrong" placeholder="Ejemplo: se apuró y eligió una variante sin pedir el dato clave.">{{ simple_defaults.what_was_wrong }}</textarea>
+        </div>
+        <details class="subsection">
+          <summary>Opciones avanzadas</summary>
+          <div class="stack-sm" style="margin-top:12px;">
+            <div class="help">Abrilo solo si ya sabés cuál era la familia o el producto correctos y querés ayudar a la recomendación automática.</div>
+            <div class="form-grid cols-2">
+              <div class="field-block">
+                <label>Familia correcta</label>
+                <input type="text" name="simple_family" value="{{ simple_defaults.family }}" placeholder="Ejemplo: mecha">
+              </div>
+              <div class="field-block">
+                <label>Producto correcto</label>
+                <input type="text" name="simple_canonical_product" value="{{ simple_defaults.canonical_product }}" placeholder="Ejemplo: caño pvc">
+              </div>
+            </div>
+          </div>
+        </details>
+        <label class="inline-toggle"><input type="checkbox" name="simple_unsure" {% if simple_defaults.future_only and simple_defaults.choice == 'not_sure' %}checked{% endif %}> No estoy seguro todavía</label>
+        <label class="inline-toggle"><input type="checkbox" name="simple_future_only" {% if simple_defaults.future_only %}checked{% endif %}> Guardar solo como ejemplo futuro</label>
+        <div class="message-actions">
+          <button type="submit" class="accent-btn">Guardar como cambio en preparación</button>
+          {% if review_target %}
+          <a class="chip" href="/ops/ferreteria/training/cases/{{ review_target.id }}">Abrir ajuste avanzado</a>
+          {% endif %}
+        </div>
+      </form>
+      {% else %}
+      <div class="empty">Primero abrí o iniciá una sesión y marcá una respuesta del bot con <strong>Esto estuvo mal</strong>.</div>
+      {% endif %}
+    </div>
+
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <h2 class="section-title" style="margin-bottom:4px;">Paso C. Cambios listos</h2>
+          <div class="help">Estos ya pasaron revisión y solo faltan activarse.</div>
+        </div>
+        <a href="/ops/ferreteria/training/suggestions?queue=approved">Ver todos</a>
+      </div>
+      <div class="workflow-list" style="margin-top:12px;">
+        {% for suggestion in ready_suggestions %}
+        <div class="session-link">
+          <div class="row" style="justify-content:space-between;">
+            <strong>{{ suggestion.domain_label }}</strong>
+            <span class="chip good">{{ suggestion.status_label }}</span>
+          </div>
+          <div>{{ suggestion.human_summary }}</div>
+          <div class="muted">{{ suggestion.before_after_preview.after_text }}</div>
+          <div class="message-actions">
+            <a class="chip accent" href="/ops/ferreteria/training/suggestions/{{ suggestion.id }}">Revisar / activar</a>
+            {% if suggestion.case_url %}<a class="chip" href="{{ suggestion.case_url }}">Caso de origen</a>{% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div class="empty">Todavía no hay cambios listos para activar.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="row" style="justify-content:space-between;">
+        <h2 class="section-title" style="margin:0;">Más herramientas</h2>
+        <a href="/ops/ferreteria/training/tools">Abrir todas</a>
+      </div>
+      <div class="stack-sm" style="margin-top:12px;">
+        <a class="tool-card" href="/ops/ferreteria/training/tools">
+          <strong>Atajos y seguimiento</strong>
+          <div class="help">Ayuda, términos sin resolver, impacto, uso, sesiones, historial y colas avanzadas.</div>
+        </a>
+        {% if next_case_action %}
+        <a class="tool-card" href="/ops/ferreteria/training/cases/{{ next_case_action.id }}">
+          <strong>Ajuste avanzado pendiente</strong>
+          <div class="help">{{ next_case_action.next_action_label }}</div>
+        </a>
+        {% endif %}
+        {% if next_regression_action %}
+        <a class="tool-card" href="/ops/ferreteria/training/cases/{{ next_regression_action.id }}">
+          <strong>Cobertura futura</strong>
+          <div class="help">{{ next_regression_action.regression_next_action }}</div>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    const select = document.querySelector('[data-simple-choice]');
+    const help = document.getElementById('simple-choice-help');
+    const choices = {{ simple_teaching_choices | tojson }};
+    if (!select || !help) return;
+    function syncHelp() {
+      const selected = choices.find((item) => item.key === select.value);
+      help.textContent = selected ? selected.help : '';
+    }
+    select.addEventListener('change', syncHelp);
+    syncHelp();
+  })();
+</script>
+{% endblock %}

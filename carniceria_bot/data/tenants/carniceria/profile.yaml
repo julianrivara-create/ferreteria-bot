@@ -1,0 +1,32 @@
+id: carniceria
+slug: carniceria
+business:
+  name: "Carnicería El Buen Corte"
+  description: "Cortes seleccionados, achuras y elaboración propia"
+  industry: food
+  language: es
+  currency: ARS
+  country: AR
+  tone: informal
+  visible_categories:
+    - Cortes Vacunos
+    - Pollo
+    - Cerdo
+    - Elaborados
+    - Achuras
+personality:
+  tone: "Carnicero amigo, buena onda, informal (voseo)"
+  emojis: "🥩 🔪 🍗 🥓 🛒"
+communication:
+  whatsapp_numbers:
+    - "whatsapp:+5491111111111"
+cross_sell_rules:
+  - source_category: Cortes Vacunos
+    target_category: Achuras
+    discount_percent: 5
+    reason: "para completar el asadito"
+paths:
+  db: data/carniceria.db
+  catalog: data/tenants/carniceria/catalog.csv
+  policies: data/tenants/carniceria/policies.md
+  branding: data/tenants/carniceria/branding.json

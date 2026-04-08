@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block page_title %}Ventas{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2>💰 Ventas</h2>
+    </div>
+</div>
+
+<div class="chart-container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5>Listado de Ventas</h5>
+        <div>
+            <select class="form-select form-select-sm" id="statusFilter">
+                <option value="all">Todos</option>
+                <option value="confirmed">Confirmados</option>
+                <option value="paid">Pagados</option>
+                <option value="shipped">Enviados</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="tabletable-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Producto</th>
+                    <th>Cliente</th>
+                    <th>Total (ARS)</th>
+                    <th>Método Pago</th>
+                    <th>Zona</th>
+                    <th>Estado</th>
+                    <th>Fecha</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="salesTable">
+                <tr>
+                    <td colspan="9" class="text-center">Cargando...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const TENANT_SLUG = "{{ tenant_slug }}";
+    const DASH_API = `/dashboard/api/t/${TENANT_SLUG}`;
+
+    async function loadSales(status = 'all') {
+        const response = await fetch(`${DASH_API}/sales?limit=100&status=${status}`);
+        const sales = await response.json();
+
+        const tbody = document.getElementById('salesTable');
+        tbody.innerHTML = '';
+
+        if (sales.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center">No hay ventas</td></tr>';
+            return;
+        }
+
+        sales.forEach(sale => {
+            const statusBadge = `<span class="badge bg-${getStatusColor(sale.status || 'confirmed')}">${sale.status || 'confirmed'}</span>`;
+
+            const row = `
+            <tr>
+                <td>#${sale.id}</td>
+                <td>${sale.product_sku}</td>
+                <td>${sale.customer_name || 'N/A'}</td>
+                <td>$${sale.total_ars.toLocaleString()}</td>
+                <td>${sale.metodo_pago || 'N/A'}</td>
+                <td>${sale.zona || 'N/A'}</td>
+                <td>${statusBadge}</td>
+                <td>${sale.timestamp ? new Date(sale.timestamp * 1000).toLocaleString() : '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="viewSale('${sale.id}')">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+            tbody.innerHTML += row;
+        });
+    }
+
+    function getStatusColor(status) {
+        const colors = {
+            'confirmed': 'success',
+            'paid': 'primary',
+            'shipped': 'info',
+            'delivered': 'success',
+            'cancelled': 'danger'
+        };
+        return colors[status] || 'secondary';
+    }
+
+    function viewSale(id) {
+        alert(`Ver detalle de venta #${id} (Implementar modal)`);
+    }
+
+    // Filter
+    document.getElementById('statusFilter').addEventListener('change', (e) => {
+        loadSales(e.target.value);
+    });
+
+    // Init
+    loadSales();
+</script>
+{% endblock %}
