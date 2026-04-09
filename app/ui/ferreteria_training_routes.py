@@ -1893,6 +1893,60 @@ def training_impact_page():
         store.close()
 
 
+@ferreteria_training_ui.route("/ops/ferreteria/training/bot-config", methods=["GET", "POST"])
+@training_login_required
+def bot_config_page():
+    """Edit bot personality and objective (training fields)."""
+    import yaml as _yaml
+    from pathlib import Path as _Path
+
+    PROFILE_PATH = _Path(__file__).resolve().parents[2] / "data" / "tenants" / "ferreteria" / "profile.yaml"
+
+    def _load_profile():
+        try:
+            with open(PROFILE_PATH, "r", encoding="utf-8") as f:
+                return _yaml.safe_load(f) or {}
+        except Exception:
+            return {}
+
+    def _save_profile(profile: dict):
+        with open(PROFILE_PATH, "w", encoding="utf-8") as f:
+            _yaml.dump(profile, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        # Invalidate TenantConfig cache so next request picks up new values
+        try:
+            from bot_sales.core.tenant_config import _config_cache
+            _config_cache.clear()
+        except Exception:
+            pass
+
+    profile = _load_profile()
+    training = profile.get("training") or {}
+    saved = False
+    error = None
+
+    if request.method == "POST":
+        personality = request.form.get("personality", "").strip()
+        objective   = request.form.get("objective", "").strip()
+        try:
+            if "training" not in profile or not isinstance(profile.get("training"), dict):
+                profile["training"] = {}
+            profile["training"]["personality"] = personality
+            profile["training"]["objective"]   = objective
+            _save_profile(profile)
+            training = profile["training"]
+            saved = True
+        except Exception as exc:
+            error = f"No se pudo guardar: {exc}"
+
+    return render_template(
+        "ferreteria_training/bot_config.html",
+        personality=training.get("personality") or "",
+        objective=training.get("objective") or "",
+        saved=saved,
+        error=error,
+    )
+
+
 def _payload_from_form(domain: str, form) -> dict:
     if domain in {"synonym", "unresolved_term_mapping"}:
         aliases = [value.strip() for value in (form.get("aliases") or "").split(",") if value.strip()]

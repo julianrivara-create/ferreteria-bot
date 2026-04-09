@@ -1083,110 +1083,99 @@ def _quote_next_step_line(items: List[QuoteItem]) -> str:
 def generate_quote_response(
     resolved_items: List[QuoteItem],
     complementary: Optional[List[str]] = None,
-    header: str = "*Presupuesto preliminar:*",
+    header: str = "*Presupuesto:*",
 ) -> str:
+    """Compact quote format: one line per item, clear total at the bottom."""
     lines: List[str] = [header, ""]
-    clarifications: List[str] = []
-    resolved_subtotals: List[float] = []
-    intro = _quote_intro_line(resolved_items)
-    if intro:
-        lines.append(intro)
-        lines.append("")
+    pending_questions: List[str] = []
+    grand_total: float = 0.0
 
-    for i, item in enumerate(resolved_items, start=1):
-        original    = item["original"].capitalize()
+    for item in resolved_items:
         status      = item["status"]
-        products    = item.get("products", [])
-        qty         = item.get("qty", 1)
-        qty_explicit = item.get("qty_explicit", False)
+        original    = item["original"].capitalize()
+        qty         = int(item.get("qty") or 1)
         unit_price  = item.get("unit_price")
         subtotal    = item.get("subtotal")
+        products    = item.get("products") or []
         pack_note   = item.get("pack_note")
-
-        lines.append(f"{i}. {original}")
-        qty_label = f"   - Cantidad: {qty}" + ("" if qty_explicit else " (por defecto)")
+        clarif      = item.get("clarification") or item.get("notes") or ""
 
         if status == "resolved" and products:
             best = products[0]
             name = best.get("model") or best.get("name") or best.get("sku", "Producto")
-            lines.append(qty_label)
-            lines.append(f"   - Opcion sugerida: {name}")
-            lines.append(f"   - Precio unitario: {_format_price(unit_price)}")
-
+            if subtotal is not None and not pack_note:
+                price_part = f"{_format_price(unit_price)}/u → *{_format_price(subtotal)}*"
+                grand_total += subtotal
+            elif unit_price is not None:
+                price_part = f"*{_format_price(unit_price)}*"
+                grand_total += unit_price * qty
+            else:
+                price_part = "precio a confirmar"
+            lines.append(f"✅ {qty} × {name} — {price_part}")
             if pack_note:
-                lines.append(f"   - ⚠ Presentacion: {pack_note}")
-                lines.append(f"   - Subtotal: pendiente de confirmar presentacion")
-            elif subtotal is not None:
-                lines.append(f"   - Subtotal: {_format_price(subtotal)}")
-                resolved_subtotals.append(subtotal)
-
-            lines.append(f"   - Estado: resuelto ✓")
-
-            # Same-family alternatives
+                lines.append(f"   ↳ ⚠️ {pack_note}")
+            # Show one alternative if available
             if len(products) > 1:
                 alt = products[1]
                 alt_name = alt.get("model") or alt.get("name") or ""
+                alt_price = _parse_price(alt)
                 if alt_name and alt_name != name:
-                    alt_price = _parse_price(alt)
-                    lines.append(f"   - Para comparar: {alt_name} ({_format_price(alt_price)})")
+                    lines.append(
+                        f"   ↳ También: {alt_name}"
+                        + (f" · {_format_price(alt_price)}" if alt_price else "")
+                    )
 
         elif status == "ambiguous" and products:
-            best = products[0]
-            name = best.get("model") or best.get("name") or best.get("sku", "Producto")
-            lines.append(qty_label)
-            lines.append(f"   - Opcion mas cercana: {name}")
-            if unit_price is not None:
-                lines.append(f"   - Precio referencial: {_format_price(unit_price)}")
-            lines.append(f"   - Estado: requiere aclaracion")
-            if item.get("clarification"):
-                lines.append(f"   - Falta definir: {item['clarification']}")
-                clarifications.append(f"- {original}: {item['clarification']}")
+            lines.append(f"❓ {original} — ¿cuál de estos?")
+            for j, p in enumerate(products[:3], start=1):
+                pname = p.get("model") or p.get("name") or ""
+                pprice = _parse_price(p)
+                lines.append(
+                    f"   {chr(64 + j)}) {pname}"
+                    + (f" · {_format_price(pprice)}" if pprice else "")
+                )
+            if clarif:
+                pending_questions.append(f"• {original}: {clarif}")
 
         elif status == "blocked_by_missing_info":
-            lines.append(qty_label)
-            lines.append("   - Estado: falta información clave")
-            if item.get("notes"):
-                lines.append(f"   - Motivo: {item['notes']}")
-            if item.get("clarification"):
-                lines.append(f"   - Necesito: {item['clarification']}")
-                clarifications.append(f"- {original}: {item['clarification']}")
+            detail = clarif or "necesito más detalle"
+            lines.append(f"⚠️ {original} — {detail}")
+            if clarif:
+                pending_questions.append(f"• {original}: {clarif}")
 
         else:  # unresolved
-            lines.append(qty_label)
-            lines.append(f"   - No encontre una coincidencia en el catalogo.")
-            lines.append(f"   - Estado: no resuelto")
-            if item.get("clarification"):
-                clarifications.append(f"- {original}: {item['clarification']}")
+            lines.append(f"❌ {original} — no lo encontré en el catálogo")
 
-        lines.append("")
-
-    # Total block
-    if resolved_subtotals:
-        grand = sum(resolved_subtotals)
-        all_fully_resolved = all(
-            it["status"] == "resolved" and it.get("subtotal") is not None
-            for it in resolved_items
+    # Separator + total
+    lines.append("")
+    lines.append("──────────────────")
+    resolved_count = sum(1 for it in resolved_items if it["status"] == "resolved")
+    total_count    = len(resolved_items)
+    if grand_total > 0:
+        label = (
+            f"*Total parcial ({resolved_count}/{total_count})*"
+            if resolved_count < total_count
+            else "*Total*"
         )
-        label = "Total preliminar" if all_fully_resolved else "Total preliminar parcial (solo items resueltos y con precio confirmado)"
-        lines.append(f"{label}: {_format_price(grand)}")
-        lines.append("")
+        lines.append(f"{label}: {_format_price(grand_total)}")
 
-    # Pending clarifications
-    if clarifications:
-        lines.append("Aclaraciones pendientes:")
-        lines.extend(clarifications)
+    # Pending questions
+    if pending_questions:
         lines.append("")
-        lines.append(_quote_next_step_line(resolved_items))
-    elif resolved_subtotals:
-        lines.append(_quote_next_step_line(resolved_items))
+        lines.append("Necesito confirmar:")
+        lines.extend(pending_questions)
+        lines.append("")
+        lines.append("Respondé y te actualizo el total. 🛠️")
+    elif grand_total > 0:
+        lines.append("")
+        lines.append("Válido 24hs · ¿Confirmás?")
 
     # Complementary suggestions
     if complementary:
         lines.append("")
-        lines.append("Para completar el trabajo sin quedarte corto, normalmente tambien se llevan:")
+        lines.append("También suelen llevar:")
         for c in complementary:
-          lines.append(f"  - {c}")
-        lines.append("")
+            lines.append(f"  • {c}")
 
     return "\n".join(lines).strip()
 

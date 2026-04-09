@@ -59,6 +59,7 @@ class TenantConfig:
 
         business = data.get("business", {}) if isinstance(data.get("business"), dict) else {}
         personality = data.get("personality", {}) if isinstance(data.get("personality"), dict) else {}
+        training = data.get("training", {}) if isinstance(data.get("training"), dict) else {}
 
         merged = {
             "store_name": data.get("store_name") or business.get("name") or "Ferretería",
@@ -74,6 +75,8 @@ class TenantConfig:
             "enable_upselling": data.get("enable_upselling", True),
             "enable_crossselling": data.get("enable_crossselling", True),
             "hold_minutes": data.get("hold_minutes", 30),
+            "bot_personality": training.get("personality") or personality.get("description") or "",
+            "bot_objective": training.get("objective") or "",
             "placeholder_names": data.get("placeholder_names")
             or ["juan", "juan perez", "ejemplo", "usuario", "cliente", "example", "test"],
             "placeholder_phones": data.get("placeholder_phones") or ["123456", "1111111", "0000000"],
@@ -121,6 +124,8 @@ class TenantConfig:
                 emojis=self.config.get("emojis", ""),
                 product_categories=self.config.get("product_categories", []),
                 policies=policies,
+                bot_personality=self.config.get("bot_personality", ""),
+                bot_objective=self.config.get("bot_objective", ""),
             )
         except Exception:
             return (

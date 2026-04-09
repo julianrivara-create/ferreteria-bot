@@ -1,0 +1,58 @@
+{% extends "ferreteria_training/base.html" %}
+{% block content %}
+
+<div class="page-hero">
+  <div class="caption">Configuración del bot</div>
+  <h1>Personalidad y Objetivo</h1>
+  <div class="lead">Definí quién es el bot y cuál es su misión. Estos dos campos reemplazan la descripción genérica del bot por tu propio manual de instrucciones.</div>
+</div>
+
+{% if saved %}
+<div class="success-banner" style="margin-bottom:18px;">
+  <strong>✅ Guardado correctamente.</strong>
+  <div class="help" style="margin-top:4px;">Los cambios están activos para nuevas conversaciones. Para que persistan en producción, commitear <code>data/tenants/ferreteria/profile.yaml</code>.</div>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="error" style="margin-bottom:18px;">{{ error }}</div>
+{% endif %}
+
+<form method="post" class="stack">
+  <div class="card card-pad">
+    <h2 class="section-title">Personalidad</h2>
+    <div class="muted" style="margin-bottom:12px;">Describí cómo habla el bot: nombre, tono, estilo, qué puede y qué no puede decir.</div>
+    <div class="help" style="margin-bottom:10px;">
+      <strong>Ejemplo:</strong> "Soy Santi, el vendedor de Ferretería Central. Hablo de vos, sin rodeos. Soy directo y concreto. No invento precios ni productos. Si no lo tengo, lo digo."
+    </div>
+    <div class="field-block">
+      <textarea name="personality" rows="6" placeholder="Describí la personalidad del bot...">{{ personality }}</textarea>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <h2 class="section-title">Objetivo e Instrucciones</h2>
+    <div class="muted" style="margin-bottom:12px;">El manual del bot: qué tiene que hacer primero, cómo manejar objeciones, ejemplos de respuesta ideales.</div>
+    <div class="help" style="margin-bottom:10px;">
+      <strong>Ejemplo:</strong><br>
+      "Objetivo principal: armar presupuestos rápidos y precisos.<br>
+      Prioridades:<br>
+      1. Si me mandan una lista, respondo con precio de cada ítem en formato tabla.<br>
+      2. Si falta info para cotizar un ítem, pregunto solo lo justo.<br>
+      3. No inicio conversación consultiva si ya hay una lista clara.<br>
+      Manejo de objeciones:<br>
+      - Si dicen 'está caro': ofrecer alternativa más económica del mismo uso.<br>
+      - Si dicen 'lo consigo más barato': confirmar calidad y disponibilidad."
+    </div>
+    <div class="field-block">
+      <textarea name="objective" rows="10" placeholder="Escribí las instrucciones del bot...">{{ objective }}</textarea>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:12px; align-items:center;">
+    <button type="submit" class="accent-btn">Guardar cambios</button>
+    <a href="/ops/ferreteria/training" class="chip">← Volver al inicio</a>
+  </div>
+</form>
+
+{% endblock %}

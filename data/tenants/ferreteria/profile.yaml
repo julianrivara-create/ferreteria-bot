@@ -62,6 +62,9 @@ cross_sell_rules:
   - Herramientas Manuales
   - Seguridad
 hold_minutes: 45
+training:
+  personality: ""
+  objective: ""
 paths:
   db: data/ferreteria.db
   catalog: data/tenants/ferreteria/catalog.csv
