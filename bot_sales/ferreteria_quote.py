@@ -996,10 +996,10 @@ def looks_like_acceptance(message: str, knowledge: Optional[Dict[str, Any]] = No
 def generate_acceptance_response(active_quote: List[QuoteItem], knowledge: Optional[Dict[str, Any]] = None) -> str:
     """
     Return the acceptance reply.
-    If there are still ambiguous/unresolved items, block acceptance and
-    ask the customer to clarify them first.
+    Only block acceptance when items have missing critical info (blocked_by_missing_info).
+    Ambiguous/unresolved items are passed through — the ops team resolves them during review.
     """
-    pending = [it for it in active_quote if it["status"] in ("ambiguous", "unresolved", "blocked_by_missing_info")]
+    pending = [it for it in active_quote if it["status"] in ("blocked_by_missing_info",)]
     if pending:
         names = [it["original"].capitalize() for it in pending]
         block = "\n".join(f"  - {n}" for n in names)

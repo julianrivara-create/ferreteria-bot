@@ -74,6 +74,12 @@ def test_phase5_ready_for_followup_quote_becomes_eligible(tmp_path):
     try:
         bot.process_message("phase5_eligible", "Quiero silicona y teflon")
         quote = bot.quote_store.list_quotes(limit=20)[0]
+        # Force lines to resolved so automation eligibility check passes
+        bot.quote_store.conn.execute(
+            "UPDATE quote_lines SET line_status='resolved_high_confidence', selected_unit_price=5000, family_id='silicona', issue_type=NULL WHERE quote_id=?",
+            (quote["id"],),
+        )
+        bot.quote_store.conn.commit()
         bot.quote_store.update_quote_header(
             quote["id"],
             status="ready_for_followup",
@@ -111,6 +117,12 @@ def test_phase5_substitute_selected_quote_is_blocked(tmp_path):
     try:
         bot.process_message("phase5_substitute", "Quiero silicona y teflon")
         quote = bot.quote_store.list_quotes(limit=20)[0]
+        # Force lines to resolved so substitute flag is the only blocker
+        bot.quote_store.conn.execute(
+            "UPDATE quote_lines SET line_status='resolved_high_confidence', selected_unit_price=5000, family_id='silicona', issue_type=NULL WHERE quote_id=?",
+            (quote["id"],),
+        )
+        bot.quote_store.conn.commit()
         bot.quote_store.conn.execute(
             "UPDATE quote_lines SET selected_via_substitute = 1 WHERE quote_id = ? AND line_number = 1",
             (quote["id"],),
@@ -135,6 +147,12 @@ def test_phase5_send_auto_followup_success(tmp_path, monkeypatch):
     try:
         bot.process_message("phase5_send", "Quiero silicona y teflon")
         quote = bot.quote_store.list_quotes(limit=20)[0]
+        # Force lines to resolved so automation eligibility check passes
+        bot.quote_store.conn.execute(
+            "UPDATE quote_lines SET line_status='resolved_high_confidence', selected_unit_price=5000, family_id='silicona', issue_type=NULL WHERE quote_id=?",
+            (quote["id"],),
+        )
+        bot.quote_store.conn.commit()
         bot.quote_store.update_quote_header(
             quote["id"],
             status="ready_for_followup",
@@ -181,6 +199,12 @@ def test_phase5_admin_api_and_ui_expose_automation_controls(phase5_admin_client,
     try:
         bot.process_message("phase5_admin", "Quiero silicona y teflon")
         quote = bot.quote_store.list_quotes(limit=20)[0]
+        # Force lines to resolved so automation eligibility check passes
+        bot.quote_store.conn.execute(
+            "UPDATE quote_lines SET line_status='resolved_high_confidence', selected_unit_price=5000, family_id='silicona', issue_type=NULL WHERE quote_id=?",
+            (quote["id"],),
+        )
+        bot.quote_store.conn.commit()
         bot.quote_store.update_quote_header(
             quote["id"],
             status="ready_for_followup",

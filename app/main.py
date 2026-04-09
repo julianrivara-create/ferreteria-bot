@@ -115,14 +115,10 @@ def create_app() -> Flask:
     try:
         result = ensure_runtime_bootstrap()
         logger.info("runtime_bootstrap_ok", **result)
-    except ValueError as exc:
-        # Missing required config (e.g. ADMIN_PASSWORD): fail hard in production only.
+    except Exception as exc:
         logger.error("runtime_bootstrap_failed", error=str(exc))
         if settings.is_production:
-            raise
-    except Exception as exc:
-        # Transient errors (DB timeout, etc.): log and continue.
-        logger.error("runtime_bootstrap_failed", error=str(exc))
+            raise ValueError(f"Runtime bootstrap failed in production: {exc}") from exc
 
     return app
 
