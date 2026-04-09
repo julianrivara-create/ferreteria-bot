@@ -10,13 +10,19 @@ business:
   tone: asesor comercial argentino, cercano, vendedor consultivo, tecnico y resolutivo
   target_audience: clientes de hogar, mantenimiento y obra
   visible_categories:
-  - Herramientas Electricas
+  - Mechas y Brocas
+  - Discos y Hojas
+  - Herramientas Eléctricas
   - Herramientas Manuales
-  - Tornilleria
-  - Fijaciones
-  - Pintureria
-  - Plomeria
+  - Lijas y Abrasivos
+  - Cintas y Adhesivos
+  - Tornillería y Fijaciones
+  - Pinturas y Acabados
+  - Electricidad
+  - Plomería
   - Seguridad
+  - Puntas y Accesorios
+  - General
 personality:
   tone: cercano, vendedor consultivo y tecnico
   emojis: "🛠️ ✅"
@@ -33,19 +39,28 @@ comparison_features:
 - volume_l
 - voltage
 cross_sell_rules:
-- source_category: Herramientas Electricas
+- source_category: Herramientas Eléctricas
   recommend_categories:
+  - Mechas y Brocas
+  - Discos y Hojas
   - Seguridad
-  - Tornilleria
+- source_category: Mechas y Brocas
+  recommend_categories:
+  - Herramientas Eléctricas
+  - Lijas y Abrasivos
+- source_category: Pinturas y Acabados
+  recommend_categories:
+  - Lijas y Abrasivos
   - Herramientas Manuales
-- source_category: Pintureria
+  - Cintas y Adhesivos
+- source_category: Plomería
+  recommend_categories:
+  - Herramientas Manuales
+  - Tornillería y Fijaciones
+- source_category: Electricidad
   recommend_categories:
   - Herramientas Manuales
   - Seguridad
-- source_category: Plomeria
-  recommend_categories:
-  - Herramientas Manuales
-  - Fijaciones
 hold_minutes: 45
 paths:
   db: data/ferreteria.db
