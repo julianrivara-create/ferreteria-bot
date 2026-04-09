@@ -27,10 +27,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
+COPY app ./app
 COPY bot_sales ./bot_sales
+COPY dashboard ./dashboard
+COPY website ./website
 COPY data ./data
 COPY config ./config
 COPY migrations ./migrations
+COPY tenants.yaml ./tenants.yaml
 COPY *.py ./
 
 # Health check
