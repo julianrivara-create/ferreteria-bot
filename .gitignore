@@ -23,4 +23,5 @@ data/*.db
 analytics_test_export.csv
 .playwright-cli/
 .claude/
-Planning/
+/Planning/
+tmp/unresolved_terms*.jsonl
