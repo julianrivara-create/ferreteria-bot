@@ -30,11 +30,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY bot_sales ./bot_sales
 COPY dashboard ./dashboard
+COPY maintenance ./maintenance
 COPY website ./website
 COPY data ./data
 COPY config ./config
 COPY migrations ./migrations
+COPY static ./static
+COPY tenants ./tenants
 COPY tenants.yaml ./tenants.yaml
+COPY faqs.json ./faqs.json
 COPY *.py ./
 
 # Health check
