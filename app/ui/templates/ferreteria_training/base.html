@@ -37,6 +37,8 @@
         --bad-bg:        #FEF2F2;
         --bad-border:    #FECACA;
 
+        --chat-bg:       #F0F2F5;
+
         --shadow-xs: 0 1px 2px rgba(15,17,23,.05);
         --shadow-sm: 0 1px 3px rgba(15,17,23,.08), 0 1px 2px -1px rgba(15,17,23,.06);
         --shadow-md: 0 4px 8px -1px rgba(15,17,23,.08), 0 2px 4px -2px rgba(15,17,23,.05);
@@ -47,6 +49,45 @@
         --r-xl:   18px;
         --r-full: 9999px;
       }
+
+      /* ── Dark Theme ──────────────────────────────────────────────── */
+      [data-theme="dark"] {
+        --bg:            #0F1117;
+        --surface:       #1A1D25;
+        --surface-alt:   #22262F;
+        --border:        #2D3140;
+        --border-strong: #3E4455;
+
+        --ink:           #E8EAF0;
+        --ink-muted:     #8B909E;
+        --ink-subtle:    #555B6B;
+
+        --accent:        #E8582A;
+        --accent-hover:  #D6440D;
+        --accent-bg:     #2A1810;
+        --accent-border: #6B2A12;
+
+        --good:          #10B981;
+        --good-bg:       #0A2018;
+        --good-border:   #065F46;
+
+        --warn:          #FBBF24;
+        --warn-bg:       #231B08;
+        --warn-border:   #78350F;
+
+        --bad:           #F87171;
+        --bad-bg:        #200A0A;
+        --bad-border:    #7F1D1D;
+
+        --chat-bg:       #12151C;
+
+        --shadow-xs: 0 1px 2px rgba(0,0,0,.3);
+        --shadow-sm: 0 1px 3px rgba(0,0,0,.35), 0 1px 2px -1px rgba(0,0,0,.25);
+        --shadow-md: 0 4px 8px -1px rgba(0,0,0,.4), 0 2px 4px -2px rgba(0,0,0,.3);
+      }
+
+      /* Smooth transitions when switching theme */
+      body { transition: background .2s, color .2s; }
 
       /* ── Reset ───────────────────────────────────────────────────── */
       *, *::before, *::after { box-sizing: border-box; }
@@ -295,7 +336,7 @@
       th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 13px; }
       th { font-size: 11.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; background: var(--surface-alt); }
       tr:last-child td { border-bottom: none; }
-      tr:hover td { background: #FAFBFC; }
+      tr:hover td { background: var(--surface-alt); }
 
       /* ── Typography ──────────────────────────────────────────────── */
       .section-title { font-size: 15px; font-weight: 700; margin: 0 0 6px; letter-spacing: -.01em; }
@@ -370,6 +411,10 @@
         <div class="app-header-right">
           <a class="subtle-link" href="/ops/ferreteria/training/help">Ayuda</a>
           <span class="chip accent">Uso interno</span>
+          <button id="theme-toggle" onclick="toggleTheme()" title="Cambiar tema"
+            style="background:none;border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 10px;font-size:16px;cursor:pointer;color:var(--ink-muted);box-shadow:none;min-width:unset;width:auto;">
+            🌙
+          </button>
           <a href="/ops/ferreteria/training/logout" class="chip" style="color:var(--ink-muted);">Salir</a>
         </div>
 
@@ -383,5 +428,25 @@
       </div>
     </main>
 
+  <script>
+    // ── Dark / Light Theme Toggle ─────────────────────────────────
+    (function() {
+      var saved = localStorage.getItem("theme") ||
+                  (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      applyTheme(saved);
+    })();
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      var btn = document.getElementById("theme-toggle");
+      if (btn) btn.textContent = theme === "dark" ? "☀️" : "🌙";
+      localStorage.setItem("theme", theme);
+    }
+
+    function toggleTheme() {
+      var current = document.documentElement.getAttribute("data-theme") || "light";
+      applyTheme(current === "dark" ? "light" : "dark");
+    }
+  </script>
   </body>
 </html>
