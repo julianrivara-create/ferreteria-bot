@@ -28,21 +28,31 @@ def iso_time(ts: Optional[float] = None) -> str:
 
 class Database:
     """Database manager for multi-industry catalog operations."""
-    
-    def __init__(self, db_file: str, catalog_csv: str, log_path: str):
+
+    def __init__(self, db_file: str, catalog_csv: str, log_path: str, api_key: str = ""):
         self.db_file = db_file
         self.catalog_csv = catalog_csv
-        self.conn = sqlite3.connect(db_file)
+        self.conn = sqlite3.connect(db_file, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
         self._init_db()
-        
+
         # Setup logging
         logging.basicConfig(
             filename=log_path,
             level=logging.INFO,
             format='%(asctime)s | %(levelname)s | %(message)s'
         )
+
+        # Vector search engine — use provided key or fall back to env var
+        import os
+        effective_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        from bot_sales.core.vector_search import VectorSearchEngine
+        self._vector = VectorSearchEngine(self.conn, api_key=effective_key)
+        if effective_key:
+            products = [self._row_to_product(row)
+                        for row in self.conn.execute("SELECT * FROM stock").fetchall()]
+            self._vector.start_indexing(products)
 
     def log_event(self, event: str, data: Dict[str, Any] = None) -> None:
         """Log business events"""
@@ -438,6 +448,68 @@ class Database:
             products = [p for p in products if prov_lower in str(p.get("proveedor", "")).lower()]
 
         return products
+
+    def find_matches_hybrid(
+        self,
+        model: Optional[str],
+        storage_gb: Optional[int] = None,
+        color: Optional[str] = None,
+        categoria: Optional[str] = None,
+        proveedor: Optional[str] = None,
+        vector_top_k: int = 20,
+        keyword_threshold: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Hybrid search: keyword-first, vector-augmented.
+
+        Logic:
+          1. Run keyword search (existing find_matches).
+          2. If keyword results >= keyword_threshold → return them (fast path).
+          3. Otherwise run vector search and merge results, keyword results
+             get priority (appear first), vector fills remaining slots.
+        """
+        keyword_results = self.find_matches(model, storage_gb, color, categoria, proveedor)
+
+        # Fast path: keyword search found enough candidates
+        if len(keyword_results) >= keyword_threshold:
+            return keyword_results
+
+        # Slow path: augment with vector search
+        if not model or not self._vector.is_ready:
+            return keyword_results
+
+        try:
+            vector_hits = self._vector.search(model, top_k=vector_top_k)
+            if not vector_hits:
+                return keyword_results
+
+            # Build lookup of all products by SKU (load once)
+            all_rows = self.conn.execute("SELECT * FROM stock").fetchall()
+            sku_map = {row["sku"]: self._row_to_product(row) for row in all_rows}
+
+            # Keyword SKUs for dedup
+            keyword_skus = {p["sku"] for p in keyword_results}
+
+            # Apply category/proveedor filters to vector results
+            extra = []
+            for sku, score in vector_hits:
+                if sku in keyword_skus:
+                    continue
+                p = sku_map.get(sku)
+                if p is None:
+                    continue
+                if categoria and categoria.lower() not in str(p.get("category", "")).lower():
+                    continue
+                if proveedor and proveedor.lower() not in str(p.get("proveedor", "")).lower():
+                    continue
+                p["_vector_score"] = score
+                extra.append(p)
+
+            return keyword_results + extra
+
+        except Exception as exc:
+            logging.warning("hybrid_search_vector_failed: %s", exc)
+            return keyword_results
 
     def get_product_by_sku(self, sku: str) -> Optional[Dict[str, Any]]:
         """Get product details by SKU"""

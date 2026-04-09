@@ -72,7 +72,7 @@ class BusinessLogic:
         # Normalize model name
         modelo = self._normalize_model(modelo)
 
-        matches = self.db.find_matches(modelo, storage_gb, color, categoria, proveedor)
+        matches = self.db.find_matches_hybrid(modelo, storage_gb, color, categoria, proveedor)
 
         if not matches:
             filtros = " ".join(filter(None, [categoria, proveedor]))
