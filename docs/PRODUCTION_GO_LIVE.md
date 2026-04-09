@@ -106,8 +106,8 @@ El smoke valida:
 - `/api/t/<tenant>/chat`
 - `/api/chat`
 - rate limit de `/api/chat`
-- `GET /webhooks/whatsapp`
-- `POST /webhooks/whatsapp`
+- `GET /webhooks/meta`
+- `POST /webhooks/meta`
 
 ## 7. Go / No-Go para producción
 

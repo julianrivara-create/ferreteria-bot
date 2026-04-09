@@ -7,7 +7,7 @@ business:
   language: es
   currency: ARS
   country: AR
-  tone: asesor comercial argentino, tecnico y directo
+  tone: asesor comercial argentino, cercano, vendedor consultivo, tecnico y resolutivo
   target_audience: clientes de hogar, mantenimiento y obra
   visible_categories:
   - Herramientas Electricas
@@ -18,7 +18,7 @@ business:
   - Plomeria
   - Seguridad
 personality:
-  tone: tecnico-comercial
+  tone: cercano, vendedor consultivo y tecnico
   emojis: "🛠️ ✅"
 communication:
   whatsapp_numbers:

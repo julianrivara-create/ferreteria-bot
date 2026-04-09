@@ -88,6 +88,8 @@ def _create_final_app() -> Flask:
             result.get("tenants_processed"),
             result.get("admins_created"),
         )
+    except ValueError:
+        raise
     except Exception as exc:
         logger.exception("runtime_bootstrap_failed error=%s", exc)
 

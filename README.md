@@ -79,7 +79,7 @@ META_VERIFY_TOKEN=...
 META_ACCESS_TOKEN=...
 ```
 
-El webhook de Meta apunta a: `/webhooks/whatsapp`
+El webhook de Meta apunta a: `/webhooks/meta`
 
 ---
 

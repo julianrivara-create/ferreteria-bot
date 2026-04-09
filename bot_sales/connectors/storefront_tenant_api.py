@@ -218,6 +218,5 @@ def api_chat(tenant_slug: str):
         return jsonify({"error": "Missing message"}), 400
 
     bot = tenant_manager.get_bot(tenant.id)
-    content = bot.process_message(str(user), message, tenant_id=tenant_slug)
+    content = bot.process_message(str(user), message)
     return jsonify({"content": content, "tenant": tenant.get_slug()})
-

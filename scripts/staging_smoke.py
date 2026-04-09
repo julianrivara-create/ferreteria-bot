@@ -83,7 +83,11 @@ def run_smoke(args: argparse.Namespace) -> int:
     if not _expect_status(tenant_products, 200, "GET /api/t/<tenant>/products"):
         failures += 1
 
-    chat_payload = {"message": "hola", "user": "staging-smoke-user"}
+    chat_payload = {
+        "message": "hola",
+        "user": "staging-smoke-user",
+        "tenant_id": args.tenant_slug,
+    }
     chat = session.post(f"{base}/api/chat", json=chat_payload, timeout=20)
     chat_ok = _expect_status(chat, 200, "POST /api/chat")
     if not chat_ok:
@@ -113,11 +117,11 @@ def run_smoke(args: argparse.Namespace) -> int:
 
     if args.channel_provider in {"auto", "meta"}:
         if not args.meta_verify_token:
-            _print_result(False, "GET /webhooks/whatsapp verification", "META_VERIFY_TOKEN missing for Meta smoke")
+            _print_result(False, "GET /webhooks/meta verification", "META_VERIFY_TOKEN missing for Meta smoke")
             failures += 1
         else:
             verify = session.get(
-                f"{base}/webhooks/whatsapp",
+                f"{base}/webhooks/meta",
                 params={
                     "hub.mode": "subscribe",
                     "hub.verify_token": args.meta_verify_token,
@@ -126,7 +130,7 @@ def run_smoke(args: argparse.Namespace) -> int:
                 timeout=10,
             )
             verify_ok = verify.status_code == 200 and verify.text == "smoke-challenge"
-            _print_result(verify_ok, "GET /webhooks/whatsapp verification", f"status={verify.status_code}")
+            _print_result(verify_ok, "GET /webhooks/meta verification", f"status={verify.status_code}")
             if not verify_ok:
                 failures += 1
 
@@ -154,13 +158,13 @@ def run_smoke(args: argparse.Namespace) -> int:
         if args.meta_app_secret:
             webhook_headers["X-Hub-Signature-256"] = _meta_signature(args.meta_app_secret, webhook_payload)
         webhook = session.post(
-            f"{base}/webhooks/whatsapp",
+            f"{base}/webhooks/meta",
             json=webhook_payload,
             headers=webhook_headers,
             timeout=20,
         )
         webhook_ok = webhook.status_code in {200, 202}
-        _print_result(webhook_ok, "POST /webhooks/whatsapp", f"status={webhook.status_code}")
+        _print_result(webhook_ok, "POST /webhooks/meta", f"status={webhook.status_code}")
         if not webhook_ok:
             failures += 1
     else:

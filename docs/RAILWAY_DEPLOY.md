@@ -50,8 +50,8 @@ Si querés el Dashboard también online:
 
 ## 6. Conectar con WhatsApp
 
--   **Twilio/Meta**: Andá a la configuración de tu proveedor y pegá el link de Railway + `/webhooks/whatsapp`.
-    -   Ej: `https://iphone-bot-production.up.railway.app/webhooks/whatsapp`
+-   **Twilio/Meta**: Andá a la configuración de tu proveedor y pegá el link de Railway + `/webhooks/meta`.
+    -   Ej: `https://iphone-bot-production.up.railway.app/webhooks/meta`
 
 ---
 

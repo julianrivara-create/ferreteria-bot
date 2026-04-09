@@ -258,6 +258,28 @@ class TestP0P1RateLimiting:
                 )
                 assert resp.status_code == 429
 
+    def test_storefront_chat_calls_bot_with_runtime_signature(self, multi_tenant_setup):
+        """Regression: tenant chat must not pass unsupported kwargs to SalesBot.process_message."""
+        setup = multi_tenant_setup
+        manager = TenantManager(str(setup["tenants_file"]))
+
+        app = Flask(__name__)
+        app.register_blueprint(storefront_tenant_bp)
+        client = app.test_client()
+
+        with patch("bot_sales.connectors.storefront_tenant_api.tenant_manager", manager):
+            ferreteria_bot = MagicMock()
+            ferreteria_bot.process_message.return_value = "Hola! 🔧"
+
+            with patch.object(manager, "get_bot", return_value=ferreteria_bot):
+                resp = client.post(
+                    "/api/t/ferreteria/chat",
+                    json={"message": "Necesito ayuda", "user": "signature_user"},
+                )
+
+        assert resp.status_code == 200
+        ferreteria_bot.process_message.assert_called_once_with("signature_user", "Necesito ayuda")
+
 
 class TestP1FAQTenantAwareness:
     """P1.2: Tenant-specific FAQ handling via KnowledgeLoader."""

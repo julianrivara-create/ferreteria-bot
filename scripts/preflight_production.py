@@ -113,7 +113,8 @@ def run_preflight(mode: str, *, channel_provider: str = "auto") -> int:
     if not redis_ok:
         warnings.append(line)
 
-    print(_status(True, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", "default is 60 unless overridden"))
+    rate_limit = max(1, int(getattr(settings, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", 60)))
+    print(_status(True, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", f"{rate_limit} req/min"))
 
     provider_ok, provider_detail = _whatsapp_provider_status(settings, channel_provider)
     if provider_ok:

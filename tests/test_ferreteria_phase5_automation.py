@@ -145,7 +145,7 @@ def test_phase5_send_auto_followup_success(tmp_path, monkeypatch):
 
         monkeypatch.setattr(
             "app.services.channels.whatsapp_meta.WhatsAppMeta.send_reply",
-            lambda to, text: calls.append((to, text)) or {"status": "sent"},
+            lambda to, text, tenant_id=None: calls.append((to, text, tenant_id)) or {"status": "sent"},
         )
         result = bot.quote_automation_service.send_quote_ready_followup(quote["id"], actor="tester")
         detail = result["quote"]
@@ -154,6 +154,7 @@ def test_phase5_send_auto_followup_success(tmp_path, monkeypatch):
         assert detail["last_auto_followup_at"]
         assert calls and calls[0][0] == "5491111111111"
         assert "presupuesto listo" in calls[0][1].lower()
+        assert calls[0][2] == "ferreteria"
         assert any(event["event_type"] == "automation_followup_sent" for event in detail["events"])
     finally:
         bot.close()
@@ -207,7 +208,7 @@ def test_phase5_admin_api_and_ui_expose_automation_controls(phase5_admin_client,
 
     monkeypatch.setattr(
         "app.services.channels.whatsapp_meta.WhatsAppMeta.send_reply",
-        lambda to, text: {"status": "sent"},
+        lambda to, text, tenant_id=None: {"status": "sent"},
     )
     send = client.post(
         f"/api/admin/ferreteria/quotes/{quote['id']}/automation/send",

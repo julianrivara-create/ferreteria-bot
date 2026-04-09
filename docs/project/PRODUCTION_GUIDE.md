@@ -320,7 +320,7 @@ python3 whatsapp_server.py
 # Deberías ver:
 # 🚀 WhatsApp Server Running (TWILIO)
 #    Port: 5001
-#    Webhook: http://localhost:5001/webhooks/whatsapp
+#    Webhook: http://localhost:5001/webhooks/meta
 ```
 
 ### F. Exponer Webhook con ngrok
@@ -358,7 +358,7 @@ Forwarding   https://xxxx-xxx-xxx-xxx.ngrok-free.app -> http://localhost:5001
 
 1. **Ir a**: Console → Messaging → Settings → WhatsApp sandbox settings
 2. **"When a message comes in"**:
-   - Pegar: `https://xxxx.ngrok-free.app/webhooks/whatsapp`
+   - Pegar: `https://xxxx.ngrok-free.app/webhooks/meta`
    - Method: POST
 3. **Save**
 
@@ -727,14 +727,14 @@ Si querés WhatsApp funcionando, necesitás un segundo servicio:
 2. **Generate Domain**
 3. Copiar URL del webhook:
 ```
-https://tu-whatsapp-service.up.railway.app/webhooks/whatsapp
+https://tu-whatsapp-service.up.railway.app/webhooks/meta
 ```
 
 ### C. Configurar en Twilio
 
 1. **Twilio Console** → Messaging → WhatsApp Sandbox
 2. **When a message comes in**:
-   - Pegar: `https://tu-whatsapp-service.up.railway.app/webhooks/whatsapp`
+   - Pegar: `https://tu-whatsapp-service.up.railway.app/webhooks/meta`
    - Method: POST
 3. **Save**
 

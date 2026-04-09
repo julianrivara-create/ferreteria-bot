@@ -450,6 +450,78 @@ def get_complementary_suggestions(
     return suggestions[:3]  # cap at 3
 
 
+def get_cross_sell_suggestions(
+    resolved_items: List[QuoteItem],
+    logic: Any,
+    cross_sell_rules: Optional[List[Dict[str, Any]]] = None,
+) -> List[str]:
+    """Return catalog-verified cross-sell suggestions based on profile cross_sell_rules.
+
+    For each resolved item, checks its product category against cross_sell_rules
+    from profile.yaml. If a matching rule exists, searches the catalog for one
+    representative product from each recommended category not already in the quote.
+    Returns at most 2 suggestions total to avoid over-selling.
+    """
+    if not cross_sell_rules:
+        return []
+
+    already_categories = set()
+    already_normalized = {it.get("normalized", "").lower() for it in resolved_items}
+
+    # Collect categories already in the quote
+    for item in resolved_items:
+        products = item.get("products") or []
+        for prod in products[:1]:
+            cat = prod.get("category", "")
+            if cat:
+                already_categories.add(cat)
+
+    suggestions: List[str] = []
+
+    for item in resolved_items:
+        if item.get("status") != "resolved":
+            continue
+        products = item.get("products") or []
+        if not products:
+            continue
+        source_category = products[0].get("category", "")
+        if not source_category:
+            continue
+
+        # Find matching cross-sell rule
+        rule = next(
+            (r for r in cross_sell_rules if r.get("source_category") == source_category),
+            None,
+        )
+        if not rule:
+            continue
+
+        for rec_category in (rule.get("recommend_categories") or []):
+            if rec_category in already_categories:
+                continue
+            # Find one representative product in this category from the catalog
+            try:
+                catalog_items = logic.db.find_by_category(rec_category)
+            except Exception:
+                continue
+            if not catalog_items:
+                continue
+            # Pick the cheapest in-stock item from that category
+            in_stock = [p for p in catalog_items if int(p.get("quantity", 0)) > 0]
+            candidates = in_stock or catalog_items
+            if not candidates:
+                continue
+            rep = min(candidates, key=lambda p: _parse_price(p) or float("inf"))
+            name = rep.get("model") or rep.get("name") or rec_category
+            if name and not any(name.lower() in n for n in already_normalized) and name not in suggestions:
+                suggestions.append(name)
+                already_categories.add(rec_category)  # don't suggest same category twice
+            if len(suggestions) >= 2:
+                return suggestions
+
+    return suggestions
+
+
 # ---------------------------------------------------------------------------
 # Filler / stop words
 # ---------------------------------------------------------------------------
@@ -950,17 +1022,63 @@ def generate_acceptance_response(active_quote: List[QuoteItem], knowledge: Optio
 # ---------------------------------------------------------------------------
 
 BROAD_REQUEST_REPLY = (
-    "Para armarte un presupuesto util necesito los materiales o rubros que buscas.\n\n"
+    "Para armarte un presupuesto util y no hacerte comprar de mas, necesito los materiales o rubros que buscas.\n\n"
     "Podes pasarme la lista completa o decirme que rubros necesitas:\n"
     "  caños, conexiones, selladores, fijaciones, sanitarios,\n"
     "  grifería, pintura, herramientas, electricidad, u otros.\n\n"
-    "Con eso te armo el presupuesto enseguida."
+    "Si queres, lo armamos por rubros y te lo ordeno para avanzar mas rapido."
 )
 
 
 # ---------------------------------------------------------------------------
 # Formatter
 # ---------------------------------------------------------------------------
+
+_POWER_TOOL_FAMILIES = {"taladro", "amoladora", "atornillador"}
+_PRECISION_FAMILIES = {"tornillo", "tarugo", "taco", "fijacion", "mecha", "broca"}
+_USE_CASE_FAMILIES = {"silicona", "sellador", "teflon", "cano", "conexion"}
+
+
+def _resolved_family_set(items: List[QuoteItem]) -> set[str]:
+    return {
+        str(item.get("family") or "").strip().lower()
+        for item in items
+        if str(item.get("family") or "").strip()
+    }
+
+
+def _pending_quote_items(items: List[QuoteItem]) -> List[QuoteItem]:
+    return [
+        item
+        for item in items
+        if item.get("status") in {"ambiguous", "unresolved", "blocked_by_missing_info"}
+    ]
+
+
+def _quote_intro_line(items: List[QuoteItem]) -> str:
+    pending = _pending_quote_items(items)
+    if not pending and len(items) == 1:
+        return "Te arme una opcion base para avanzar sin vueltas."
+    if not pending:
+        return "Te arme una base bastante cerrada para que ya tengas numero y opcion concreta."
+    if any(item.get("status") == "resolved" for item in items):
+        return "Te arme una primera base y te marco donde conviene afinar para no cotizarte mal."
+    return "Te ordene el pedido y te marco lo que falta definir para recomendarte bien."
+
+
+def _quote_next_step_line(items: List[QuoteItem]) -> str:
+    pending = _pending_quote_items(items)
+    families = _resolved_family_set(items)
+    if pending:
+        if families & _PRECISION_FAMILIES:
+            return "Si me confirmas superficie, medida o material, te digo cual conviene y te lo dejo fino."
+        if families & _USE_CASE_FAMILIES:
+            return "Si me decis uso y medida, te confirmo la opcion correcta y te lo cierro bien."
+        return "Si me respondes eso, te lo dejo afinado enseguida."
+    if families & _POWER_TOOL_FAMILIES:
+        return "Si queres, te digo si esta base conviene mas para hogar, obra o uso seguido."
+    return "Si queres, te lo dejo asi o lo ajusto por precio, uso o marca."
+
 
 def generate_quote_response(
     resolved_items: List[QuoteItem],
@@ -970,6 +1088,10 @@ def generate_quote_response(
     lines: List[str] = [header, ""]
     clarifications: List[str] = []
     resolved_subtotals: List[float] = []
+    intro = _quote_intro_line(resolved_items)
+    if intro:
+        lines.append(intro)
+        lines.append("")
 
     for i, item in enumerate(resolved_items, start=1):
         original    = item["original"].capitalize()
@@ -988,7 +1110,7 @@ def generate_quote_response(
             best = products[0]
             name = best.get("model") or best.get("name") or best.get("sku", "Producto")
             lines.append(qty_label)
-            lines.append(f"   - Opcion encontrada: {name}")
+            lines.append(f"   - Opcion sugerida: {name}")
             lines.append(f"   - Precio unitario: {_format_price(unit_price)}")
 
             if pack_note:
@@ -1006,13 +1128,13 @@ def generate_quote_response(
                 alt_name = alt.get("model") or alt.get("name") or ""
                 if alt_name and alt_name != name:
                     alt_price = _parse_price(alt)
-                    lines.append(f"   - Alternativa: {alt_name} ({_format_price(alt_price)})")
+                    lines.append(f"   - Para comparar: {alt_name} ({_format_price(alt_price)})")
 
         elif status == "ambiguous" and products:
             best = products[0]
             name = best.get("model") or best.get("name") or best.get("sku", "Producto")
             lines.append(qty_label)
-            lines.append(f"   - Opciones relacionadas: {name}")
+            lines.append(f"   - Opcion mas cercana: {name}")
             if unit_price is not None:
                 lines.append(f"   - Precio referencial: {_format_price(unit_price)}")
             lines.append(f"   - Estado: requiere aclaracion")
@@ -1054,16 +1176,257 @@ def generate_quote_response(
         lines.append("Aclaraciones pendientes:")
         lines.extend(clarifications)
         lines.append("")
+        lines.append(_quote_next_step_line(resolved_items))
     elif resolved_subtotals:
-        lines.append("Todo resuelto. Decime si agrego mas items o cerramos la cotizacion.")
+        lines.append(_quote_next_step_line(resolved_items))
 
     # Complementary suggestions
     if complementary:
-        lines.append("También podrías necesitar:")
+        lines.append("")
+        lines.append("Para completar el trabajo sin quedarte corto, normalmente tambien se llevan:")
         for c in complementary:
-            lines.append(f"  - {c}")
+          lines.append(f"  - {c}")
         lines.append("")
 
+    return "\n".join(lines).strip()
+
+
+def _resolved_snapshot_lines(open_items: List[QuoteItem], *, limit: int = 3) -> List[str]:
+    snapshot: List[str] = []
+    for item in open_items:
+        if item.get("status") != "resolved":
+            continue
+        products = item.get("products") or []
+        if not products:
+            continue
+        product = products[0]
+        name = product.get("model") or product.get("name") or product.get("sku", "Producto")
+        qty = int(item.get("qty") or 1)
+        qty_prefix = f"{qty} x " if qty > 1 else ""
+        snapshot.append(f"- **{qty_prefix}{name}** | {_format_price(item.get('subtotal') or item.get('unit_price'))}")
+        if len(snapshot) >= limit:
+            break
+    return snapshot
+
+
+def _focus_resolved_item(open_items: List[QuoteItem]) -> Optional[QuoteItem]:
+    resolved = [
+        item for item in open_items
+        if item.get("status") == "resolved" and (item.get("products") or [])
+    ]
+    return resolved[-1] if resolved else None
+
+
+def _cheapest_alternative(item: QuoteItem) -> Optional[Dict[str, Any]]:
+    products = item.get("products") or []
+    if len(products) <= 1:
+        return None
+    primary_name = products[0].get("model") or products[0].get("name") or products[0].get("sku", "")
+    candidates = []
+    for product in products[1:]:
+        name = product.get("model") or product.get("name") or product.get("sku", "")
+        if name and name != primary_name:
+            candidates.append(product)
+    if not candidates:
+        return None
+    return min(
+        candidates,
+        key=lambda product: _parse_price(product) if _parse_price(product) is not None else float("inf"),
+    )
+
+
+def _sales_use_phrase(sales_preferences: Optional[Dict[str, Any]] = None) -> str:
+    prefs = sales_preferences or {}
+    use_case = str(prefs.get("use_case") or "").strip().lower()
+    mapping = {
+        "hogar": "para hogar",
+        "obra": "para obra",
+        "taller": "para taller",
+        "profesional": "para uso profesional",
+        "mantenimiento": "para mantenimiento",
+    }
+    return mapping.get(use_case, "")
+
+
+def _budget_fits(price: Optional[float], budget_cap: Optional[int]) -> bool:
+    if budget_cap is None or price is None:
+        return True
+    return price <= budget_cap
+
+
+def _format_budget(budget_cap: int) -> str:
+    return f"${budget_cap:,}".replace(",", ".")
+
+
+def generate_sales_guidance_response(
+    open_items: List[QuoteItem],
+    *,
+    mode: str,
+    sales_preferences: Optional[Dict[str, Any]] = None,
+) -> str:
+    focus_item = _focus_resolved_item(open_items)
+    snapshot = _resolved_snapshot_lines(open_items)
+    snapshot_count = len(snapshot)
+    if not focus_item or not snapshot:
+        if mode == "price":
+            return (
+                "Entiendo. Para cuidar el numero sin errarle, decime en que item queres bajar costo "
+                "o pasame un presupuesto tope y te lo rearmo."
+            )
+        if mode == "comparison":
+            return (
+                "Para compararlo bien necesito tener una opcion concreta arriba de la mesa. "
+                "Decime que item queres revisar y si priorizas precio, uso o marca."
+            )
+        return (
+            "Te puedo recomendar mejor si primero dejamos una opcion concreta en el presupuesto. "
+            "Decime que producto queres revisar y lo vemos."
+        )
+
+    prefs = sales_preferences or {}
+    budget_cap: Optional[int] = prefs.get("budget_cap")
+    decision_style: str = str(prefs.get("decision_style") or "").strip().lower()
+
+    primary = (focus_item.get("products") or [None])[0] or {}
+    primary_name = primary.get("model") or primary.get("name") or primary.get("sku", "Producto")
+    primary_price_val = _parse_price(primary) if primary else focus_item.get("unit_price")
+    primary_price = _format_price(primary_price_val)
+    alt = _cheapest_alternative(focus_item)
+    alt_name = alt.get("model") or alt.get("name") or alt.get("sku", "") if alt else ""
+    alt_price_val = _parse_price(alt) if alt else None
+    alt_price = _format_price(alt_price_val) if alt else ""
+    use_phrase = _sales_use_phrase(sales_preferences)
+
+    if mode == "price":
+        lines = [
+            "Entiendo, vamos a cuidar el numero sin mandarte a algo que despues no te sirva.",
+            "",
+            "Hoy tenes armado esto:",
+            *snapshot,
+            "",
+        ]
+        if budget_cap is not None:
+            lines.append(f"Con un tope de {_format_budget(budget_cap)}, te rearmo la base sin perder de vista el uso.")
+        if snapshot_count > 1:
+            if budget_cap is None:
+                lines.append(
+                    "Si queres bajar presupuesto, decime en cual item queres ajustar primero y te digo donde tiene mas sentido ahorrar."
+                )
+                lines.append(
+                    "Tambien me sirve si me pasas un presupuesto tope y te rearmo la base sin perder de vista el uso."
+                )
+            return "\n".join(lines).strip()
+        if alt and alt_name:
+            alt_fits = _budget_fits(alt_price_val, budget_cap)
+            primary_fits = _budget_fits(primary_price_val, budget_cap)
+            if budget_cap is not None and alt_fits and not primary_fits:
+                lines.append(
+                    f"Con tu tope de {_format_budget(budget_cap)}, la opcion que entra es **{alt_name}** ({alt_price})."
+                )
+                lines.append("Si queres, te actualizo el presupuesto con esa variante.")
+            else:
+                lines.append(
+                    f"Si queres bajar presupuesto, la primera variante a revisar seria **{alt_name}** ({alt_price}) "
+                    f"en lugar de **{primary_name}** ({primary_price})."
+                )
+                lines.append("Si queres, te actualizo el presupuesto con esa variante.")
+        else:
+            lines.append(
+                f"Sobre **{primary_name}** ({primary_price}), hoy no te voy a inventar una alternativa mas barata si no la tengo clara."
+            )
+            if budget_cap is None:
+                lines.append(
+                    "Si queres, decime si priorizas precio, rendimiento o marca, o pasame un presupuesto tope, y te lo ajusto."
+                )
+        return "\n".join(lines).strip()
+
+    if mode == "comparison":
+        lines = [
+            "Hoy lo compararia asi:",
+            "",
+            *snapshot,
+            "",
+        ]
+        if snapshot_count > 1:
+            lines.append(
+                "Si queres comparar en serio, decime que item queres revisar y si priorizas precio, duracion o marca."
+            )
+            return "\n".join(lines).strip()
+        if alt and alt_name:
+            if decision_style == "price":
+                lines.append(f"- Priorizando precio: **{alt_name}** ({alt_price})")
+                lines.append(f"- Si el rendimiento es lo primero: **{primary_name}** ({primary_price})")
+            elif decision_style == "quality":
+                lines.append(f"- Priorizando rendimiento: **{primary_name}** ({primary_price})")
+                lines.append(f"- Si queres cuidar mas el numero: **{alt_name}** ({alt_price})")
+            else:
+                lines.append(f"- Para mirar una variante mas accesible: **{alt_name}** ({alt_price})")
+                lines.append(f"- Para seguir con la base ya armada: **{primary_name}** ({primary_price})")
+            if budget_cap is not None:
+                fits = _budget_fits(alt_price_val, budget_cap) or _budget_fits(primary_price_val, budget_cap)
+                if fits:
+                    winner = alt_name if _budget_fits(alt_price_val, budget_cap) else primary_name
+                    lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la que entra es **{winner}**.")
+            lines.append("Si queres, te actualizo el presupuesto con la opcion que elijas.")
+        else:
+            lines.append(
+                "Hoy no tengo una segunda variante clara dentro de ese mismo item para compararte sin inventar."
+            )
+            lines.append(
+                "Si queres comparar en serio, decime si priorizas precio, duracion o marca y te busco una alternativa real."
+            )
+        return "\n".join(lines).strip()
+
+    # mode == "recommendation"
+    lines = [
+        "Por lo que me venis contando, yo arrancaria con esta base:",
+        "",
+        *snapshot,
+        "",
+    ]
+    if snapshot_count > 1:
+        if use_phrase:
+            lines.append(f"Como base, el conjunto me cierra {use_phrase}.")
+        else:
+            lines.append("Como base, el conjunto esta bien armado para avanzar sin vueltas.")
+        if budget_cap is not None:
+            lines.append(f"Si queres ajustarlo a tu tope de {_format_budget(budget_cap)}, decime cual item querés revisar.")
+        else:
+            lines.append(
+                "Si me decis que parte del trabajo queres priorizar, te digo donde conviene gastar y donde conviene ahorrar."
+            )
+        return "\n".join(lines).strip()
+
+    # Single item recommendation — apply decision_style and budget_cap
+    if decision_style == "price" and alt and alt_name:
+        # User prefers price → lead with the cheaper option
+        lines.append(f"Si priorizas precio, arrancaria con **{alt_name}** ({alt_price}).")
+        if use_phrase:
+            lines.append(f"Cumple bien {use_phrase} sin pasarte de presupuesto.")
+        lines.append(f"Si despues el rendimiento importa mas, **{primary_name}** ({primary_price}) es el siguiente escalon.")
+    elif decision_style == "quality":
+        # User prefers quality → lead with the primary (best) option
+        lines.append(f"Priorizando rendimiento, yo me quedaria con **{primary_name}** ({primary_price}).")
+        if use_phrase:
+            lines.append(f"Para {use_phrase.replace('para ', '')} es el que mejor aguanta el uso.")
+        if alt and alt_name:
+            lines.append(f"Si el presupuesto aprieta, **{alt_name}** ({alt_price}) es la alternativa.")
+    elif budget_cap is not None and alt and alt_name and _budget_fits(alt_price_val, budget_cap) and not _budget_fits(primary_price_val, budget_cap):
+        # Has budget cap and only the alt fits → recommend the alt
+        lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la opcion que te recomiendo es **{alt_name}** ({alt_price}).")
+        if use_phrase:
+            lines.append(f"Cumple bien {use_phrase}.")
+    else:
+        if use_phrase:
+            lines.append(f"Como punto de partida, me gusta {use_phrase}.")
+        else:
+            lines.append(
+                f"Como base, **{primary_name}** ({primary_price}) me parece una opcion logica para avanzar sin vueltas."
+            )
+        if alt and alt_name:
+            lines.append(f"Si queres comparar o cuidar mas el numero, tambien revisaria **{alt_name}** ({alt_price}).")
+    if not use_phrase:
+        lines.append("Si me decis si es para hogar, obra o uso mas seguido, te digo cual conviene mas.")
     return "\n".join(lines).strip()
 
 

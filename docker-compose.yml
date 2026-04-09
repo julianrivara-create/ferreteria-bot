@@ -11,7 +11,7 @@ services:
     environment:
       - ENVIRONMENT=development
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_PATH=/app/data/iphone_store.db
+      - DATABASE_URL=sqlite:////app/data/store.db
     env_file:
       - .env.development
     volumes:

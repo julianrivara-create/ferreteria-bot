@@ -104,7 +104,7 @@ class QuoteAutomationService:
             raise QuoteAutomationError("Automated follow-up was already sent")
 
         message = build_quote_ready_followup(quote, items)
-        result = WhatsAppMeta.send_reply(customer_ref, message)
+        result = WhatsAppMeta.send_reply(customer_ref, message, tenant_id=self.tenant_id)
         status = str((result or {}).get("status") or "sent")
 
         with self.store.transaction():

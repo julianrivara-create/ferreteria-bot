@@ -25,6 +25,12 @@ def sample_product():
     }
 
 
+@pytest.fixture(autouse=True)
+def isolate_unresolved_log(tmp_path, monkeypatch):
+    """Keep test runs from mutating the tracked unresolved-term log."""
+    monkeypatch.setenv("FERRETERIA_UNRESOLVED_LOG", str(tmp_path / "unresolved_terms.jsonl"))
+
+
 @pytest.fixture
 def sample_customer():
     """Sample customer data for testing"""

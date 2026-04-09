@@ -82,6 +82,7 @@ class Settings(BaseSettings):
     # Business Logic
     HOLD_MINUTES: int = Field(default=15)
     STOCK_API_BATCH_ENDPOINT: str = Field(default="/api/stock/batch")
+    PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE: int = Field(default=60)
 
     # CRM Module
     CRM_JWT_SECRET: str = Field(default="")

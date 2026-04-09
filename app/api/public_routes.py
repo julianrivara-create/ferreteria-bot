@@ -1,5 +1,6 @@
 
-from flask import Blueprint, request, jsonify
+from collections import defaultdict, deque
+from flask import Blueprint, request, jsonify, make_response
 from app.db.session import SessionLocal
 from app.db.models import Product
 from app.services.bot_core import BotCore
@@ -10,10 +11,105 @@ import structlog
 import unicodedata
 import re
 import hmac
+import math
+import time
+from threading import Lock
 
 public_api = Blueprint('public_api', __name__)
 logger = structlog.get_logger()
 settings = get_settings()
+_public_chat_rate_limiter = None
+_public_chat_rate_limiter_guard = Lock()
+
+
+class SlidingWindowRateLimiter:
+    """Thread-safe in-memory sliding window limiter for public chat."""
+
+    def __init__(self, requests_per_minute: int, window_seconds: int = 60):
+        self.limit = max(1, int(requests_per_minute))
+        self.window_seconds = window_seconds
+        self._requests = defaultdict(deque)
+        self._lock = Lock()
+
+    def check(self, client_id: str, *, now: float | None = None) -> tuple[bool, dict]:
+        current_time = time.time() if now is None else now
+        cutoff = current_time - self.window_seconds
+
+        with self._lock:
+            bucket = self._requests[client_id]
+            while bucket and bucket[0] <= cutoff:
+                bucket.popleft()
+
+            if len(bucket) >= self.limit:
+                reset = bucket[0] + self.window_seconds
+                retry_after = max(1, math.ceil(reset - current_time))
+                return False, {
+                    "limit": self.limit,
+                    "remaining": 0,
+                    "reset": reset,
+                    "retry_after": retry_after,
+                }
+
+            bucket.append(current_time)
+            reset = bucket[0] + self.window_seconds
+            return True, {
+                "limit": self.limit,
+                "remaining": max(0, self.limit - len(bucket)),
+                "reset": reset,
+                "retry_after": max(0, math.ceil(reset - current_time)),
+            }
+
+
+def _get_public_chat_rate_limiter() -> SlidingWindowRateLimiter:
+    global _public_chat_rate_limiter
+    limit = max(1, int(getattr(settings, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", 60)))
+    with _public_chat_rate_limiter_guard:
+        if _public_chat_rate_limiter is None or _public_chat_rate_limiter.limit != limit:
+            _public_chat_rate_limiter = SlidingWindowRateLimiter(limit)
+        return _public_chat_rate_limiter
+
+
+def _reset_public_chat_rate_limiter() -> None:
+    global _public_chat_rate_limiter
+    with _public_chat_rate_limiter_guard:
+        _public_chat_rate_limiter = None
+
+
+def _get_request_ip() -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip() or "unknown"
+    return (request.headers.get("X-Real-IP") or request.remote_addr or "unknown").strip() or "unknown"
+
+
+def _attach_public_chat_rate_limit_headers(response, info: dict):
+    response.headers["X-RateLimit-Limit"] = str(info["limit"])
+    response.headers["X-RateLimit-Remaining"] = str(max(0, info["remaining"]))
+    response.headers["X-RateLimit-Reset"] = str(int(info["reset"]))
+    response.headers["Retry-After"] = str(max(0, info["retry_after"]))
+    return response
+
+
+def _json_response(payload: dict, status: int, *, rate_limit_info: dict | None = None):
+    response = make_response(jsonify(payload), status)
+    if rate_limit_info is not None:
+        _attach_public_chat_rate_limit_headers(response, rate_limit_info)
+    return response
+
+
+def _get_tenant_manager():
+    from bot_sales.core.tenancy import tenant_manager
+
+    return tenant_manager
+
+
+def _resolve_runtime_tenant(tenant_ref: str):
+    tenant_ref = (tenant_ref or "").strip()
+    if not tenant_ref:
+        return None
+
+    manager = _get_tenant_manager()
+    return manager.get_tenant(tenant_ref) or manager.get_tenant_by_slug(tenant_ref)
 
 
 def _diag_authorized() -> bool:
@@ -57,18 +153,33 @@ def get_stock_batch():
 
 @public_api.route('/chat', methods=['POST'])
 def web_chat():
-    """Legacy single-tenant web chat endpoint. Uses BotCore."""
+    """Tenant-aware web chat endpoint with legacy fallback."""
     import os
     data = request.json or {}
     user_message = data.get('message')
+    allowed, rate_limit_info = _get_public_chat_rate_limiter().check(f"ip:{_get_request_ip()}")
+
+    if not allowed:
+        return _json_response(
+            {
+                "error": "Rate limit exceeded",
+                "retry_after": rate_limit_info["retry_after"],
+            },
+            429,
+            rate_limit_info=rate_limit_info,
+        )
 
     # Require a stable per-visitor identifier — no shared anonymous sessions.
     user_id = (data.get('user') or data.get('session_id') or "").strip()
     if not user_id:
-        return jsonify({'error': 'Missing user or session_id. Provide a stable per-visitor identifier.'}), 400
+        return _json_response(
+            {'error': 'Missing user or session_id. Provide a stable per-visitor identifier.'},
+            400,
+            rate_limit_info=rate_limit_info,
+        )
 
     if not user_message:
-        return jsonify({'error': 'No message'}), 400
+        return _json_response({'error': 'No message'}, 400, rate_limit_info=rate_limit_info)
 
     # Tenant: from request body → X-Tenant-Id header → DEFAULT_TENANT_ID env var.
     # Callers should always pass tenant_id; the env fallback is for legacy deployments.
@@ -78,13 +189,43 @@ def web_chat():
         or os.getenv('DEFAULT_TENANT_ID', '')
     ).strip()
     if not tenant_id:
-        return jsonify({'error': 'Missing tenant_id. Pass it in the request body, X-Tenant-Id header, or set DEFAULT_TENANT_ID env var.'}), 400
+        return _json_response(
+            {'error': 'Missing tenant_id. Pass it in the request body, X-Tenant-Id header, or set DEFAULT_TENANT_ID env var.'},
+            400,
+            rate_limit_info=rate_limit_info,
+        )
 
-    response = BotCore.reply_with_meta('web', user_id, user_message, tenant_id=tenant_id)
-    payload = {'content': response.get('content', ''), 'status': 'success'}
+    tenant = _resolve_runtime_tenant(tenant_id)
+    if not tenant:
+        return _json_response(
+            {'error': f'Unknown tenant_id: {tenant_id}'},
+            404,
+            rate_limit_info=rate_limit_info,
+        )
+
+    session_id = f"web_{user_id}"
+    payload = {'status': 'success', 'tenant': tenant.get_slug()}
+
+    try:
+        bot = _get_tenant_manager().get_bot(tenant.id)
+        payload['content'] = bot.process_message(session_id, user_message)
+        if hasattr(bot, "get_last_turn_meta"):
+            meta = bot.get_last_turn_meta(session_id)
+            if meta:
+                payload["meta"] = meta
+        return _json_response(payload, 200, rate_limit_info=rate_limit_info)
+    except Exception as exc:
+        logger.warning(
+            "tenant_web_chat_failed_using_legacy",
+            tenant_id=tenant.id,
+            error=str(exc),
+        )
+
+    response = BotCore.reply_with_meta('web', user_id, user_message, tenant_id=tenant.id)
+    payload['content'] = response.get('content', '')
     if response.get("meta") is not None:
         payload["meta"] = response.get("meta")
-    return jsonify(payload)
+    return _json_response(payload, 200, rate_limit_info=rate_limit_info)
 
 @public_api.route('/health', methods=['GET'])
 def api_health():

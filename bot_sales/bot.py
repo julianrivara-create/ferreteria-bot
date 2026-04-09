@@ -437,6 +437,7 @@ class SalesBot:
 
         normalized = self._normalize_lookup_text(text)
         sess = self.sessions.setdefault(session_id, {})
+        sales_preferences = self._update_sales_preferences(session_id, normalized)
         quote_state: Optional[str] = sess.get("quote_state")
         open_quote: Optional[List] = sess.get("active_quote")
         knowledge = self._knowledge()
@@ -451,6 +452,23 @@ class SalesBot:
         faq_result = self.logic.consultar_faq(text)
         if faq_result.get("status") == "found":
             return _done(str(faq_result.get("respuesta") or ""), "faq")
+
+        if not open_quote:
+            if self._looks_like_price_objection(normalized):
+                return _done(
+                    "Dale. Para bajar costo sin errarle, decime que producto estas mirando y si priorizas precio, rendimiento o marca.",
+                    "deterministic",
+                )
+            if self._looks_like_comparison_request(normalized):
+                return _done(
+                    "Comparemoslo bien. Decime que producto queres revisar y que te importa mas: precio, duracion o marca.",
+                    "deterministic",
+                )
+            if self._looks_like_recommendation_request(normalized):
+                return _done(
+                    "Te recomiendo mejor si me decis que producto estas evaluando y si es para hogar, obra o uso seguido.",
+                    "deterministic",
+                )
 
         # ── 0.5. Acceptance ──────────────────────────────────────────────────
         if open_quote and fq.looks_like_acceptance(text, knowledge=knowledge):
@@ -489,6 +507,31 @@ class SalesBot:
             sess.pop("pending_decision", None)
             open_quote = None
 
+        # ── 1.7. Consultative sales guidance on open quote ───────────────────
+        if open_quote and quote_state == "open":
+            consultative_mode = None
+            if self._looks_like_price_objection(normalized):
+                consultative_mode = "price"
+            elif self._looks_like_comparison_request(normalized):
+                consultative_mode = "comparison"
+            elif self._looks_like_recommendation_request(normalized):
+                consultative_mode = "recommendation"
+
+            if consultative_mode:
+                reply = fq.generate_sales_guidance_response(
+                    open_quote,
+                    mode=consultative_mode,
+                    sales_preferences=sales_preferences,
+                )
+                self._persist_quote_state(
+                    session_id,
+                    response_text=reply,
+                    user_message=user_message,
+                    event_type=f"sales_guidance_{consultative_mode}",
+                    event_payload={"mode": consultative_mode},
+                )
+                return _done(reply, "deterministic")
+
         # ── 2. Pending merge-vs-replace decision resolution ──────────────────
         pending_decision = sess.get("pending_decision")
         if pending_decision and pending_decision.get("type") == "merge_or_replace":
@@ -501,7 +544,7 @@ class SalesBot:
                 sess["active_quote"] = merged
                 sess["quote_state"] = "open"
                 sess.pop("pending_decision", None)
-                comps = fq.get_complementary_suggestions(merged, self.logic, knowledge=knowledge)
+                comps = self._get_suggestions(merged, knowledge=knowledge)
                 reply = fq.generate_updated_quote_response(merged, complementary=comps or None)
                 self._persist_quote_state(
                     session_id,
@@ -516,7 +559,7 @@ class SalesBot:
                 sess["active_quote"] = pending_items
                 sess["quote_state"] = "open"
                 sess.pop("pending_decision", None)
-                comps = fq.get_complementary_suggestions(pending_items, self.logic, knowledge=knowledge)
+                comps = self._get_suggestions(pending_items, knowledge=knowledge)
                 reply = self._generate_quote_response(pending_items, complementary=comps or None)
                 self._persist_quote_state(
                     session_id,
@@ -559,7 +602,7 @@ class SalesBot:
         if open_quote and fq.looks_like_remove(text):
             updated, msg = fq.apply_remove(text, open_quote)
             sess["active_quote"] = updated
-            comps = fq.get_complementary_suggestions(updated, self.logic, knowledge=knowledge)
+            comps = self._get_suggestions(updated, knowledge=knowledge)
             header = fq.generate_updated_quote_response(updated, complementary=comps or None)
             self._persist_quote_state(
                 session_id,
@@ -574,7 +617,7 @@ class SalesBot:
         if open_quote and fq.looks_like_replace(text):
             updated, msg = fq.apply_replace(text, open_quote, self.logic, knowledge=knowledge)
             sess["active_quote"] = updated
-            comps = fq.get_complementary_suggestions(updated, self.logic, knowledge=knowledge)
+            comps = self._get_suggestions(updated, knowledge=knowledge)
             header = fq.generate_updated_quote_response(updated, complementary=comps or None)
             self._persist_quote_state(
                 session_id,
@@ -591,7 +634,7 @@ class SalesBot:
             sess["active_quote"] = updated
             sess["quote_state"] = "open"
             sess.pop("pending_decision", None)
-            comps = fq.get_complementary_suggestions(updated, self.logic, knowledge=knowledge)
+            comps = self._get_suggestions(updated, knowledge=knowledge)
             reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
             self._persist_quote_state(
                 session_id,
@@ -655,7 +698,7 @@ class SalesBot:
                     sess["quote_state"] = "open"
                     if followup.get("status") == "updated":
                         sess.pop("pending_clarification_target", None)
-                        comps = fq.get_complementary_suggestions(updated, self.logic, knowledge=knowledge)
+                        comps = self._get_suggestions(updated, knowledge=knowledge)
                         reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
                         self._persist_quote_state(
                             session_id,
@@ -679,7 +722,7 @@ class SalesBot:
                         ]
                         if recoverable_ids:
                             sess["pending_clarification_target"] = recoverable_ids
-                        comps = fq.get_complementary_suggestions(updated, self.logic, knowledge=knowledge)
+                        comps = self._get_suggestions(updated, knowledge=knowledge)
                         reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
                         prompt = str(assessment.get("prompt") or "").strip()
                         if prompt:
@@ -742,7 +785,7 @@ class SalesBot:
                 knowledge=knowledge,
             )
             sess["active_quote"] = updated
-            comps = fq.get_complementary_suggestions(updated, self.logic, knowledge=knowledge)
+            comps = self._get_suggestions(updated, knowledge=knowledge)
             reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
             self._persist_quote_state(
                 session_id,
@@ -771,7 +814,7 @@ class SalesBot:
             sess["active_quote"] = resolved_items
             sess["quote_state"] = "open"
             sess.pop("pending_decision", None)
-            comps = fq.get_complementary_suggestions(resolved_items, self.logic, knowledge=knowledge)
+            comps = self._get_suggestions(resolved_items, knowledge=knowledge)
             reply = self._generate_quote_response(resolved_items, complementary=comps or None)
             self._persist_quote_state(
                 session_id,
@@ -783,16 +826,6 @@ class SalesBot:
             return _done(reply, "deterministic")
 
         # ── 6. Single-item / category / product-first paths ──────────────────
-        category = self._detect_ferreteria_category(normalized)
-        if category:
-            result = self.logic.buscar_por_categoria(category)
-            if result.get("status") == "found":
-                return _done(self._format_ferreteria_products_reply(
-                    result.get("products", []),
-                    heading=f"Te paso opciones de **{category}** con stock:",
-                ), "deterministic")
-            return _done(f"No veo stock activo en **{category}** ahora. Decime uso/medida y te propongo alternativa.", "deterministic")
-
         if self._looks_like_project_request(normalized):
             return _done(fq.BROAD_REQUEST_REPLY, "fallback")
 
@@ -816,14 +849,20 @@ class SalesBot:
                     and single_norm in generic_browse_terms
                     and len(single_raw_words) <= 2
                 ):
-                    return _done(self._format_ferreteria_products_reply(resolved_single.get("products", [])), "deterministic")
+                    return _done(
+                        self._format_ferreteria_products_reply(
+                            resolved_single.get("products", []),
+                            query_hint=single_norm,
+                        ),
+                        "deterministic",
+                    )
 
                 if resolved_single.get("status") in ("resolved", "ambiguous", "unresolved", "blocked_by_missing_info"):
                     sess["active_quote"] = [resolved_single]
                     sess["quote_state"] = "open"
                     comps = []
                     if resolved_single.get("status") == "resolved":
-                        comps = fq.get_complementary_suggestions([resolved_single], self.logic, knowledge=knowledge)
+                        comps = self._get_suggestions([resolved_single], knowledge=knowledge)
                     reply = self._generate_quote_response([resolved_single], complementary=comps or None)
                     self._persist_quote_state(
                         session_id,
@@ -853,6 +892,21 @@ class SalesBot:
                     "2. El rubro del producto",
                     "fallback",
                 )
+
+        category = self._detect_ferreteria_browse_category(normalized)
+        if category:
+            result = self.logic.buscar_por_categoria(category)
+            if result.get("status") == "found":
+                return _done(
+                    self._format_ferreteria_products_reply(
+                        result.get("products", []),
+                        heading=f"Te paso opciones de **{category}** con stock:",
+                        category_hint=category,
+                        query_hint=normalized,
+                    ),
+                    "deterministic",
+                )
+            return _done(f"No veo stock activo en **{category}** ahora. Decime uso, medida o presupuesto y te propongo alternativa.", "deterministic")
 
         # ── 7. Session guard ─────────────────────────────────────────────────
         if open_quote and len(text.split()) <= 6 and not re.search(r"[,/+]|\by\b|\be\b", text, re.I):
@@ -888,34 +942,27 @@ class SalesBot:
         normalized = re.sub(r"\s+", " ", normalized)
         return normalized
 
-    def _detect_ferreteria_category(self, normalized_message: str) -> Optional[str]:
+    def _detect_ferreteria_browse_category(self, normalized_message: str) -> Optional[str]:
         aliases = {
             "herramienta": "Herramientas Electricas",
             "herramientas": "Herramientas Electricas",
-            "taladro": "Herramientas Electricas",
-            "amoladora": "Herramientas Electricas",
-            "atornillador": "Herramientas Electricas",
+            "herramientas electricas": "Herramientas Electricas",
+            "herramienta electrica": "Herramientas Electricas",
             "manual": "Herramientas Manuales",
+            "herramientas manuales": "Herramientas Manuales",
             "martillo": "Herramientas Manuales",
             "destornillador": "Herramientas Manuales",
             "llave": "Herramientas Manuales",
+            "tornilleria": "Tornilleria",
             "tornillo": "Tornilleria",
             "tornillos": "Tornilleria",
-            "autoperforante": "Tornilleria",
-            "tarugo": "Fijaciones",
-            "tarugos": "Fijaciones",
             "fijacion": "Fijaciones",
             "fijaciones": "Fijaciones",
+            "tarugo": "Fijaciones",
+            "tarugos": "Fijaciones",
             "pintura": "Pintureria",
             "pintureria": "Pintureria",
-            "latex": "Pintureria",
-            "esmalte": "Pintureria",
-            "rodillo": "Pintureria",
-            "silicona": "Plomeria",
-            "teflon": "Plomeria",
             "plomeria": "Plomeria",
-            "guante": "Seguridad",
-            "guantes": "Seguridad",
             "seguridad": "Seguridad",
         }
         for token, category in aliases.items():
@@ -942,6 +989,27 @@ class SalesBot:
     ) -> str:
         """Format resolved items into a structured customer-facing quote."""
         return fq.generate_quote_response(resolved_items, complementary=complementary)
+
+    def _get_suggestions(
+        self,
+        resolved_items: List[Dict[str, Any]],
+        knowledge: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
+        """Combine catalog-grounded complementary suggestions with profile cross-sell rules."""
+        comps = fq.get_complementary_suggestions(resolved_items, self.logic, knowledge=knowledge)
+        cross_sell_rules = (
+            self.tenant_profile.get("cross_sell_rules") or []
+            if isinstance(self.tenant_profile, dict)
+            else []
+        )
+        cross = fq.get_cross_sell_suggestions(resolved_items, self.logic, cross_sell_rules=cross_sell_rules)
+        # Deduplicate: complementary takes priority (catalog-grounded); cross-sell fills remaining slots
+        seen = set(comps)
+        for item in cross:
+            if item not in seen:
+                comps.append(item)
+                seen.add(item)
+        return comps[:3]
 
     def _looks_like_project_request(self, normalized_message: str) -> bool:
         project_terms = (
@@ -994,7 +1062,29 @@ class SalesBot:
         return any(term in normalized_message for term in product_terms)
 
     @staticmethod
-    def _format_ferreteria_products_reply(products: List[Dict[str, Any]], heading: str = "Encontre estas opciones con stock:") -> str:
+    def _consultative_browse_cta(query_hint: str = "", category_hint: str = "") -> str:
+        hint = f"{query_hint} {category_hint}".strip().lower()
+        if any(token in hint for token in ("taladro", "amoladora", "atornillador", "herramientas electricas")):
+            return "Si queres, te marco cual conviene mas para hogar, obra o uso seguido."
+        if any(token in hint for token in ("tornillo", "tarugo", "fijacion", "mecha", "broca", "tornilleria")):
+            return "Si me decis superficie, medida o material, te digo cual conviene sin hacerte errarle."
+        if any(token in hint for token in ("silicona", "sellador", "teflon", "plomeria", "cano", "conexion")):
+            return "Si me decis uso y medida, te confirmo la opcion correcta y te lo dejo fino."
+        if any(token in hint for token in ("pintura", "latex", "esmalte", "rodillo", "pintureria")):
+            return "Si me decis interior o exterior y la superficie, te recomiendo la opcion mas conveniente."
+        return "Si queres, te ayudo a elegir por uso, medida, marca o presupuesto."
+
+    @classmethod
+    def _format_ferreteria_products_reply(
+        cls,
+        products: List[Dict[str, Any]],
+        heading: str = "Encontre estas opciones con stock:",
+        *,
+        category_hint: str = "",
+        query_hint: str = "",
+    ) -> str:
+        if heading == "Encontre estas opciones con stock:" and len(products) == 1 and query_hint:
+            heading = "Para arrancar, iria con esta opcion con stock:"
         lines = [heading, ""]
         for product in products[:4]:
             name = product.get("model") or product.get("name") or product.get("sku", "Producto")
@@ -1007,8 +1097,82 @@ class SalesBot:
             lines.append("- " + " | ".join(str(part) for part in detail if part))
 
         lines.append("")
-        lines.append("Si queres, te ayudo a elegir por uso, medida, marca o presupuesto.")
+        lines.append(cls._consultative_browse_cta(query_hint=query_hint, category_hint=category_hint))
         return "\n".join(lines)
+
+    def _update_sales_preferences(self, session_id: str, normalized_message: str) -> Dict[str, Any]:
+        sess = self.sessions.setdefault(session_id, {})
+        preferences = dict(sess.get("sales_preferences") or {})
+
+        if any(token in normalized_message for token in ("hogar", "casa", "domestico", "casero")):
+            preferences["use_case"] = "hogar"
+        elif any(token in normalized_message for token in ("obra", "albanil", "albañil", "construccion", "mantenimiento")):
+            preferences["use_case"] = "obra"
+        elif any(token in normalized_message for token in ("taller", "profesional", "laburo", "uso seguido", "todos los dias")):
+            preferences["use_case"] = "profesional"
+
+        if any(token in normalized_message for token in ("barato", "economico", "económico", "mas barato", "más barato", "cuidar numero", "cuidar presupuesto")):
+            preferences["decision_style"] = "price"
+        elif any(token in normalized_message for token in ("mejor", "bueno", "durable", "calidad", "rendimiento", "premium")):
+            preferences["decision_style"] = "quality"
+
+        budget_match = re.search(r"(?:hasta|maximo|máximo|tope)\s*\$?\s*([\d\.,]+)", normalized_message)
+        if budget_match:
+            try:
+                preferences["budget_cap"] = int(budget_match.group(1).replace(".", "").replace(",", ""))
+            except ValueError:
+                pass
+
+        sess["sales_preferences"] = preferences
+        return preferences
+
+    @staticmethod
+    def _looks_like_price_objection(normalized_message: str) -> bool:
+        patterns = (
+            "mas barato",
+            "más barato",
+            "barato",
+            "economico",
+            "económico",
+            "caro",
+            "bajar presupuesto",
+            "bajarlo",
+            "cuidar el numero",
+            "cuidar el presupuesto",
+        )
+        return any(pattern in normalized_message for pattern in patterns)
+
+    @staticmethod
+    def _looks_like_recommendation_request(normalized_message: str) -> bool:
+        patterns = (
+            "cual me recomendas",
+            "cuál me recomendás",
+            "que me recomendas",
+            "qué me recomendás",
+            "que conviene",
+            "qué conviene",
+            "cual conviene",
+            "cuál conviene",
+            "vos cual",
+            "vos cuál",
+            "cual eligirias",
+            "cuál elegirías",
+        )
+        return any(pattern in normalized_message for pattern in patterns)
+
+    @staticmethod
+    def _looks_like_comparison_request(normalized_message: str) -> bool:
+        patterns = (
+            "compar",
+            "diferencia",
+            "versus",
+            "vs",
+            "cual es mejor",
+            "cuál es mejor",
+            "que cambia",
+            "qué cambia",
+        )
+        return any(pattern in normalized_message for pattern in patterns)
 
     def _chat_with_functions(self, session_id: str) -> str:
         """

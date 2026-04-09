@@ -81,6 +81,9 @@ def test_conversation_busco_un_taladro_is_product_first(tmp_path):
         reply = bot.process_message("sid_taladro", "Busco un taladro")
         assert "urgencia" not in reply.lower()
         assert "pago" not in reply.lower()
+        assert "taladro" in reply.lower()
+        assert "amoladora" not in reply.lower()
+        assert any(fragment in reply.lower() for fragment in ("hogar", "obra", "uso seguido", "conviene"))
     finally:
         bot.close()
 
@@ -103,6 +106,34 @@ def test_conversation_silicona_y_teflon_resolves_multi_item_first(tmp_path):
         assert "Presupuesto" in reply
         assert "urgencia" not in reply.lower()
         assert "pago" not in reply.lower()
+        assert any(fragment in reply.lower() for fragment in ("te arme", "si queres", "precio", "uso"))
+    finally:
+        bot.close()
+
+
+def test_open_quote_recommendation_request_gets_consultative_reply(tmp_path):
+    bot = build_ferreteria_bot(tmp_path)
+    try:
+        bot.process_message("sid_reco", "Quiero silicona y teflon")
+        reply = bot.process_message("sid_reco", "¿Cuál me recomendás?")
+        lower = reply.lower()
+        assert "urgencia" not in lower
+        assert "pago" not in lower
+        assert any(fragment in lower for fragment in ("yo arrancaria", "yo arrancaría", "conviene", "hogar", "obra"))
+        assert "silicona" in lower or "teflon" in lower
+    finally:
+        bot.close()
+
+
+def test_open_quote_price_objection_stays_consultative(tmp_path):
+    bot = build_ferreteria_bot(tmp_path)
+    try:
+        bot.process_message("sid_price", "Quiero silicona y teflon")
+        reply = bot.process_message("sid_price", "Lo necesito más barato")
+        lower = reply.lower()
+        assert "urgencia" not in lower
+        assert "pago" not in lower
+        assert any(fragment in lower for fragment in ("cuidar el numero", "presupuesto tope", "priorizas precio", "priorizás precio"))
     finally:
         bot.close()
 

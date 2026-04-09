@@ -117,6 +117,8 @@ def create_app() -> Flask:
         logger.info("runtime_bootstrap_ok", **result)
     except Exception as exc:
         logger.error("runtime_bootstrap_failed", error=str(exc))
+        if settings.is_production:
+            raise ValueError("Runtime bootstrap failed in production.") from exc
 
     return app
 
