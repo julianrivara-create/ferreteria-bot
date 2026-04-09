@@ -8,7 +8,7 @@ from functools import wraps
 from pathlib import Path
 import re
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
 from app.api.ferreteria_training_routes import (
     ALLOWED_SUGGESTION_DOMAINS,
@@ -1896,8 +1896,9 @@ def training_impact_page():
 @ferreteria_training_ui.route("/ops/ferreteria/training/bot-config", methods=["GET", "POST"])
 @training_login_required
 def bot_config_page():
-    """Edit bot personality and objective (training fields)."""
+    """Edit bot manual (structured instruction fields) + personality."""
     import yaml as _yaml
+    import json as _json
     from pathlib import Path as _Path
 
     PROFILE_PATH = _Path(__file__).resolve().parents[2] / "data" / "tenants" / "ferreteria" / "profile.yaml"
@@ -1912,39 +1913,103 @@ def bot_config_page():
     def _save_profile(profile: dict):
         with open(PROFILE_PATH, "w", encoding="utf-8") as f:
             _yaml.dump(profile, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-        # Invalidate TenantConfig cache so next request picks up new values
         try:
             from bot_sales.core.tenant_config import _config_cache
             _config_cache.clear()
         except Exception:
             pass
 
+    def _fields_to_objective(fields: list) -> str:
+        """Combine list of {title, content} into a single instruction text."""
+        parts = []
+        for field in fields:
+            title = str(field.get("title") or "").strip()
+            content = str(field.get("content") or "").strip()
+            if content:
+                if title:
+                    parts.append(f"## {title}\n{content}")
+                else:
+                    parts.append(content)
+        return "\n\n".join(parts)
+
     profile = _load_profile()
     training = profile.get("training") or {}
-    saved = False
-    error = None
 
     if request.method == "POST":
-        personality = request.form.get("personality", "").strip()
-        objective   = request.form.get("objective", "").strip()
-        try:
-            if "training" not in profile or not isinstance(profile.get("training"), dict):
-                profile["training"] = {}
-            profile["training"]["personality"] = personality
-            profile["training"]["objective"]   = objective
-            _save_profile(profile)
-            training = profile["training"]
-            saved = True
-        except Exception as exc:
-            error = f"No se pudo guardar: {exc}"
+        # AJAX JSON save
+        if request.is_json:
+            data = request.get_json() or {}
+            personality = str(data.get("personality") or "").strip()
+            manual_fields = data.get("manual_fields") or []
+            # Validate fields is a list of dicts
+            if not isinstance(manual_fields, list):
+                return jsonify({"error": "invalid fields"}), 400
+            objective = _fields_to_objective(manual_fields)
+            try:
+                if not isinstance(profile.get("training"), dict):
+                    profile["training"] = {}
+                profile["training"]["personality"] = personality
+                profile["training"]["objective"] = objective
+                profile["training"]["manual_fields"] = manual_fields
+                _save_profile(profile)
+                return jsonify({"ok": True})
+            except Exception as exc:
+                return jsonify({"error": str(exc)}), 500
+        else:
+            # Legacy form POST (fallback)
+            personality = request.form.get("personality", "").strip()
+            objective   = request.form.get("objective", "").strip()
+            try:
+                if not isinstance(profile.get("training"), dict):
+                    profile["training"] = {}
+                profile["training"]["personality"] = personality
+                profile["training"]["objective"]   = objective
+                _save_profile(profile)
+                training = profile["training"]
+            except Exception:
+                pass
+            return redirect(request.url)
 
+    manual_fields = training.get("manual_fields") or []
     return render_template(
         "ferreteria_training/bot_config.html",
         personality=training.get("personality") or "",
-        objective=training.get("objective") or "",
-        saved=saved,
-        error=error,
+        manual_fields=manual_fields,
     )
+
+
+@ferreteria_training_ui.route("/ops/ferreteria/training/api/chat-test", methods=["POST"])
+@training_login_required
+def training_chat_test():
+    """Process a test message through the live ferreteria bot."""
+    data = request.get_json() or {}
+    message = str(data.get("message") or "").strip()
+    session_id = str(data.get("session_id") or "training_test_ferreteria")
+    if not message:
+        return jsonify({"error": "Mensaje vacío"}), 400
+    try:
+        from bot_sales.core.tenancy import tenant_manager
+        bot = tenant_manager.get_bot("ferreteria")
+        reply = bot.process_message(session_id, message)
+        return jsonify({"reply": reply or "(sin respuesta)"})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@ferreteria_training_ui.route("/ops/ferreteria/training/api/chat-reset", methods=["POST"])
+@training_login_required
+def training_chat_reset():
+    """Clear a test chat session."""
+    data = request.get_json() or {}
+    session_id = str(data.get("session_id") or "training_test_ferreteria")
+    try:
+        from bot_sales.core.tenancy import tenant_manager
+        bot = tenant_manager.get_bot("ferreteria")
+        if hasattr(bot, "sessions") and session_id in bot.sessions:
+            del bot.sessions[session_id]
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 def _payload_from_form(domain: str, form) -> dict:

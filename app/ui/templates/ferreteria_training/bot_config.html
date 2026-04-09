@@ -1,58 +1,618 @@
 {% extends "ferreteria_training/base.html" %}
 {% block content %}
 
-<div class="page-hero">
-  <div class="caption">Configuración del bot</div>
-  <h1>Personalidad y Objetivo</h1>
-  <div class="lead">Definí quién es el bot y cuál es su misión. Estos dos campos reemplazan la descripción genérica del bot por tu propio manual de instrucciones.</div>
+<style>
+  /* ── Split Layout ─────────────────────────────────────────── */
+  .trainer-shell {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    height: calc(100vh - 60px);
+    overflow: hidden;
+  }
+
+  /* ── Left Panel: Manual ───────────────────────────────────── */
+  .manual-panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .panel-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .manual-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 14px 80px;
+  }
+
+  /* ── Field Card ───────────────────────────────────────────── */
+  .field-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .field-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .field-title-input {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--border-strong);
+    outline: none;
+    padding: 2px 4px;
+    width: 100%;
+    font-family: inherit;
+  }
+  .field-title-input:focus {
+    border-bottom-color: var(--accent);
+  }
+  .field-btns {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .field-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-alt);
+    color: var(--ink);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .field-btn:hover { background: var(--border); }
+  .field-btn.danger { color: var(--bad); border-color: var(--bad-border); }
+  .field-btn.danger:hover { background: var(--bad-bg); }
+  .field-textarea {
+    width: 100%;
+    border: none;
+    border-top: 1px solid var(--border);
+    resize: none;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--surface);
+    outline: none;
+    min-height: 80px;
+  }
+  .field-textarea:focus { background: #FAFBFC; }
+
+  /* Personality strip at bottom of manual panel */
+  .personality-strip {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 14px;
+  }
+  .personality-strip label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .personality-strip textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    line-height: 1.4;
+    color: var(--ink);
+    resize: none;
+    outline: none;
+  }
+  .personality-strip textarea:focus { border-color: var(--accent); }
+
+  /* Save bar */
+  .save-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .save-status {
+    font-size: 12px;
+    color: var(--good);
+    font-weight: 500;
+  }
+  .save-status.error { color: var(--bad); }
+
+  /* ── Right Panel: Chat ────────────────────────────────────── */
+  .chat-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #F0F2F5;
+  }
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user {
+    background: var(--accent);
+    color: #fff;
+    align-self: flex-end;
+    border-bottom-right-radius: 3px;
+  }
+  .msg.bot {
+    background: var(--surface);
+    color: var(--ink);
+    align-self: flex-start;
+    border-bottom-left-radius: 3px;
+    box-shadow: var(--shadow-xs);
+  }
+  .msg.system {
+    align-self: center;
+    background: none;
+    color: var(--ink-subtle);
+    font-size: 11px;
+    padding: 4px 0;
+  }
+  .chat-input-bar {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .chat-input {
+    flex: 1;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-full);
+    padding: 9px 16px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    resize: none;
+    line-height: 1.4;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  .chat-input:focus { border-color: var(--accent); }
+  .send-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--r-full);
+    padding: 9px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .send-btn:hover { background: var(--accent-hover); }
+  .send-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* ── Expand Modal ─────────────────────────────────────────── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.45);
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface);
+    border-radius: var(--r-lg);
+    width: min(700px, 92vw);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-title-input {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: inherit;
+    color: var(--ink);
+    border-bottom: 1px dashed var(--border-strong);
+    padding: 2px 6px;
+    width: 60%;
+  }
+  .modal-title-input:focus { border-bottom-color: var(--accent); }
+  .modal-close {
+    background: none; border: none; font-size: 20px; cursor: pointer; color: var(--ink-muted);
+    padding: 0 4px;
+  }
+  .modal-close:hover { color: var(--ink); }
+  .modal-textarea {
+    flex: 1;
+    border: none;
+    padding: 16px 18px;
+    font-size: 14px;
+    font-family: inherit;
+    line-height: 1.6;
+    color: var(--ink);
+    resize: none;
+    outline: none;
+    min-height: 300px;
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    gap: 8px;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────── */
+  .btn-primary {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: var(--r-sm); padding: 7px 16px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary {
+    background: var(--surface-alt); color: var(--ink);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm); padding: 7px 14px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-ghost {
+    background: none; border: 1px solid var(--border);
+    border-radius: var(--r-sm); padding: 6px 12px;
+    font-size: 12px; font-weight: 500; color: var(--ink-muted); cursor: pointer;
+  }
+  .btn-ghost:hover { border-color: var(--border-strong); color: var(--ink); }
+
+  /* Back link */
+  .back-link {
+    font-size: 12px; color: var(--ink-muted);
+    display: inline-flex; align-items: center; gap: 4px;
+    text-decoration: none; margin: 0;
+  }
+  .back-link:hover { color: var(--ink); text-decoration: none; }
+</style>
+
+<!-- Back link outside the grid -->
+<div style="padding: 10px 18px; border-bottom: 1px solid var(--border); background: var(--surface); display:flex; align-items:center; gap:14px;">
+  <a href="/ops/ferreteria/training" class="back-link">← Inicio</a>
+  <span style="color:var(--border-strong)">|</span>
+  <span style="font-size:13px; font-weight:600;">Manual del bot</span>
 </div>
 
-{% if saved %}
-<div class="success-banner" style="margin-bottom:18px;">
-  <strong>✅ Guardado correctamente.</strong>
-  <div class="help" style="margin-top:4px;">Los cambios están activos para nuevas conversaciones. Para que persistan en producción, commitear <code>data/tenants/ferreteria/profile.yaml</code>.</div>
+<div class="trainer-shell">
+
+  <!-- ════════════════════ LEFT: MANUAL ════════════════════ -->
+  <div class="manual-panel">
+    <div class="panel-header">
+      <span class="panel-title">Manual del bot</span>
+      <div class="panel-actions">
+        <button class="btn-ghost" onclick="addField()">+ Nuevo campo</button>
+        <button class="btn-primary" onclick="saveManual()" id="save-btn">Guardar</button>
+      </div>
+    </div>
+
+    <div class="manual-body" id="fields-container">
+      <!-- Fields rendered by JS -->
+    </div>
+
+    <div class="personality-strip">
+      <label>Personalidad del bot</label>
+      <textarea id="personality-input" rows="2"
+        placeholder="Ej: Soy Santi, vendedor de Ferretería Central. Directo, sin rodeos, técnico y resolutivo.">{{ personality }}</textarea>
+    </div>
+
+    <div class="save-bar">
+      <span class="save-status" id="save-status"></span>
+    </div>
+  </div>
+
+  <!-- ════════════════════ RIGHT: CHAT ════════════════════ -->
+  <div class="chat-panel">
+    <div class="panel-header">
+      <span class="panel-title">Conversación de prueba</span>
+      <div class="panel-actions">
+        <button class="btn-ghost" onclick="clearChat()">Limpiar chat</button>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      <div class="msg system">Guardá el manual y probá el bot como si fueras un cliente.</div>
+    </div>
+
+    <div class="chat-input-bar">
+      <textarea class="chat-input" id="chat-input" rows="1"
+        placeholder="Escribí como si fueras un cliente..."
+        onkeydown="handleChatKey(event)"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">Enviar</button>
+    </div>
+  </div>
 </div>
-{% endif %}
 
-{% if error %}
-<div class="error" style="margin-bottom:18px;">{{ error }}</div>
-{% endif %}
-
-<form method="post" class="stack">
-  <div class="card card-pad">
-    <h2 class="section-title">Personalidad</h2>
-    <div class="muted" style="margin-bottom:12px;">Describí cómo habla el bot: nombre, tono, estilo, qué puede y qué no puede decir.</div>
-    <div class="help" style="margin-bottom:10px;">
-      <strong>Ejemplo:</strong> "Soy Santi, el vendedor de Ferretería Central. Hablo de vos, sin rodeos. Soy directo y concreto. No invento precios ni productos. Si no lo tengo, lo digo."
+<!-- ════════════════════ EXPAND MODAL ════════════════════ -->
+<div class="modal-overlay" id="expand-modal" onclick="closeModal(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <input class="modal-title-input" id="modal-title" type="text" placeholder="Título del campo">
+      <button class="modal-close" onclick="closeModalDirect()">×</button>
     </div>
-    <div class="field-block">
-      <textarea name="personality" rows="6" placeholder="Describí la personalidad del bot...">{{ personality }}</textarea>
+    <textarea class="modal-textarea" id="modal-content"
+      placeholder="Escribí las instrucciones para este campo..."></textarea>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModalDirect()">Cancelar</button>
+      <button class="btn-primary" onclick="saveModal()">Aplicar</button>
     </div>
   </div>
+</div>
 
-  <div class="card card-pad">
-    <h2 class="section-title">Objetivo e Instrucciones</h2>
-    <div class="muted" style="margin-bottom:12px;">El manual del bot: qué tiene que hacer primero, cómo manejar objeciones, ejemplos de respuesta ideales.</div>
-    <div class="help" style="margin-bottom:10px;">
-      <strong>Ejemplo:</strong><br>
-      "Objetivo principal: armar presupuestos rápidos y precisos.<br>
-      Prioridades:<br>
-      1. Si me mandan una lista, respondo con precio de cada ítem en formato tabla.<br>
-      2. Si falta info para cotizar un ítem, pregunto solo lo justo.<br>
-      3. No inicio conversación consultiva si ya hay una lista clara.<br>
-      Manejo de objeciones:<br>
-      - Si dicen 'está caro': ofrecer alternativa más económica del mismo uso.<br>
-      - Si dicen 'lo consigo más barato': confirmar calidad y disponibilidad."
-    </div>
-    <div class="field-block">
-      <textarea name="objective" rows="10" placeholder="Escribí las instrucciones del bot...">{{ objective }}</textarea>
-    </div>
-  </div>
+<script>
+  // ─── State ────────────────────────────────────────────────
+  let fields = {{ manual_fields | tojson }};
+  let sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
+  let activeModalIdx = null;
 
-  <div style="display:flex; gap:12px; align-items:center;">
-    <button type="submit" class="accent-btn">Guardar cambios</button>
-    <a href="/ops/ferreteria/training" class="chip">← Volver al inicio</a>
-  </div>
-</form>
+  // ─── Init ─────────────────────────────────────────────────
+  document.addEventListener("DOMContentLoaded", () => {
+    if (fields.length === 0) {
+      fields = [
+        { title: "Personalidad y Tono", content: "" },
+        { title: "Cómo saludar", content: "" },
+        { title: "Qué hacer si no encuentra el producto", content: "" },
+        { title: "Cómo ofrecer similares", content: "" },
+        { title: "Cómo pedir aclaraciones", content: "" },
+      ];
+    }
+    renderFields();
+  });
+
+  // ─── Render fields list ────────────────────────────────────
+  function renderFields() {
+    const container = document.getElementById("fields-container");
+    container.innerHTML = "";
+    fields.forEach((f, i) => {
+      const card = document.createElement("div");
+      card.className = "field-card";
+      card.dataset.idx = i;
+      card.innerHTML = `
+        <div class="field-header">
+          <input class="field-title-input" value="${escHtml(f.title)}"
+            placeholder="Título del campo"
+            onchange="updateTitle(${i}, this.value)"
+            oninput="updateTitle(${i}, this.value)">
+          <div class="field-btns">
+            <button class="field-btn" onclick="expandField(${i})">Expandir</button>
+            <button class="field-btn danger" onclick="deleteField(${i})">Eliminar</button>
+          </div>
+        </div>
+        <textarea class="field-textarea" rows="3"
+          placeholder="Escribí las instrucciones para este campo..."
+          onchange="updateContent(${i}, this.value)"
+          oninput="updateContent(${i}, this.value)">${escHtml(f.content)}</textarea>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function escHtml(str) {
+    return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  // ─── Field operations ──────────────────────────────────────
+  function addField() {
+    fields.push({ title: "Nuevo campo", content: "" });
+    renderFields();
+    // Scroll to bottom of fields
+    const container = document.getElementById("fields-container");
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function deleteField(idx) {
+    if (fields.length <= 1) { alert("Debe quedar al menos un campo."); return; }
+    fields.splice(idx, 1);
+    renderFields();
+  }
+
+  function updateTitle(idx, value) {
+    fields[idx].title = value;
+  }
+
+  function updateContent(idx, value) {
+    fields[idx].content = value;
+  }
+
+  // ─── Expand modal ──────────────────────────────────────────
+  function expandField(idx) {
+    activeModalIdx = idx;
+    document.getElementById("modal-title").value = fields[idx].title || "";
+    document.getElementById("modal-content").value = fields[idx].content || "";
+    document.getElementById("expand-modal").classList.add("open");
+    setTimeout(() => document.getElementById("modal-content").focus(), 100);
+  }
+
+  function closeModal(e) {
+    if (e.target === document.getElementById("expand-modal")) closeModalDirect();
+  }
+
+  function closeModalDirect() {
+    document.getElementById("expand-modal").classList.remove("open");
+    activeModalIdx = null;
+  }
+
+  function saveModal() {
+    if (activeModalIdx === null) return;
+    fields[activeModalIdx].title = document.getElementById("modal-title").value;
+    fields[activeModalIdx].content = document.getElementById("modal-content").value;
+    renderFields();
+    closeModalDirect();
+  }
+
+  // Close modal on Escape
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeModalDirect();
+  });
+
+  // ─── Save manual ───────────────────────────────────────────
+  async function saveManual() {
+    const btn = document.getElementById("save-btn");
+    const status = document.getElementById("save-status");
+    btn.disabled = true;
+    status.textContent = "Guardando...";
+    status.className = "save-status";
+
+    const personality = document.getElementById("personality-input").value;
+
+    try {
+      const resp = await fetch("/ops/ferreteria/training/bot-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personality, manual_fields: fields })
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        status.textContent = "✅ Guardado. Ahora podés probar en el chat.";
+        status.className = "save-status";
+      } else {
+        status.textContent = "❌ Error: " + (data.error || "desconocido");
+        status.className = "save-status error";
+      }
+    } catch (err) {
+      status.textContent = "❌ Error de red";
+      status.className = "save-status error";
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => { status.textContent = ""; }, 4000);
+    }
+  }
+
+  // ─── Chat ──────────────────────────────────────────────────
+  function appendMsg(text, role) {
+    const container = document.getElementById("chat-messages");
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.textContent = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function clearChat() {
+    const container = document.getElementById("chat-messages");
+    container.innerHTML = '<div class="msg system">Chat limpiado. Empezá una nueva conversación.</div>';
+    // Generate new session so bot forgets context
+    sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
+    // Also reset on server
+    fetch("/ops/ferreteria/training/api/chat-reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId })
+    }).catch(() => {});
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById("chat-input");
+    const btn = document.getElementById("send-btn");
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = "";
+    input.style.height = "auto";
+    appendMsg(text, "user");
+    btn.disabled = true;
+
+    // Thinking indicator
+    const thinking = document.createElement("div");
+    thinking.className = "msg system";
+    thinking.textContent = "...";
+    document.getElementById("chat-messages").appendChild(thinking);
+    document.getElementById("chat-messages").scrollTop = 99999;
+
+    try {
+      const resp = await fetch("/ops/ferreteria/training/api/chat-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, session_id: sessionId })
+      });
+      const data = await resp.json();
+      thinking.remove();
+      if (data.reply) {
+        appendMsg(data.reply, "bot");
+      } else {
+        appendMsg("❌ Error: " + (data.error || "sin respuesta"), "system");
+      }
+    } catch (err) {
+      thinking.remove();
+      appendMsg("❌ Error de red", "system");
+    } finally {
+      btn.disabled = false;
+      input.focus();
+    }
+  }
+
+  function handleChatKey(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+</script>
 
 {% endblock %}
