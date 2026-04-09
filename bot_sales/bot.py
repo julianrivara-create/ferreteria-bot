@@ -206,7 +206,10 @@ class SalesBot:
             logging.warning("knowledge_load_failed tenant=%s error=%s", self.tenant_id, exc)
             return None
 
-    def _quote_channel(self) -> str:
+    def _quote_channel(self, session_id: str = "") -> str:
+        """Return the inbound channel for this session, defaulting to 'cli'."""
+        if session_id:
+            return self.sessions.get(session_id, {}).get("channel", "cli")
         return "cli"
 
     def _load_active_quote_from_store(self, session_id: str) -> None:
@@ -244,8 +247,8 @@ class SalesBot:
         quote_id = self.quote_service.save_quote_snapshot(
             session_id=session_id,
             items=items,
-            channel=self._quote_channel(),
-            customer_ref=session_id,
+            channel=self._quote_channel(session_id),
+            customer_ref=self.sessions.get(session_id, {}).get("customer_ref", session_id),
             accepted=accepted,
             status_override=status_override,
             event_type=event_type,
@@ -384,18 +387,32 @@ class SalesBot:
 
         return None
 
-    def process_message(self, session_id: str, user_message: str) -> str:
+    def process_message(
+        self,
+        session_id: str,
+        user_message: str,
+        channel: str = "",
+        customer_ref: str = "",
+    ) -> str:
         """
-        Process a user message and return bot response
-        
+        Process a user message and return bot response.
+
         Args:
-            session_id: Unique identifier for conversation (phone, chat ID, etc.)
-            user_message: User's message text
-        
+            session_id:    Unique identifier for conversation (phone, chat ID, etc.)
+            user_message:  User's message text (may be extracted from an image/PDF/Excel)
+            channel:       Inbound channel — "whatsapp", "instagram", "email", "cli", etc.
+            customer_ref:  Customer identifier visible in the channel (phone number, email, etc.)
+
         Returns:
             Bot's response text
         """
         self._ensure_session_initialized(session_id)
+
+        # Store channel / customer_ref in session so the quote can be tagged
+        if channel:
+            self.sessions[session_id]["channel"] = channel
+        if customer_ref:
+            self.sessions[session_id]["customer_ref"] = customer_ref
 
         if self._is_ferreteria_runtime():
             self._load_active_quote_from_store(session_id)

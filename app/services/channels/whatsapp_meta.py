@@ -31,15 +31,53 @@ class WhatsAppMeta:
     def handle_inbound(message: dict, metadata: dict, tenant_id: str):
         """Process an inbound WhatsApp message using the tenant-scoped bot.
 
+        Handles text, image, document (PDF/Excel), and audio (future) messages.
         Routes through bot_sales.TenantManager so each tenant uses its own
         SalesBot instance, DB, catalog and profile. Falls back to the legacy
         BotCore only if the tenant-scoped bot cannot be initialised.
         """
         from_number = message.get('from')
-        msg_type = message.get('type')
+        msg_type = message.get('type', '')
         text = ""
+
+        # ── Text message ───────────────────────────────────────────────────
         if msg_type == 'text':
             text = message.get('text', {}).get('body', '')
+
+        # ── Media message (image / document / audio) ───────────────────────
+        elif msg_type in ('image', 'document', 'audio'):
+            try:
+                from app.services.media_processor import MediaProcessor
+                processor = MediaProcessor(
+                    access_token=settings.META_ACCESS_TOKEN,
+                    openai_api_key=settings.OPENAI_API_KEY if hasattr(settings, 'OPENAI_API_KEY') else "",
+                )
+                extracted = processor.process_whatsapp_media(message)
+                if extracted:
+                    text = extracted
+                    logger.info(
+                        "whatsapp_media_extracted",
+                        tenant_id=tenant_id,
+                        msg_type=msg_type,
+                        chars=len(text),
+                    )
+                else:
+                    # Unsupported media type — inform the customer
+                    WhatsAppMeta.send_reply(
+                        from_number,
+                        "Recibí tu mensaje pero no pude leer ese tipo de archivo. "
+                        "Podés enviarme el detalle por texto, o mandar una imagen, PDF o Excel.",
+                        tenant_id=tenant_id,
+                    )
+                    return
+            except Exception as exc:
+                logger.error("whatsapp_media_processing_error", error=str(exc), msg_type=msg_type)
+                WhatsAppMeta.send_reply(
+                    from_number,
+                    "Tuve un problema leyendo el archivo. ¿Podés reenviar o escribir el detalle por texto?",
+                    tenant_id=tenant_id,
+                )
+                return
 
         if not text:
             return
@@ -50,8 +88,13 @@ class WhatsAppMeta:
         try:
             from bot_sales.core.tenancy import tenant_manager
             bot = tenant_manager.get_bot(tenant_id)
-            # session_id = phone number so each number has its own context
-            reply_text = bot.process_message(str(from_number), text)
+            # Pass channel metadata so the bot can tag the quote correctly
+            reply_text = bot.process_message(
+                str(from_number),
+                text,
+                channel="whatsapp",
+                customer_ref=str(from_number),
+            )
         except Exception as exc:
             logger.warning(
                 "whatsapp_tenant_bot_failed_using_legacy",
