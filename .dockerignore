@@ -1,0 +1,42 @@
+.git/
+.claude/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Caches
+.pytest_cache/
+.coverage
+htmlcov/
+.playwright-cli/
+.benchmarks/
+
+# Environment files
+.env
+.env.*
+
+# Logs and outputs
+logs/
+tmp/
+archive/
+output/
+reports/
+experiments/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/store.db
+
+# Misc bots
+carniceria_bot/
+
+# OS files
+.DS_Store
+Thumbs.db
