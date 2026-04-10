@@ -1,42 +1,53 @@
-.git/
+# Railway upload ignore — keeps snapshot small and fast
+
+# Claude Code internal state (141 MB)
 .claude/
+
+# Git history
+.git/
+
+# Python environments
 .venv/
 venv/
 env/
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
+*.pyo
+*.egg-info/
+dist/
+build/
 
-# Caches
-.pytest_cache/
-.coverage
-htmlcov/
-.playwright-cli/
-.benchmarks/
-
-# Environment files
-.env
-.env.*
-
-# Logs and outputs
-logs/
-tmp/
-archive/
-output/
-reports/
-experiments/
-
-# Databases
+# Databases (Railway usa volumes / storage persistente)
 *.db
 *.sqlite
 *.sqlite3
 data/*.db
 data/store.db
 
-# Misc bots
-carniceria_bot/
+# Logs y temp
+logs/
+tmp/
+output/
+reports/
+experiments/
+archive/
 
-# OS files
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.playwright-cli/
+.benchmarks/
+
+# Otros bots / proyectos no relacionados
+carniceria_bot/
+website/
+Planning/
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Secrets
+.env
+.env.*
