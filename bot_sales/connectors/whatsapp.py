@@ -473,7 +473,12 @@ def get_whatsapp_blueprint(bot_instance: Optional[Any], connector: WhatsAppConne
                     logging.error("No bot instance found (Multi-tenant resolution failed)")
                     return jsonify({'status': 'error', 'message': 'No tenant'}), 500
 
-                response = target_bot.process_message(from_number, message)
+                response = target_bot.process_message(
+                    from_number,
+                    message,
+                    channel="whatsapp",
+                    customer_ref=str(from_number),
+                )
                 
                 # Enviar respuesta
                 connector.send_message(from_number, response)

@@ -208,7 +208,12 @@ def web_chat():
 
     try:
         bot = _get_tenant_manager().get_bot(tenant.id)
-        payload['content'] = bot.process_message(session_id, user_message)
+        payload['content'] = bot.process_message(
+            session_id,
+            user_message,
+            channel="web",
+            customer_ref=str(user_id),
+        )
         if hasattr(bot, "get_last_turn_meta"):
             meta = bot.get_last_turn_meta(session_id)
             if meta:

@@ -52,7 +52,12 @@ class SalesBotGemini:
         if db:
             self.db = db
         else:
-            self.db = Database(DB_FILE, CATALOG_CSV, LOG_PATH)
+            self.db = Database(
+                DB_FILE,
+                CATALOG_CSV,
+                LOG_PATH,
+                api_key=os.getenv("OPENAI_API_KEY", ""),
+            )
         
         # Initialize analytics
         self.analytics = Analytics(self.db)

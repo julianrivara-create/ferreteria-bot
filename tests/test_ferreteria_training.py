@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sqlite3
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -133,6 +134,23 @@ def test_sandbox_acceptance_does_not_trigger_handoffs_or_email(tmp_path, monkeyp
         bot.close()
     assert handoff_calls == []
     assert email_calls == []
+
+
+def test_training_chat_reset_uses_bot_reset_session(training_client, monkeypatch):
+    client, _ = training_client
+    fake_bot = MagicMock()
+
+    monkeypatch.setattr("bot_sales.core.tenancy.tenant_manager.get_bot", lambda tenant_id: fake_bot)
+
+    resp = client.post(
+        "/ops/ferreteria/training/api/chat-reset",
+        headers={"X-Admin-Token": "test-admin-token", "Content-Type": "application/json"},
+        json={"session_id": "training_test_reset"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+    fake_bot.reset_session.assert_called_once_with("training_test_reset")
 
 
 def test_sandbox_human_handoff_path_does_not_call_external_handoff_logic(training_client, monkeypatch):

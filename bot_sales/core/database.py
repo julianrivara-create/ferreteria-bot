@@ -44,11 +44,11 @@ class Database:
             format='%(asctime)s | %(levelname)s | %(message)s'
         )
 
-        # Vector search engine — use provided key or fall back to env var
-        import os
-        effective_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        # Vector search engine uses an isolated connection so request traffic
+        # never shares transactional state with background indexing.
+        effective_key = (api_key or "").strip()
         from bot_sales.core.vector_search import VectorSearchEngine
-        self._vector = VectorSearchEngine(self.conn, api_key=effective_key)
+        self._vector = VectorSearchEngine(db_file, api_key=effective_key)
         if effective_key:
             products = [self._row_to_product(row)
                         for row in self.conn.execute("SELECT * FROM stock").fetchall()]
@@ -439,13 +439,17 @@ class Database:
                     filtered.append(p)
             products = filtered
 
-        if categoria:
-            cat_lower = categoria.lower()
-            products = [p for p in products if cat_lower in str(p.get("category", "")).lower()]
-
-        if proveedor:
-            prov_lower = proveedor.lower()
-            products = [p for p in products if prov_lower in str(p.get("proveedor", "")).lower()]
+        products = [
+            p
+            for p in products
+            if self._matches_variant_filters(
+                p,
+                storage_gb=storage_gb,
+                color=color,
+                categoria=categoria,
+                proveedor=proveedor,
+            )
+        ]
 
         return products
 
@@ -483,14 +487,15 @@ class Database:
             if not vector_hits:
                 return keyword_results
 
-            # Build lookup of all products by SKU (load once)
-            all_rows = self.conn.execute("SELECT * FROM stock").fetchall()
-            sku_map = {row["sku"]: self._row_to_product(row) for row in all_rows}
-
             # Keyword SKUs for dedup
             keyword_skus = {p["sku"] for p in keyword_results}
+            candidate_skus = [sku for sku, _score in vector_hits if sku not in keyword_skus]
+            if not candidate_skus:
+                return keyword_results
 
-            # Apply category/proveedor filters to vector results
+            sku_map = self._fetch_products_by_skus(candidate_skus)
+
+            # Preserve the same strict filters used in the keyword path.
             extra = []
             for sku, score in vector_hits:
                 if sku in keyword_skus:
@@ -498,9 +503,13 @@ class Database:
                 p = sku_map.get(sku)
                 if p is None:
                     continue
-                if categoria and categoria.lower() not in str(p.get("category", "")).lower():
-                    continue
-                if proveedor and proveedor.lower() not in str(p.get("proveedor", "")).lower():
+                if not self._matches_variant_filters(
+                    p,
+                    storage_gb=storage_gb,
+                    color=color,
+                    categoria=categoria,
+                    proveedor=proveedor,
+                ):
                     continue
                 p["_vector_score"] = score
                 extra.append(p)
@@ -769,4 +778,57 @@ class Database:
 
     def close(self):
         """Close database connection"""
+        if hasattr(self, "_vector") and self._vector:
+            self._vector.close()
         self.conn.close()
+
+    def _matches_variant_filters(
+        self,
+        product: Dict[str, Any],
+        *,
+        storage_gb: Optional[int] = None,
+        color: Optional[str] = None,
+        categoria: Optional[str] = None,
+        proveedor: Optional[str] = None,
+    ) -> bool:
+        if storage_gb is not None:
+            try:
+                expected_storage = int(storage_gb)
+            except (TypeError, ValueError):
+                expected_storage = storage_gb
+            actual_storage = self._parse_int(product.get("storage_gb"))
+            if actual_storage != expected_storage:
+                return False
+
+        if color:
+            color_lower = str(color).strip().lower()
+            color_haystack = " ".join(
+                [
+                    str(product.get("color", "")).lower(),
+                    json.dumps(product.get("attributes", {}), ensure_ascii=False).lower(),
+                ]
+            )
+            if color_lower not in color_haystack:
+                return False
+
+        if categoria:
+            cat_lower = str(categoria).strip().lower()
+            if cat_lower not in str(product.get("category", "")).lower():
+                return False
+
+        if proveedor:
+            prov_lower = str(proveedor).strip().lower()
+            if prov_lower not in str(product.get("proveedor", "")).lower():
+                return False
+
+        return True
+
+    def _fetch_products_by_skus(self, skus: List[str]) -> Dict[str, Dict[str, Any]]:
+        if not skus:
+            return {}
+        placeholders = ",".join("?" for _ in skus)
+        rows = self.conn.execute(
+            f"SELECT * FROM stock WHERE sku IN ({placeholders})",
+            tuple(skus),
+        ).fetchall()
+        return {row["sku"]: self._row_to_product(row) for row in rows}

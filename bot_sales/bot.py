@@ -58,12 +58,13 @@ class SalesBot:
         self.tenant_id = tenant_id
         self.tenant_profile = tenant_profile or {}
         self.sandbox_mode = sandbox_mode
+        resolved_api_key = api_key or OPENAI_API_KEY
 
         # Initialize database
         if db:
             self.db = db
         else:
-            self.db = Database(DB_FILE, CATALOG_CSV, LOG_PATH)
+            self.db = Database(DB_FILE, CATALOG_CSV, LOG_PATH, api_key=resolved_api_key)
 
         self.knowledge_loader: Optional[KnowledgeLoader] = None
         self.quote_store: Optional[QuoteStore] = None
@@ -114,7 +115,7 @@ class SalesBot:
         
         # Config defaults
         if not api_key:
-            api_key = OPENAI_API_KEY
+            api_key = resolved_api_key
         if not model:
             model = OPENAI_MODEL
 
@@ -285,7 +286,10 @@ class SalesBot:
                 event_payload={"source": "customer_acceptance"},
             )
             if quote_id and self.handoff_service and not self.sandbox_mode:
-                self.handoff_service.create_review_handoff(quote_id, customer_ref=session_id)
+                self.handoff_service.create_review_handoff(
+                    quote_id,
+                    customer_ref=self.sessions.get(session_id, {}).get("customer_ref", session_id),
+                )
             return quote_id
 
     def _ensure_session_initialized(self, session_id: str) -> None:

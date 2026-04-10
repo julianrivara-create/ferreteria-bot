@@ -123,7 +123,12 @@ class SlackConnector:
         
         # Process with bot (prefix session with 'slack_')
         session_id = f"slack_{user_id}"
-        response = bot.process_message(session_id, text)
+        response = bot.process_message(
+            session_id,
+            text,
+            channel="slack",
+            customer_ref=str(user_id),
+        )
         
         # Send response
         self.send_message(channel, response)

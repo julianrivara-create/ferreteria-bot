@@ -107,6 +107,35 @@ def test_acceptance_creates_review_requested_handoff(tmp_path, monkeypatch):
         bot.close()
 
 
+def test_acceptance_handoff_uses_customer_ref_when_available(tmp_path):
+    bot = build_vnext_bot(tmp_path)
+    recorded = []
+
+    def track_handoff(quote_id, customer_ref):
+        recorded.append((quote_id, customer_ref))
+
+    bot.handoff_service.create_review_handoff = track_handoff
+
+    try:
+        bot.process_message(
+            "ig_12345",
+            "Quiero silicona y teflon",
+            channel="instagram",
+            customer_ref="12345",
+        )
+        reply = bot.process_message(
+            "ig_12345",
+            "Dale cerralo",
+            channel="instagram",
+            customer_ref="12345",
+        )
+        assert "revisi" in reply.lower()
+        assert recorded
+        assert recorded[0][1] == "12345"
+    finally:
+        bot.close()
+
+
 def test_acceptance_handoff_failure_rolls_back_quote_status_and_handoffs(tmp_path):
     bot = build_vnext_bot(tmp_path)
 

@@ -82,7 +82,12 @@ class InstagramConnector:
             
             # Process with bot (prefix session with 'ig_' to identify Instagram users)
             session_id = f"ig_{sender_id}"
-            response = bot.process_message(session_id, message_text)
+            response = bot.process_message(
+                session_id,
+                message_text,
+                channel="instagram",
+                customer_ref=str(sender_id),
+            )
             
             # Send response
             self.send_message(sender_id, response)

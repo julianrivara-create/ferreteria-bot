@@ -462,21 +462,22 @@
   let sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
   let activeModalIdx = null;
   let activeChannel = "whatsapp";
+  const channelLabels = { whatsapp: "WhatsApp 📱", instagram: "Instagram 📸", email: "Email ✉️", cli: "CLI 💻" };
 
   // ─── Channel selector ──────────────────────────────────────
   function selectChannel(channel, btn) {
+    const previousSessionId = sessionId;
     activeChannel = channel;
     document.querySelectorAll(".channel-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     // Reset session so bot context starts fresh for the new channel
     sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
     const container = document.getElementById("chat-messages");
-    const labels = { whatsapp: "WhatsApp 📱", instagram: "Instagram 📸", email: "Email ✉️", cli: "CLI 💻" };
-    container.innerHTML = `<div class="msg system">Canal cambiado a <strong>${labels[channel] || channel}</strong>. Nueva sesión iniciada.</div>`;
+    container.innerHTML = `<div class="msg system">Canal cambiado a <strong>${channelLabels[channel] || channel}</strong>. Nueva sesión iniciada.</div>`;
     fetch("/ops/ferreteria/training/api/chat-reset", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId })
+      body: JSON.stringify({ session_id: previousSessionId })
     }).catch(() => {});
   }
 
@@ -628,15 +629,15 @@
 
   function clearChat() {
     const container = document.getElementById("chat-messages");
-    const labels = { whatsapp: "WhatsApp 📱", instagram: "Instagram 📸", email: "Email ✉️", cli: "CLI 💻" };
-    container.innerHTML = `<div class="msg system">Chat limpiado. Canal: <strong>${labels[activeChannel] || activeChannel}</strong>. Empezá una nueva conversación.</div>`;
+    const previousSessionId = sessionId;
+    container.innerHTML = `<div class="msg system">Chat limpiado. Canal: <strong>${channelLabels[activeChannel] || activeChannel}</strong>. Empezá una nueva conversación.</div>`;
     // Generate new session so bot forgets context
     sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
     // Also reset on server
     fetch("/ops/ferreteria/training/api/chat-reset", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId })
+      body: JSON.stringify({ session_id: previousSessionId })
     }).catch(() => {});
   }
 

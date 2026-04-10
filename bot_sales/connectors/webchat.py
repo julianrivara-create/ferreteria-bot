@@ -53,7 +53,12 @@ class WebChatAPI:
                     return jsonify({'error': 'Missing session_id or message'}), 400
                 
                 # Procesar con bot
-                response = self.bot.process_message(session_id, message)
+                response = self.bot.process_message(
+                    session_id,
+                    message,
+                    channel="web",
+                    customer_ref=str(session_id),
+                )
                 
                 return jsonify({
                     'response': response,

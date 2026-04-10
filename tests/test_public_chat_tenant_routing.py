@@ -88,7 +88,12 @@ def test_public_chat_prefers_tenant_runtime_and_namespaces_web_session(monkeypat
     assert payload["meta"]["route_source"] == "deterministic"
     assert resp.headers["X-RateLimit-Limit"] == "60"
     manager.get_bot.assert_called_once_with("ferreteria")
-    bot.process_message.assert_called_once_with("web_visitor-42", "Hola")
+    bot.process_message.assert_called_once_with(
+        "web_visitor-42",
+        "Hola",
+        channel="web",
+        customer_ref="visitor-42",
+    )
 
 
 def test_public_chat_returns_404_for_unknown_tenant(monkeypatch):

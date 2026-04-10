@@ -1991,7 +1991,12 @@ def training_chat_test():
     try:
         from bot_sales.core.tenancy import tenant_manager
         bot = tenant_manager.get_bot("ferreteria")
-        reply = bot.process_message(session_id, message, channel=channel)
+        reply = bot.process_message(
+            session_id,
+            message,
+            channel=channel,
+            customer_ref=session_id,
+        )
         return jsonify({"reply": reply or "(sin respuesta)"})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -2006,8 +2011,13 @@ def training_chat_reset():
     try:
         from bot_sales.core.tenancy import tenant_manager
         bot = tenant_manager.get_bot("ferreteria")
-        if hasattr(bot, "sessions") and session_id in bot.sessions:
-            del bot.sessions[session_id]
+        if hasattr(bot, "reset_session"):
+            bot.reset_session(session_id)
+        else:
+            if hasattr(bot, "contexts"):
+                bot.contexts.pop(session_id, None)
+            if hasattr(bot, "sessions"):
+                bot.sessions.pop(session_id, None)
         return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

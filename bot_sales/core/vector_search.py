@@ -61,17 +61,18 @@ class VectorSearchEngine:
     immediately (returns [] until the matrix is loaded).
     """
 
-    def __init__(self, db_conn: sqlite3.Connection, api_key: str = "") -> None:
-        self._conn    = db_conn
+    def __init__(self, db_path: str, api_key: str = "") -> None:
+        self._db_path = db_path
         self._enabled = bool(api_key)
         self._client  = None
         self._matrix  = None   # numpy (N, DIMS) — loaded after indexing
         self._skus: List[str] = []
         self._lock    = threading.Lock()
         self._ready   = threading.Event()
+        self._stop    = threading.Event()
+        self._thread: Optional[threading.Thread] = None
 
-        db_conn.execute(_SCHEMA)
-        db_conn.commit()
+        self._ensure_schema()
 
         if not self._enabled:
             logger.info("vector_search_disabled: no api_key")
@@ -92,22 +93,25 @@ class VectorSearchEngine:
         Kick off background indexing. Returns immediately.
         search() will return [] until ready; the app keeps running normally.
         """
-        if not self._enabled:
+        if not self._enabled or self._stop.is_set():
             return
-        t = threading.Thread(
-            target=self._index_worker,
-            args=(products,),
-            daemon=True,
-            name="vector-indexer",
-        )
-        t.start()
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                return
+            self._thread = threading.Thread(
+                target=self._index_worker,
+                args=(products,),
+                daemon=True,
+                name="vector-indexer",
+            )
+            self._thread.start()
 
     def search(self, query: str, top_k: int = 15) -> List[Tuple[str, float]]:
         """
         Return [(sku, similarity_score), ...] sorted descending.
         Returns [] if not ready yet or engine is disabled.
         """
-        if not self._enabled:
+        if not self._enabled or self._stop.is_set():
             return []
         with self._lock:
             if self._matrix is None:
@@ -131,26 +135,47 @@ class VectorSearchEngine:
     def is_ready(self) -> bool:
         return self._matrix is not None
 
+    def close(self, timeout: float = 1.0) -> None:
+        """Signal the background worker to stop and wait briefly for it."""
+        self._stop.set()
+        with self._lock:
+            thread = self._thread
+        if thread and thread.is_alive():
+            thread.join(timeout=timeout)
+
     # ─── Private ───────────────────────────────────────────────────────────
 
     def _index_worker(self, products: List[dict]) -> None:
+        conn: Optional[sqlite3.Connection] = None
         try:
-            self._generate_missing(products)
-            matrix, skus = self._load_matrix()
+            if self._stop.is_set():
+                return
+            conn = self._open_conn()
+            self._generate_missing(conn, products)
+            if self._stop.is_set():
+                return
+            matrix, skus = self._load_matrix(conn)
+            if self._stop.is_set():
+                return
             with self._lock:
                 self._matrix = matrix
                 self._skus   = skus
-            self._ready.set()
-            logger.info("vector_search_ready: %d products indexed", len(skus))
+            if matrix is not None:
+                self._ready.set()
+                logger.info("vector_search_ready: %d products indexed", len(skus))
         except Exception as exc:
             logger.error("vector_search_index_worker_failed: %s", exc)
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
-    def _generate_missing(self, products: List[dict]) -> None:
-        import numpy as np
-
+    def _generate_missing(self, conn: sqlite3.Connection, products: List[dict]) -> None:
         existing = {
             row[0]: row[1]
-            for row in self._conn.execute(
+            for row in conn.execute(
                 "SELECT sku, text_hash FROM product_embeddings"
             ).fetchall()
         }
@@ -174,6 +199,8 @@ class VectorSearchEngine:
         done  = 0
 
         for batch_start in range(0, total, BATCH_SIZE):
+            if self._stop.is_set():
+                return
             batch  = to_embed[batch_start: batch_start + BATCH_SIZE]
             texts  = [b[1] for b in batch]
             try:
@@ -183,18 +210,18 @@ class VectorSearchEngine:
                 continue
 
             rows = [(batch[i][0], _pack(vecs[i]), batch[i][2]) for i in range(len(batch))]
-            self._conn.executemany(
+            conn.executemany(
                 "INSERT OR REPLACE INTO product_embeddings (sku, embedding, text_hash) VALUES (?,?,?)",
                 rows,
             )
-            self._conn.commit()
+            conn.commit()
             done += len(batch)
             if done % 5000 < BATCH_SIZE:
                 logger.info("vector_search_progress: %d/%d (%.0f%%)", done, total, 100 * done / total)
 
-    def _load_matrix(self):
+    def _load_matrix(self, conn: sqlite3.Connection):
         import numpy as np
-        rows = self._conn.execute(
+        rows = conn.execute(
             "SELECT sku, embedding FROM product_embeddings ORDER BY sku"
         ).fetchall()
         if not rows:
@@ -212,3 +239,14 @@ class VectorSearchEngine:
         )
         ordered = sorted(resp.data, key=lambda x: x.index)
         return [item.embedding for item in ordered]
+
+    def _ensure_schema(self) -> None:
+        conn = self._open_conn()
+        try:
+            conn.execute(_SCHEMA)
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _open_conn(self) -> sqlite3.Connection:
+        return sqlite3.connect(self._db_path, check_same_thread=False)

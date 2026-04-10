@@ -213,7 +213,12 @@ class TenantManager:
 
         os.makedirs(db_path.parent, exist_ok=True)
 
-        db = Database(str(db_path), str(catalog_path), LOG_PATH)
+        db = Database(
+            str(db_path),
+            str(catalog_path),
+            LOG_PATH,
+            api_key=tenant.get_api_key("openai"),
+        )
         self._db_cache[tenant_id] = db
         return db
 
