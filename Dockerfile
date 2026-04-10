@@ -26,20 +26,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (only what the ferreteria bot needs at runtime)
 COPY app ./app
 COPY bot_sales ./bot_sales
-COPY dashboard ./dashboard
-COPY maintenance ./maintenance
-COPY website ./website
 COPY data ./data
 COPY config ./config
-COPY migrations ./migrations
-COPY static ./static
-COPY tenants ./tenants
 COPY tenants.yaml ./tenants.yaml
-COPY faqs.json ./faqs.json
-COPY *.py ./
+COPY wsgi.py ./wsgi.py
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
