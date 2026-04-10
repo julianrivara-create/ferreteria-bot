@@ -128,6 +128,12 @@ class TenantConfig:
                 bot_objective=self.config.get("bot_objective", ""),
             )
         except Exception:
+            import logging as _log
+            _log.exception(
+                "tenant_config_render_prompt_failed template=%s store=%s — using bare fallback",
+                template_name,
+                self.config.get("store_name", "?"),
+            )
             return (
                 f"Sos un asesor de ventas para {self.config.get('store_name', 'Store')}.\n"
                 f"Categorías: {', '.join(self.config.get('product_categories', ['productos']))}.\n"

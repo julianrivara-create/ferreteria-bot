@@ -92,7 +92,7 @@ class SalesBot:
                     tenant_profile=self.tenant_profile,
                 )
             except Exception as exc:
-                logging.warning("ferreteria_quote_store_unavailable tenant=%s error=%s", self.tenant_id, exc)
+                logging.warning("ferreteria_quote_store_unavailable tenant=%s error=%s", self.tenant_id, exc, exc_info=True)
                 self.quote_store = None
                 self.quote_service = None
                 self.handoff_service = None
@@ -204,7 +204,7 @@ class SalesBot:
         try:
             return self.knowledge_loader.load()
         except Exception as exc:
-            logging.warning("knowledge_load_failed tenant=%s error=%s", self.tenant_id, exc)
+            logging.warning("knowledge_load_failed tenant=%s error=%s", self.tenant_id, exc, exc_info=True)
             return None
 
     def _quote_channel(self, session_id: str = "") -> str:
@@ -261,7 +261,7 @@ class SalesBot:
             try:
                 self.quote_automation_service.refresh_quote_automation(quote_id)
             except Exception as exc:
-                logging.warning("quote_automation_refresh_failed tenant=%s quote=%s error=%s", self.tenant_id, quote_id, exc)
+                logging.warning("quote_automation_refresh_failed tenant=%s quote=%s error=%s", self.tenant_id, quote_id, exc, exc_info=True)
         return quote_id
 
     def _accept_quote_for_review(self, session_id: str, user_message: str, response_text: str) -> Optional[str]:
@@ -294,11 +294,21 @@ class SalesBot:
 
     def _ensure_session_initialized(self, session_id: str) -> None:
         if session_id in self.contexts:
+            # Sync system prompt in case the config was updated after this session
+            # was loaded (e.g. user saved a new manual in the training panel).
+            ctx = self.contexts[session_id]
+            if ctx and ctx[0].get("role") == "system" and ctx[0].get("content") != self.system_prompt:
+                ctx[0]["content"] = self.system_prompt
+                logging.info("system_prompt_refreshed_in_memory session=%s tenant=%s", session_id, self.tenant_id)
             return
         # Load from DB first (survives restarts); skip in sandbox to keep tests isolated
         if not self.sandbox_mode:
             persisted_ctx, persisted_state = self.db.load_session(session_id, self.tenant_id)
             if persisted_ctx:
+                # Always inject the CURRENT system prompt — never trust what was
+                # persisted in the DB, which could reflect an old manual/personality.
+                if persisted_ctx and persisted_ctx[0].get("role") == "system":
+                    persisted_ctx[0]["content"] = self.system_prompt
                 self.contexts[session_id] = persisted_ctx
                 self.sessions[session_id] = persisted_state
                 return
@@ -377,7 +387,7 @@ class SalesBot:
                         resumen=summary,
                     )
                 except Exception as exc:
-                    logging.warning("sales_flow_handoff_failed session=%s error=%s", session_id, exc)
+                    logging.warning("sales_flow_handoff_failed session=%s error=%s", session_id, exc, exc_info=True)
 
             response_text = str(sales_contract.get("reply_text") or "Te paso con un asesor para continuar.")
             self._set_last_turn_meta(session_id, route_source="model_assisted")
@@ -1298,7 +1308,7 @@ class SalesBot:
         try:
             return self.flow_manager.process_input(session_id, user_message)
         except Exception as exc:
-            logging.warning("sales_intelligence_failed_using_legacy_flow tenant=%s session=%s error=%s", self.tenant_id, session_id, exc)
+            logging.warning("sales_intelligence_failed_using_legacy_flow tenant=%s session=%s error=%s", self.tenant_id, session_id, exc, exc_info=True)
             return None
 
     def _execute_function(self, session_id: str, func_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
