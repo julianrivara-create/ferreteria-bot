@@ -157,6 +157,43 @@
   }
   .save-status.error { color: var(--bad); }
 
+  /* ── Channel Selector ─────────────────────────────────────── */
+  .channel-selector {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .channel-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--r-full);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-alt);
+    color: var(--ink-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .channel-btn:hover { background: var(--border); color: var(--ink); }
+  .channel-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .channel-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, currentColor 15%, transparent);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
   /* ── Right Panel: Chat ────────────────────────────────────── */
   .chat-panel {
     display: flex;
@@ -372,6 +409,20 @@
     <div class="panel-header">
       <span class="panel-title">Conversación de prueba</span>
       <div class="panel-actions">
+        <div class="channel-selector" id="channel-selector">
+          <button class="channel-btn" data-channel="whatsapp" onclick="selectChannel('whatsapp', this)">
+            📱 WhatsApp
+          </button>
+          <button class="channel-btn" data-channel="instagram" onclick="selectChannel('instagram', this)">
+            📸 Instagram
+          </button>
+          <button class="channel-btn" data-channel="email" onclick="selectChannel('email', this)">
+            ✉️ Email
+          </button>
+          <button class="channel-btn" data-channel="cli" onclick="selectChannel('cli', this)">
+            💻 CLI
+          </button>
+        </div>
         <button class="btn-ghost" onclick="clearChat()">Limpiar chat</button>
       </div>
     </div>
@@ -410,6 +461,24 @@
   let fields = {{ manual_fields | tojson }};
   let sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
   let activeModalIdx = null;
+  let activeChannel = "whatsapp";
+
+  // ─── Channel selector ──────────────────────────────────────
+  function selectChannel(channel, btn) {
+    activeChannel = channel;
+    document.querySelectorAll(".channel-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    // Reset session so bot context starts fresh for the new channel
+    sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
+    const container = document.getElementById("chat-messages");
+    const labels = { whatsapp: "WhatsApp 📱", instagram: "Instagram 📸", email: "Email ✉️", cli: "CLI 💻" };
+    container.innerHTML = `<div class="msg system">Canal cambiado a <strong>${labels[channel] || channel}</strong>. Nueva sesión iniciada.</div>`;
+    fetch("/ops/ferreteria/training/api/chat-reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId })
+    }).catch(() => {});
+  }
 
   // ─── Init ─────────────────────────────────────────────────
   document.addEventListener("DOMContentLoaded", () => {
@@ -423,6 +492,9 @@
       ];
     }
     renderFields();
+    // Set default active channel button
+    const defaultBtn = document.querySelector(`.channel-btn[data-channel="${activeChannel}"]`);
+    if (defaultBtn) defaultBtn.classList.add("active");
   });
 
   // ─── Render fields list ────────────────────────────────────
@@ -556,7 +628,8 @@
 
   function clearChat() {
     const container = document.getElementById("chat-messages");
-    container.innerHTML = '<div class="msg system">Chat limpiado. Empezá una nueva conversación.</div>';
+    const labels = { whatsapp: "WhatsApp 📱", instagram: "Instagram 📸", email: "Email ✉️", cli: "CLI 💻" };
+    container.innerHTML = `<div class="msg system">Chat limpiado. Canal: <strong>${labels[activeChannel] || activeChannel}</strong>. Empezá una nueva conversación.</div>`;
     // Generate new session so bot forgets context
     sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
     // Also reset on server
@@ -589,7 +662,7 @@
       const resp = await fetch("/ops/ferreteria/training/api/chat-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, session_id: sessionId })
+        body: JSON.stringify({ message: text, session_id: sessionId, channel: activeChannel })
       });
       const data = await resp.json();
       thinking.remove();

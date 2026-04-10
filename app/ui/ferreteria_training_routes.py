@@ -1985,12 +1985,13 @@ def training_chat_test():
     data = request.get_json() or {}
     message = str(data.get("message") or "").strip()
     session_id = str(data.get("session_id") or "training_test_ferreteria")
+    channel = str(data.get("channel") or "cli").strip()
     if not message:
         return jsonify({"error": "Mensaje vacío"}), 400
     try:
         from bot_sales.core.tenancy import tenant_manager
         bot = tenant_manager.get_bot("ferreteria")
-        reply = bot.process_message(session_id, message)
+        reply = bot.process_message(session_id, message, channel=channel)
         return jsonify({"reply": reply or "(sin respuesta)"})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
