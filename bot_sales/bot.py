@@ -11,6 +11,7 @@ import re
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from cachetools import TTLCache
 
 from .core.database import Database
 from .core.chatgpt import ChatGPTClient, get_available_functions
@@ -144,11 +145,11 @@ class SalesBot:
         # Get available functions
         self.functions = get_available_functions()
         
-        # Conversation contexts (in-memory, keyed by session_id)
-        self.contexts: Dict[str, List[Dict[str, str]]] = {}
+        # Conversation contexts — evicted after 24h of inactivity (prevents OOM on long-running Railway containers)
+        self.contexts: TTLCache = TTLCache(maxsize=5000, ttl=86400)
         
-        # Session state (for tracking hold_id, etc.)
-        self.sessions: Dict[str, Dict[str, Any]] = {}
+        # Session state — same 24h TTL
+        self.sessions: TTLCache = TTLCache(maxsize=5000, ttl=86400)
 
         try:
             self.flow_manager: Optional[SalesFlowManager] = SalesFlowManager()

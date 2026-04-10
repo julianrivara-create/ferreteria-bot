@@ -330,6 +330,12 @@ class WhatsAppConnector:
 
 from flask import Flask, request, jsonify, Blueprint
 
+import concurrent.futures
+from cachetools import TTLCache
+
+webhook_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+_processed_webhook_msg_ids = TTLCache(maxsize=10000, ttl=300)
+
 def get_whatsapp_blueprint(bot_instance: Optional[Any], connector: WhatsAppConnector) -> Blueprint:
     """
     Crea Blueprint para webhooks de WhatsApp
@@ -338,6 +344,7 @@ def get_whatsapp_blueprint(bot_instance: Optional[Any], connector: WhatsAppConne
         connector: Instancia del conector
     """
     from ..core.tenancy import tenant_manager
+    from app.core.config import get_settings
     bp = Blueprint('whatsapp', __name__)
     
     @bp.route('/webhooks/whatsapp', methods=['GET', 'POST'])
@@ -348,7 +355,7 @@ def get_whatsapp_blueprint(bot_instance: Optional[Any], connector: WhatsAppConne
             token = request.args.get('hub.verify_token')
             challenge = request.args.get('hub.challenge')
             
-            verify_token = 'my_verify_token'  # Configurar en .env
+            verify_token = get_settings().META_VERIFY_TOKEN
             
             result = connector.verify_webhook_meta(mode, token, challenge, verify_token)
             if result:
@@ -368,10 +375,19 @@ def get_whatsapp_blueprint(bot_instance: Optional[Any], connector: WhatsAppConne
         parsed = connector.receive_webhook(data)
         
         if parsed and (parsed.get('message') or parsed.get('type') in ['audio', 'image']):
-            # Datos básicos
             from_number = parsed.get('from')
             message = parsed.get('message', '')
             msg_type = parsed.get('type')
+            msg_id = parsed.get('message_id')
+            
+            if msg_id:
+                if msg_id in _processed_webhook_msg_ids:
+                    logging.warning(f"Ignorando webhook duplicado (idempotencia): {msg_id}")
+                    return jsonify({'status': 'ok', 'note': 'duplicate'}), 200
+                _processed_webhook_msg_ids[msg_id] = True
+            
+            if message:
+                message = message[:4000]
             
             # --- PHASE 1: AUDIO ---
             if msg_type == 'audio' and parsed.get('media_id'):
@@ -473,20 +489,24 @@ def get_whatsapp_blueprint(bot_instance: Optional[Any], connector: WhatsAppConne
                     logging.error("No bot instance found (Multi-tenant resolution failed)")
                     return jsonify({'status': 'error', 'message': 'No tenant'}), 500
 
-                response = target_bot.process_message(
-                    from_number,
-                    message,
-                    channel="whatsapp",
-                    customer_ref=str(from_number),
-                )
+                def process_in_background(t_bot, f_num, msg):
+                    try:
+                        response = t_bot.process_message(
+                            f_num,
+                            msg,
+                            channel="whatsapp",
+                            customer_ref=str(f_num),
+                        )
+                        connector.send_message(f_num, response)
+                    except Exception as e:
+                        logging.error(f"Error processing WhatsApp message in background: {e}", exc_info=True)
+
+                webhook_executor.submit(process_in_background, target_bot, from_number, message)
                 
-                # Enviar respuesta
-                connector.send_message(from_number, response)
-                
-                return jsonify({'status': 'ok'}), 200
+                return jsonify({'status': 'ok', 'note': 'async processing started'}), 200
             
             except Exception as e:
-                logging.error(f"Error processing WhatsApp message: {e}")
+                logging.error(f"Error delegating WhatsApp message: {e}", exc_info=True)
                 return jsonify({'status': 'error', 'message': str(e)}), 500
         
         return jsonify({'status': 'ok'}), 200
