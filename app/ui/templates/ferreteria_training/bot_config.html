@@ -42,6 +42,16 @@
     overflow-y: auto;
     padding: 14px 14px 80px;
   }
+  .manual-help {
+    margin: 0 14px 10px;
+    padding: 10px 12px;
+    border-radius: var(--r-sm);
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--ink-muted);
+  }
 
   /* ── Field Card ───────────────────────────────────────────── */
   .field-card {
@@ -50,6 +60,15 @@
     border-radius: var(--r);
     margin-bottom: 10px;
     overflow: hidden;
+    transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .field-card.dragging {
+    opacity: 0.55;
+    transform: scale(0.995);
+  }
+  .field-card.drop-target {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
   }
   .field-header {
     display: flex;
@@ -57,6 +76,37 @@
     justify-content: space-between;
     padding: 10px 12px;
     gap: 8px;
+  }
+  .field-meta {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .field-priority {
+    flex-shrink: 0;
+    min-width: 42px;
+    padding-top: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+  .field-drag {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-sm);
+    border: 1px dashed var(--border-strong);
+    background: var(--surface-alt);
+    color: var(--ink-muted);
+    cursor: grab;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .field-drag:active {
+    cursor: grabbing;
   }
   .field-title-input {
     font-size: 11px;
@@ -389,6 +439,11 @@
       </div>
     </div>
 
+    <div class="manual-help">
+      De arriba hacia abajo = mayor a menor prioridad.
+      Arrastrá los campos para cambiar el orden en que el bot debe obedecerlos.
+    </div>
+
     <div class="manual-body" id="fields-container">
       <!-- Fields rendered by JS -->
     </div>
@@ -462,23 +517,27 @@
   let sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
   let activeModalIdx = null;
   let activeChannel = "whatsapp";
+  let dragIdx = null;
   const channelLabels = { whatsapp: "WhatsApp 📱", instagram: "Instagram 📸", email: "Email ✉️", cli: "CLI 💻" };
 
   // ─── Channel selector ──────────────────────────────────────
-  function selectChannel(channel, btn) {
-    const previousSessionId = sessionId;
-    activeChannel = channel;
-    document.querySelectorAll(".channel-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    // Reset session so bot context starts fresh for the new channel
-    sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
+  function resetChatState(message, nextSessionId = null) {
     const container = document.getElementById("chat-messages");
-    container.innerHTML = `<div class="msg system">Canal cambiado a <strong>${channelLabels[channel] || channel}</strong>. Nueva sesión iniciada.</div>`;
+    const previousSessionId = sessionId;
+    container.innerHTML = `<div class="msg system">${message}</div>`;
+    sessionId = nextSessionId || ("training_test_" + Math.random().toString(36).slice(2, 8));
     fetch("/ops/ferreteria/training/api/chat-reset", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: previousSessionId })
     }).catch(() => {});
+  }
+
+  function selectChannel(channel, btn) {
+    activeChannel = channel;
+    document.querySelectorAll(".channel-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    resetChatState(`Canal cambiado a ${channelLabels[channel] || channel}. Nueva sesión iniciada.`);
   }
 
   // ─── Init ─────────────────────────────────────────────────
@@ -506,12 +565,25 @@
       const card = document.createElement("div");
       card.className = "field-card";
       card.dataset.idx = i;
+      card.ondragover = (event) => handleDragOver(event, i);
+      card.ondragenter = (event) => handleDragEnter(event, i);
+      card.ondragleave = (event) => handleDragLeave(event);
+      card.ondrop = (event) => handleDrop(event, i);
       card.innerHTML = `
         <div class="field-header">
-          <input class="field-title-input" value="${escHtml(f.title)}"
-            placeholder="Título del campo"
-            onchange="updateTitle(${i}, this.value)"
-            oninput="updateTitle(${i}, this.value)">
+          <div class="field-meta">
+            <button class="field-drag" draggable="true"
+              title="Arrastrar para reordenar"
+              ondragstart="handleDragStart(event, ${i})"
+              ondragend="handleDragEnd()">
+              ::
+            </button>
+            <div class="field-priority">P${i + 1}</div>
+            <input class="field-title-input" value="${escHtml(f.title)}"
+              placeholder="Título del campo"
+              onchange="updateTitle(${i}, this.value)"
+              oninput="updateTitle(${i}, this.value)">
+          </div>
           <div class="field-btns">
             <button class="field-btn" onclick="expandField(${i})">Expandir</button>
             <button class="field-btn danger" onclick="deleteField(${i})">Eliminar</button>
@@ -528,6 +600,13 @@
 
   function escHtml(str) {
     return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  function clearDragStyles() {
+    document.querySelectorAll(".field-card").forEach(card => {
+      card.classList.remove("dragging");
+      card.classList.remove("drop-target");
+    });
   }
 
   // ─── Field operations ──────────────────────────────────────
@@ -551,6 +630,51 @@
 
   function updateContent(idx, value) {
     fields[idx].content = value;
+  }
+
+  function moveField(fromIdx, toIdx) {
+    if (fromIdx === toIdx || fromIdx === null || toIdx === null) return;
+    const [moved] = fields.splice(fromIdx, 1);
+    let insertIdx = toIdx;
+    if (fromIdx < toIdx) insertIdx -= 1;
+    fields.splice(insertIdx, 0, moved);
+    renderFields();
+  }
+
+  function handleDragStart(event, idx) {
+    dragIdx = idx;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(idx));
+    event.target.closest(".field-card")?.classList.add("dragging");
+  }
+
+  function handleDragOver(event, idx) {
+    if (dragIdx === null || dragIdx === idx) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }
+
+  function handleDragEnter(event, idx) {
+    if (dragIdx === null || dragIdx === idx) return;
+    event.currentTarget.classList.add("drop-target");
+  }
+
+  function handleDragLeave(event) {
+    event.currentTarget.classList.remove("drop-target");
+  }
+
+  function handleDrop(event, idx) {
+    event.preventDefault();
+    const sourceIdx = dragIdx ?? Number(event.dataTransfer.getData("text/plain"));
+    clearDragStyles();
+    dragIdx = null;
+    if (!Number.isInteger(sourceIdx)) return;
+    moveField(sourceIdx, idx);
+  }
+
+  function handleDragEnd() {
+    dragIdx = null;
+    clearDragStyles();
   }
 
   // ─── Expand modal ──────────────────────────────────────────
@@ -602,7 +726,8 @@
       });
       const data = await resp.json();
       if (data.ok) {
-        status.textContent = "✅ Guardado. Ahora podés probar en el chat.";
+        resetChatState(`Manual guardado. Canal: ${channelLabels[activeChannel] || activeChannel}. Nueva sesión iniciada con el manual actualizado.`);
+        status.textContent = "✅ Guardado. Reinicié el chat para probar con el manual nuevo.";
         status.className = "save-status";
       } else {
         status.textContent = "❌ Error: " + (data.error || "desconocido");
@@ -628,17 +753,7 @@
   }
 
   function clearChat() {
-    const container = document.getElementById("chat-messages");
-    const previousSessionId = sessionId;
-    container.innerHTML = `<div class="msg system">Chat limpiado. Canal: <strong>${channelLabels[activeChannel] || activeChannel}</strong>. Empezá una nueva conversación.</div>`;
-    // Generate new session so bot forgets context
-    sessionId = "training_test_" + Math.random().toString(36).slice(2, 8);
-    // Also reset on server
-    fetch("/ops/ferreteria/training/api/chat-reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: previousSessionId })
-    }).catch(() => {});
+    resetChatState(`Chat limpiado. Canal: ${channelLabels[activeChannel] || activeChannel}. Empezá una nueva conversación.`);
   }
 
   async function sendMessage() {

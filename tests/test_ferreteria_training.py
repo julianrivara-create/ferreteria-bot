@@ -153,6 +153,48 @@ def test_training_chat_reset_uses_bot_reset_session(training_client, monkeypatch
     fake_bot.reset_session.assert_called_once_with("training_test_reset")
 
 
+def test_bot_config_save_reload_runtime_and_persists_priority_order(training_client, tmp_path, monkeypatch):
+    client, profile = training_client
+    profile_path = tmp_path / "profile.yaml"
+    profile_path.write_text(yaml.safe_dump(profile, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    reload_calls = []
+
+    monkeypatch.setattr(
+        "app.ui.ferreteria_training_routes._ferreteria_profile_path",
+        lambda: profile_path,
+    )
+    monkeypatch.setattr(
+        "app.ui.ferreteria_training_routes._reload_ferreteria_runtime",
+        lambda: reload_calls.append("reloaded"),
+    )
+
+    payload = {
+        "personality": "Vendedor tecnico y directo.",
+        "manual_fields": [
+            {"title": "Saludo inicial", "content": "Arranca corto y orientado a cerrar la venta."},
+            {"title": "Aclaracion", "content": "Pedi primero material y medida antes de sugerir productos."},
+        ],
+    }
+
+    resp = client.post(
+        "/ops/ferreteria/training/bot-config",
+        headers={"X-Admin-Token": "test-admin-token", "Content-Type": "application/json"},
+        json=payload,
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+    assert reload_calls == ["reloaded"]
+
+    saved = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    training = saved["training"]
+    assert training["personality"] == payload["personality"]
+    assert training["manual_fields"] == payload["manual_fields"]
+    assert "orden de prioridad" in training["objective"].lower()
+    assert "PRIORIDAD 1 - Saludo inicial" in training["objective"]
+    assert "PRIORIDAD 2 - Aclaracion" in training["objective"]
+
+
 def test_sandbox_human_handoff_path_does_not_call_external_handoff_logic(training_client, monkeypatch):
     client, _ = training_client
     handoff_calls = []

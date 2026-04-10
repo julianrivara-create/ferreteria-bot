@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+import yaml
 
 from app.api.ferreteria_training_routes import (
     ALLOWED_SUGGESTION_DOMAINS,
@@ -68,6 +69,44 @@ DEMO_OPEN_COMMAND = (
     "open http://127.0.0.1:8033/index.html"
 )
 DEMO_INDEX_HINT = "tmp/training_demo/snapshots/index.html"
+
+
+def _ferreteria_profile_path() -> Path:
+    from bot_sales.core.tenancy import tenant_manager
+
+    tenant = tenant_manager.get_tenant_by_slug("ferreteria") or tenant_manager.get_tenant("ferreteria")
+    configured_path = getattr(tenant, "profile_path", "") if tenant else ""
+    profile_path = Path(configured_path or "data/tenants/ferreteria/profile.yaml")
+    if not profile_path.is_absolute():
+        profile_path = ROOT_DIR / profile_path
+    return profile_path
+
+
+def _fields_to_objective(fields: list[dict]) -> str:
+    """Render training fields as an ordered instruction block for the prompt."""
+    parts = [
+        "Respetá estas instrucciones en orden de prioridad.",
+        "Si dos campos entran en conflicto, manda siempre el de menor número.",
+    ]
+    for idx, field in enumerate(fields, start=1):
+        title = str(field.get("title") or "").strip()
+        content = str(field.get("content") or "").strip()
+        if not content:
+            continue
+        heading = f"### PRIORIDAD {idx}"
+        if title:
+            heading += f" - {title}"
+        parts.append(f"{heading}\n{content}")
+    return "\n\n".join(parts).strip()
+
+
+def _reload_ferreteria_runtime() -> None:
+    """Reload cached tenant/bot state so the training chat uses the latest manual."""
+    from bot_sales.core.tenancy import tenant_manager
+    from bot_sales.core.tenant_config import _config_cache
+
+    _config_cache.clear()
+    tenant_manager.reload()
 
 
 def _read_support_doc(path: Path, fallback: str) -> str:
@@ -1897,40 +1936,18 @@ def training_impact_page():
 @training_login_required
 def bot_config_page():
     """Edit bot manual (structured instruction fields) + personality."""
-    import yaml as _yaml
-    import json as _json
-    from pathlib import Path as _Path
-
-    PROFILE_PATH = _Path(__file__).resolve().parents[2] / "data" / "tenants" / "ferreteria" / "profile.yaml"
+    profile_path = _ferreteria_profile_path()
 
     def _load_profile():
         try:
-            with open(PROFILE_PATH, "r", encoding="utf-8") as f:
-                return _yaml.safe_load(f) or {}
+            with open(profile_path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
         except Exception:
             return {}
 
     def _save_profile(profile: dict):
-        with open(PROFILE_PATH, "w", encoding="utf-8") as f:
-            _yaml.dump(profile, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-        try:
-            from bot_sales.core.tenant_config import _config_cache
-            _config_cache.clear()
-        except Exception:
-            pass
-
-    def _fields_to_objective(fields: list) -> str:
-        """Combine list of {title, content} into a single instruction text."""
-        parts = []
-        for field in fields:
-            title = str(field.get("title") or "").strip()
-            content = str(field.get("content") or "").strip()
-            if content:
-                if title:
-                    parts.append(f"## {title}\n{content}")
-                else:
-                    parts.append(content)
-        return "\n\n".join(parts)
+        with open(profile_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(profile, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
     profile = _load_profile()
     training = profile.get("training") or {}
@@ -1952,6 +1969,7 @@ def bot_config_page():
                 profile["training"]["objective"] = objective
                 profile["training"]["manual_fields"] = manual_fields
                 _save_profile(profile)
+                _reload_ferreteria_runtime()
                 return jsonify({"ok": True})
             except Exception as exc:
                 return jsonify({"error": str(exc)}), 500
