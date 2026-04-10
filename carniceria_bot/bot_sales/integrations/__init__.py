@@ -1,1 +1,0 @@
-"""Slack integrations package"""

@@ -25,3 +25,4 @@ analytics_test_export.csv
 .claude/
 /Planning/
 tmp/unresolved_terms*.jsonl
+carniceria_bot/

@@ -1,5 +1,0 @@
-simple-salesforce==1.12.4
-hubspot-api-client==8.3.0
-matplotlib==3.8.2
-pillow==10.1.0
-textblob==0.17.1
