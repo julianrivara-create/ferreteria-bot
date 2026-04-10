@@ -415,43 +415,33 @@ def get_whatsapp_blueprint(bot_instance: Optional[Any], connector: WhatsAppConne
             elif msg_type == 'image' and parsed.get('media_id'):
                 try:
                     from bot_sales.multimedia import ImageAnalyzer
-                    
-                    # Need public URL for GPT-4o Vision
-                    # Meta API returns a private URL that requires headers.
-                    # We can't pass that directly to OpenAI. 
-                    # Workaround: Download -> (Upload to temp public storage or describe simply).
-                    # BETTER: For MVP, assume we can get a signed URL or handle via download.
-                    # Actually, for Image Analysis we might need to send base64 or download it locally first.
-                    
-                    # Currently `download_media` downloads to local file.
-                    # GPT-4o API supports base64 data URIs.
-                    pass # We will implement download + analysis inside the try block
-                    
+                    import base64
+                    import os as _os
+
                     image_path = connector.download_media(parsed['media_id'])
                     if image_path:
-                        # Convert to base64 data URI for OpenAI
-                        import base64
+                        # Convert to base64 data URI — GPT-4o Vision supports this directly
                         with open(image_path, "rb") as img_file:
                             b64_data = base64.b64encode(img_file.read()).decode('utf-8')
-                        
-                        try: os.unlink(image_path) 
-                        except: pass
-                        
-                        public_url = f"data:image/jpeg;base64,{b64_data}" # OpenAI supports this
-                        
+                        try:
+                            _os.unlink(image_path)
+                        except Exception:
+                            pass
+
+                        public_url = f"data:image/jpeg;base64,{b64_data}"
                         analyzer = ImageAnalyzer()
                         analysis = analyzer.analyze_product(public_url)
-                        
+
                         if analysis and not analysis.get('error'):
-                            # Construct a "fake" user message based on analysis
                             user_caption = parsed.get('caption', '')
-                            message = f"Hola, vi este producto: {analysis.get('model')} color {analysis.get('color')}. {user_caption}"
+                            message = f"Vi este producto: {analysis.get('model', '')} color {analysis.get('color', '')}. {user_caption}".strip(". ")
                             logging.info(f"📸 Image analyzed: {analysis}")
                         else:
                             message = parsed.get('caption') or "Te mando una foto."
-                            
+                    else:
+                        message = parsed.get('caption') or "Foto recibida."
                 except Exception as e:
-                    logging.error(f"Image error: {e}")
+                    logging.error(f"Image error: {e}", exc_info=True)
                     message = parsed.get('caption') or "Foto recibida."
 
             if not message:
