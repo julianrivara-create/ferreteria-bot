@@ -150,10 +150,12 @@ class ChatGPTClient:
                 
             except Exception as e:
                 last_error = e
-                logging.warning(f"ChatGPT API attempt {attempt + 1}/{max_retries} failed: {type(e).__name__}: {str(e)}")
-                
+                logging.warning(
+                    "chatgpt_api_attempt_failed attempt=%d/%d error=%s",
+                    attempt + 1, max_retries, type(e).__name__,
+                    exc_info=True,
+                )
                 if attempt < max_retries - 1:
-                    # Exponential backoff
                     import time
                     time.sleep(retry_delay * (2 ** attempt))
                     continue
@@ -180,7 +182,7 @@ class ChatGPTClient:
             }
             return result
         except Exception as mock_e:
-            logging.error(f"Mock fallback also failed: {mock_e}")
+            logging.error("chatgpt_mock_fallback_failed error=%s", mock_e, exc_info=True)
             return {
                 "role": "assistant",
                 "content": "🔧 Disculpá, estoy teniendo problemas técnicos. Por favor intentá de nuevo en unos minutos o contactá a un vendedor humano. ¡Gracias por tu paciencia!",

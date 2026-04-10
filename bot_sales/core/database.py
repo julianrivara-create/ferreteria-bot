@@ -32,8 +32,13 @@ class Database:
     def __init__(self, db_file: str, catalog_csv: str, log_path: str, api_key: str = ""):
         self.db_file = db_file
         self.catalog_csv = catalog_csv
-        self.conn = sqlite3.connect(db_file, check_same_thread=False)
+        # timeout=30 means concurrent threads wait up to 30s instead of raising 'database is locked'
+        self.conn = sqlite3.connect(db_file, check_same_thread=False, timeout=30.0)
         self.conn.row_factory = sqlite3.Row
+        # WAL mode allows concurrent reads while a write is in progress (vs. default exclusive lock)
+        self.conn.execute("PRAGMA journal_mode=WAL;")
+        self.conn.execute("PRAGMA synchronous=NORMAL;")
+        self.conn.commit()
         self.cursor = self.conn.cursor()
         self._init_db()
 

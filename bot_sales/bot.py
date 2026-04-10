@@ -138,7 +138,7 @@ class SalesBot:
             self.system_prompt = tenant_config.render_prompt(policies=self.policies)
             logging.info("Using dynamic prompt from tenant config")
         except Exception as e:
-            logging.warning(f"Could not load tenant config: {e}. Falling back to static prompt...")
+            logging.error("tenant_config_load_failed tenant=%s error=%s", self.tenant_id, e, exc_info=True)
             self.system_prompt = ChatGPTClient.build_system_prompt(self.policies)
         
         # Get available functions
@@ -155,7 +155,7 @@ class SalesBot:
             logging.info("sales_flow_manager_initialized tenant=%s", self.tenant_id)
         except Exception as exc:
             self.flow_manager = None
-            logging.warning("sales_flow_manager_unavailable tenant=%s error=%s", self.tenant_id, exc)
+            logging.error("sales_flow_manager_unavailable tenant=%s error=%s", self.tenant_id, exc, exc_info=True)
         
         logging.info("SalesBot initialized successfully (tenant=%s)", self.tenant_id)
 
@@ -602,16 +602,17 @@ class SalesBot:
             pending_decision["turns"] = turns
             sess["pending_decision"] = pending_decision
 
-            if turns >= 2:
-                # Auto-default to merge (conservative) and clear state
-                reply = _do_merge()
-                return _done(
-                    "Lo sumo al presupuesto actual. "
-                    "Si querés empezar uno nuevo, decime *nuevo presupuesto*.\n\n"
-                    + reply,
-                    "deterministic",
+            if turns >= 3:
+                # Too many ambiguous turns: clear the pending state and let the LLM
+                # take over naturally — avoids infinite "sumar o nuevo" loop.
+                # The LLM still has the pending items in context and can decide.
+                logging.info(
+                    "merge_vs_replace_loop_exceeded session=%s turns=%d — releasing to LLM",
+                    session_id, turns,
                 )
-            # Re-ask with question
+                sess.pop("pending_decision", None)
+                return None  # falls through to _chat_with_functions
+            # Re-ask once before releasing to LLM
             return _done(fq.MERGE_VS_REPLACE_QUESTION, "deterministic")
 
         # ── 2.5. Pending clarification target resolution ─────────────────────
