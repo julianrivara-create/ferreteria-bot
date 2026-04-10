@@ -316,18 +316,11 @@ class SalesBot:
             self._store.set_session(session_id, sess)
             return {"content": response, "meta": sales_meta}
 
-        if sales_contract and sales_contract.get("missing_fields"):
-            response_text = str(sales_contract.get("reply_text") or "")
-            if response_text:
-                ctx = self._store.get_context(session_id)
-                ctx.append({"role": "assistant", "content": response_text})
-                self._store.set_context(session_id, ctx)
-                sess = self._store.get_session(session_id)
-                sess["sales_intelligence_v1"] = sales_meta
-                self._store.set_session(session_id, sess)
-                return {"content": response_text, "meta": sales_meta}
-
         # Process with ChatGPT (with potential function calls)
+        # NOTE: sales_contract is used ONLY for analytics metadata and handoff.
+        # We never short-circuit to the deterministic reply here, as that causes
+        # the bot to loop forever with "Para cotizarte exacto..." without ever
+        # reaching ChatGPT.
         response_text = self._chat_with_functions(session_id)
         
         # Add assistant response to context
