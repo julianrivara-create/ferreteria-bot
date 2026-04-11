@@ -485,6 +485,34 @@ class SalesBot:
         if faq_result.get("status") == "found":
             return _done(str(faq_result.get("respuesta") or ""), "faq")
 
+        # ── 0.1. Conversational intent guard ─────────────────────────────────
+        # If the message is a greeting, personal info, general question or
+        # conversational phrase — let Carlos (the LLM) handle it naturally.
+        # Do NOT forward to the quote engine or catalog lookup.
+        _GREETINGS = {
+            "hola", "buen", "buenas", "buenos", "buenas tardes", "buenas noches",
+            "buenas dias", "buenos dias", "buen dia", "buen día",
+            "hey", "hi", "saludos", "qué tal", "que tal", "como andas",
+            "como estas", "cómo estás", "cómo andás",
+        }
+        _CONVERSATIONAL_PATTERNS = re.compile(
+            r"^\s*(hola|hey|hi|saludos|buenos?\s*(dias?|tardes?|noches?)|qu[eé]\s*tal|"
+            r"c[oó]mo\s*(est[aá]s?|and[aá]s?)|gracias|perfecto|ok|dale|genial|"
+            r"me\s+llamo|mi\s+nombre|soy\s+\w+|trabajo\s+en|mi\s+empresa|"
+            r"estoy\s+en|vivo\s+en|somos\s+de|vengo\s+de|mi\s+rubro)\b",
+            re.IGNORECASE,
+        )
+        words = [w for w in normalized.split() if w]
+        # Short messages with no catalog-specific terms → LLM
+        if _CONVERSATIONAL_PATTERNS.match(text):
+            return None  # Let Carlos handle it
+        # Multi-word messages where all words look like common Spanish words
+        # (no product-specific terms) → LLM
+        if not open_quote and len(words) <= 4:
+            catalog_hint = self._looks_like_product_request(normalized)
+            if not catalog_hint:
+                return None  # Let Carlos handle it
+
         if not open_quote:
             if self._looks_like_price_objection(normalized):
                 return _done(
