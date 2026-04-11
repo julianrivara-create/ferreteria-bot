@@ -52,10 +52,15 @@ def _tenant_or_default(slug: str = ""):
     return tenant
 
 
-def _get_products_for_tenant(slug: str) -> List[Dict[str, Any]]:
+def _get_products_for_tenant(slug: str, category: str = "", page: int = 1, limit: int = 50) -> List[Dict[str, Any]]:
     tenant = _tenant_or_default(slug)
     db = tenant_manager.get_db(tenant.id)
-    return db.load_stock()
+    if category:
+        products = db.find_by_category(category)
+    else:
+        products = db.load_stock()
+    offset = (page - 1) * limit
+    return products[offset: offset + limit]
 
 
 def _to_storefront_payload(slug: str) -> Dict[str, Any]:
@@ -64,8 +69,10 @@ def _to_storefront_payload(slug: str) -> Dict[str, Any]:
     business = profile.get("business", {}) if isinstance(profile, dict) else {}
     branding = _load_branding(tenant)
 
-    products = _get_products_for_tenant(slug)
-    categories = sorted({p.get("category", "") for p in products if p.get("category")})
+    # Use lightweight DB queries — avoid loading all 60k+ rows just for categories/count.
+    db = tenant_manager.get_db(tenant.id)
+    categories = db.get_all_categories()
+    product_count = db.cursor.execute("SELECT COUNT(*) FROM stock").fetchone()[0]
 
     return {
         "tenant_id": tenant.id,
@@ -78,7 +85,7 @@ def _to_storefront_payload(slug: str) -> Dict[str, Any]:
         "country": business.get("country") or "AR",
         "categories": categories,
         "branding": branding,
-        "product_count": len(products),
+        "product_count": product_count,
     }
 
 
@@ -139,8 +146,12 @@ def api_storefront(tenant_slug: str):
 @storefront_tenant_bp.route("/api/t/<tenant_slug>/products", methods=["GET"])
 def api_products(tenant_slug: str):
     try:
-        return jsonify(_get_products_for_tenant(tenant_slug))
-    except ValueError as exc:
+        page = max(1, int(request.args.get("page", 1)))
+        limit = min(200, max(1, int(request.args.get("limit", 50))))
+        category = request.args.get("category", "").strip()
+        products = _get_products_for_tenant(tenant_slug, category=category, page=page, limit=limit)
+        return jsonify({"products": products, "page": page, "limit": limit, "count": len(products)})
+    except (ValueError, TypeError) as exc:
         return jsonify({"error": str(exc)}), 404
 
 

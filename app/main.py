@@ -42,15 +42,10 @@ def create_app() -> Flask:
         # Dev: allow all for easy local testing
         CORS(app, origins="*", supports_credentials=False)
     else:
-        # Production with no explicit CORS_ORIGINS: default to Railway public domain
-        railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
-        fallback_origins = [
-            f"https://{railway_domain}" if railway_domain else None,
-            "https://ferreteria-bot-production-c9c9.up.railway.app",
-        ]
-        fallback_origins = [o for o in fallback_origins if o]
-        logger.warning("cors_using_railway_domain_fallback", origins=fallback_origins)
-        CORS(app, origins=fallback_origins, supports_credentials=True)
+        # Production with no explicit CORS_ORIGINS: allow all origins without credentials.
+        # Set CORS_ORIGINS env var to restrict to specific client domains when needed.
+        logger.warning("cors_no_origins_configured_allowing_all_without_credentials")
+        CORS(app, origins="*", supports_credentials=False)
 
     # Register Blueprints
     app.register_blueprint(webhooks, url_prefix='/webhooks')

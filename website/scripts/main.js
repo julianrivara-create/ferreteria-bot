@@ -42,11 +42,15 @@ async function fetchStorefront() {
     }
 }
 
-async function fetchProducts() {
+async function fetchProducts(category = '', page = 1, limit = 50) {
     try {
-        const response = await fetch(`${API_URL}/products`);
+        const params = new URLSearchParams({ page, limit });
+        if (category) params.set('category', category);
+        const response = await fetch(`${API_URL}/products?${params}`);
         if (!response.ok) throw new Error('products request failed');
-        catalog = await response.json();
+        const data = await response.json();
+        // API returns {products, page, limit, count}
+        catalog = Array.isArray(data) ? data : (data.products || []);
     } catch (error) {
         console.error('Error fetching products:', error);
         catalog = [];
@@ -209,31 +213,59 @@ function escapeForAttr(value) {
 
 function getProductImage(item) {
     const category = String(item.category || '').toLowerCase();
-    const color = String(item.color || '').toLowerCase();
+    const name = String(item.name || item.model || '').toLowerCase();
 
-    if (category.includes('smartphone') || category.includes('telefono') || category.includes('celular') || category.includes('mobile')) {
+    // Ferretería categories
+    if (category.includes('herramientas el') || category.includes('electrica')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('herramientas manuales')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('mechas') || category.includes('brocas')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('discos') || category.includes('hojas')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('pinturas') || category.includes('acabados') || category.includes('pintur')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('plomer') || category.includes('plomeria')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('torniller') || category.includes('fijacion')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('electricidad')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('seguridad')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('lijas') || category.includes('abrasivos')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+    if (category.includes('cintas') || category.includes('adhesivos')) {
+        return PRODUCT_FALLBACK_IMAGE;
+    }
+
+    // Use item image_url if provided by the API
+    if (item.image_url) return item.image_url;
+
+    // Legacy electronics (kept for multi-tenant compatibility)
+    const color = String(item.color || '').toLowerCase();
+    if (category.includes('smartphone') || category.includes('telefono') || category.includes('celular')) {
         if (color.includes('blue') || color.includes('azul')) return 'images/iphone-blue.png';
         if (color.includes('pink') || color.includes('rosa')) return 'images/iphone-pink.png';
         if (color.includes('black') || color.includes('negro')) return 'images/iphone-black.png';
         if (color.includes('white') || color.includes('blanco')) return 'images/iphone-white.png';
         return 'images/iphone-black.png';
     }
-
-    if (category.includes('macbook') || category.includes('laptop')) {
-        return 'images/macbook-space-black.png';
-    }
-
-    if (category.includes('ipad') || category.includes('tablet')) {
-        return 'images/ipad-blue.png';
-    }
-
-    if (category.includes('airpod') || category.includes('audio')) {
-        return 'images/airpods-white.png';
-    }
-
-    if (category.includes('playstation') || category.includes('gaming')) {
-        return 'images/ps5-digital-white.png';
-    }
+    if (category.includes('laptop')) return 'images/macbook-space-black.png';
+    if (category.includes('tablet')) return 'images/ipad-blue.png';
+    if (category.includes('audio')) return 'images/airpods-white.png';
+    if (category.includes('gaming')) return 'images/ps5-digital-white.png';
 
     return PRODUCT_FALLBACK_IMAGE;
 }

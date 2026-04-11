@@ -258,8 +258,8 @@
                     this.isTyping = true;
 
                     try {
-                        // Call backend API
-                        const response = await fetch('http://localhost:8080/chat/message', {
+                        // Call backend API (relative URL — works in any deployment)
+                        const response = await fetch('/api/chat', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'

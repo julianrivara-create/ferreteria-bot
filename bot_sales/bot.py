@@ -447,6 +447,14 @@ class SalesBot:
         if ferreteria_pre_route:
             return self._append_assistant_turn(session_id, ferreteria_pre_route)
 
+        # Conversational messages (greetings, personal info, vague short phrases) must
+        # bypass the sales intelligence entirely and go straight to the LLM.
+        # The pre-route already guards these with return None, but without this check
+        # _run_sales_intelligence runs anyway and returns "missing fields" questionnaires.
+        if self._is_ferreteria_runtime() and self._should_bypass_sales_intelligence(user_message):
+            response_text = self._chat_with_functions(session_id)
+            return self._append_assistant_turn(session_id, response_text)
+
         sales_contract = self._run_sales_intelligence(session_id, user_message)
         self.sessions[session_id]["sales_intelligence_v1"] = self._build_sales_intelligence_meta(sales_contract)
         sales_response = self._handle_sales_contract_reply(session_id, sales_contract)
@@ -1004,27 +1012,62 @@ class SalesBot:
         return normalized
 
     def _detect_ferreteria_browse_category(self, normalized_message: str) -> Optional[str]:
+        # Category names must match exactly what is stored in the catalog DB.
+        # Verified against data/tenants/ferreteria/catalog.csv.
         aliases = {
-            "herramienta": "Herramientas Electricas",
-            "herramientas": "Herramientas Electricas",
-            "herramientas electricas": "Herramientas Electricas",
-            "herramienta electrica": "Herramientas Electricas",
+            "herramientas electricas": "Herramientas Eléctricas",
+            "herramienta electrica": "Herramientas Eléctricas",
+            "herramienta": "Herramientas Eléctricas",
+            "herramientas": "Herramientas Eléctricas",
+            "taladro": "Herramientas Eléctricas",
+            "amoladora": "Herramientas Eléctricas",
+            "atornillador": "Herramientas Eléctricas",
             "manual": "Herramientas Manuales",
             "herramientas manuales": "Herramientas Manuales",
             "martillo": "Herramientas Manuales",
             "destornillador": "Herramientas Manuales",
             "llave": "Herramientas Manuales",
-            "tornilleria": "Tornilleria",
-            "tornillo": "Tornilleria",
-            "tornillos": "Tornilleria",
-            "fijacion": "Fijaciones",
-            "fijaciones": "Fijaciones",
-            "tarugo": "Fijaciones",
-            "tarugos": "Fijaciones",
-            "pintura": "Pintureria",
-            "pintureria": "Pintureria",
-            "plomeria": "Plomeria",
+            "tornilleria": "Tornillería y Fijaciones",
+            "tornillo": "Tornillería y Fijaciones",
+            "tornillos": "Tornillería y Fijaciones",
+            "fijacion": "Tornillería y Fijaciones",
+            "fijaciones": "Tornillería y Fijaciones",
+            "tarugo": "Tornillería y Fijaciones",
+            "tarugos": "Tornillería y Fijaciones",
+            "anclaje": "Tornillería y Fijaciones",
+            "mecha": "Mechas y Brocas",
+            "mechas": "Mechas y Brocas",
+            "broca": "Mechas y Brocas",
+            "brocas": "Mechas y Brocas",
+            "disco": "Discos y Hojas",
+            "discos": "Discos y Hojas",
+            "lija": "Lijas y Abrasivos",
+            "lijas": "Lijas y Abrasivos",
+            "cinta": "Cintas y Adhesivos",
+            "cintas": "Cintas y Adhesivos",
+            "adhesivo": "Cintas y Adhesivos",
+            "pintura": "Pinturas y Acabados",
+            "pinturas": "Pinturas y Acabados",
+            "pintureria": "Pinturas y Acabados",
+            "rodillo": "Pinturas y Acabados",
+            "latex": "Pinturas y Acabados",
+            "esmalte": "Pinturas y Acabados",
+            "sellador": "Pinturas y Acabados",
+            "cable": "Electricidad",
+            "cables": "Electricidad",
+            "electricidad": "Electricidad",
+            "tomacorriente": "Electricidad",
+            "silicona": "Plomería",
+            "teflon": "Plomería",
+            "plomeria": "Plomería",
+            "cano": "Plomería",
             "seguridad": "Seguridad",
+            "guante": "Seguridad",
+            "guantes": "Seguridad",
+            "casco": "Seguridad",
+            "puntas": "Puntas y Accesorios",
+            "accesorio": "Puntas y Accesorios",
+            "accesorios": "Puntas y Accesorios",
         }
         for token, category in aliases.items():
             if token in normalized_message:
@@ -1090,35 +1133,92 @@ class SalesBot:
             return False
         return not any(token in normalized_message for token in ("taladro", "silicona", "teflon", "tornillo", "tarugo", "pintura", "rodillo"))
 
+    _CONVERSATIONAL_BYPASS_RE = re.compile(
+        r"^\s*(hola|hey|hi|saludos|buenos?\s*(dias?|tardes?|noches?)|qu[eé]\s*tal|"
+        r"c[oó]mo\s*(est[aá]s?|and[aá]s?)|gracias|perfecto|ok|dale|genial|"
+        r"me\s+llamo|mi\s+nombre|soy\s+\w+|trabajo\s+en|mi\s+empresa|"
+        r"estoy\s+en|vivo\s+en|somos\s+de|vengo\s+de|mi\s+rubro)\b",
+        re.IGNORECASE,
+    )
+
+    def _should_bypass_sales_intelligence(self, user_message: str) -> bool:
+        """Return True when the message is conversational/vague and should go straight to LLM."""
+        text = (user_message or "").strip()
+        if self._CONVERSATIONAL_BYPASS_RE.match(text):
+            return True
+        normalized = self._normalize_lookup_text(text)
+        sess_open_quote = None  # no session context here; conservative check
+        words = [w for w in normalized.split() if w]
+        if len(words) <= 3 and not self._looks_like_product_request(normalized):
+            return True
+        return False
+
     def _looks_like_product_request(self, normalized_message: str) -> bool:
         product_terms = (
+            # Intents
             "busco",
             "necesito",
             "quiero",
             "tenes",
             "tienen",
+            # Herramientas eléctricas
             "taladro",
             "amoladora",
             "atornillador",
+            "sierra caladora",
+            "lijadora",
+            "herramienta electrica",
+            "herramientas electricas",
+            "herramienta",
+            "herramientas",
+            # Herramientas manuales
             "martillo",
             "destornillador",
             "llave",
+            "alicate",
+            "pinza",
+            # Tornillería y fijaciones
             "tornillo",
             "tarugo",
-            "pintura",
-            "rodillo",
-            "silicona",
-            "teflon",
-            "guante",
-            "cable",
-            "mecha",
-            "broca",
-            "sellador",
+            "fijacion",
+            "anclaje",
             "taco fisher",
             "taco",
+            # Mechas y brocas
+            "mecha",
+            "broca",
+            # Discos y hojas
+            "disco de corte",
+            "disco",
+            "hoja de sierra",
+            # Lijas y abrasivos
+            "lija",
+            "papel lija",
+            # Cintas y adhesivos
+            "cinta",
+            "adhesivo",
+            # Pinturas y acabados
+            "pintura",
+            "rodillo",
+            "sellador",
+            "esmalte",
+            "latex",
+            "pintureria",
+            # Electricidad
+            "cable",
+            "tomacorriente",
+            "electricidad",
+            # Plomería
+            "silicona",
+            "teflon",
             "caño",
             "cano",
-            "fijacion",
+            "plomeria",
+            "conexion",
+            # Seguridad
+            "guante",
+            "casco",
+            "seguridad",
         )
         return any(term in normalized_message for term in product_terms)
 

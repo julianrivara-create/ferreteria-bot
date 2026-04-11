@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 
 from app.api.admin_routes import admin_required
 from app.api.ferreteria_admin_routes import _tenant_db_path, _tenant_profile
+from app.crm.services.rate_limiter import rate_limiter
 from bot_sales.knowledge.loader import KnowledgeLoader
 from bot_sales.knowledge.validators import KnowledgeValidationError
 from bot_sales.training.review_service import TrainingReviewService
@@ -15,6 +16,18 @@ from bot_sales.training.suggestion_service import TrainingSuggestionService
 
 
 ferreteria_training_api = Blueprint("ferreteria_training_api", __name__)
+
+# Rate limiting: max 30 training API calls per minute per IP to prevent brute-force.
+_TRAINING_RATE_LIMIT = 30
+_TRAINING_RATE_WINDOW = 60
+
+
+def _training_rate_limit_check() -> bool:
+    """Return True if the request is allowed, False if rate-limited."""
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
+    key = f"training_ip:{ip}"
+    return rate_limiter.allow(key, limit=_TRAINING_RATE_LIMIT, window_seconds=_TRAINING_RATE_WINDOW)
+
 
 ALLOWED_SUGGESTION_DOMAINS = {
     "synonym",
@@ -44,6 +57,13 @@ def get_training_services() -> tuple[TrainingStore, TrainingSessionService, Trai
         TrainingReviewService(store),
         TrainingSuggestionService(store, loader),
     )
+
+
+@ferreteria_training_api.before_request
+def training_rate_limit():
+    """Block brute-force attempts before they reach admin token validation."""
+    if not _training_rate_limit_check():
+        return jsonify({"error": "Rate limit exceeded. Max 30 requests/minute per IP."}), 429
 
 
 def _operator_ref(payload: Dict[str, Any]) -> str | None:

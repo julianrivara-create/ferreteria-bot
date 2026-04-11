@@ -156,9 +156,9 @@ class Database:
 
         self._ensure_stock_schema()
         
-        # Bootstrap the catalog when empty; otherwise only merge new SKUs from CSV
-        stock_count = self.cursor.execute("SELECT COUNT(*) FROM stock").fetchone()[0]
-        self._load_catalog_from_csv(replace_existing=(stock_count == 0))
+        # Always replace on boot so stock_qty reflects the latest CSV values.
+        # INSERT OR REPLACE overwrites existing rows; new SKUs are inserted fresh.
+        self._load_catalog_from_csv(replace_existing=True)
 
     def _ensure_stock_schema(self) -> None:
         """Ensure stock table has required columns for multi-industry catalogs."""

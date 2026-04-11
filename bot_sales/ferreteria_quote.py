@@ -528,6 +528,7 @@ def get_cross_sell_suggestions(
 
 _FILLER_RE = re.compile(
     r"^(?:quiero|necesito|busco|dame|pasame|paseme|"
+    r"ten[eé]s|tienen|tene[sn]|"
     r"presupuesto\s+para|presupuesto|me\s+das|podes\s+darme)\s+",
     re.IGNORECASE,
 )
