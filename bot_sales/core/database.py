@@ -141,6 +141,7 @@ class Database:
         # Indexes for query performance
         self.cursor.executescript('''
             CREATE INDEX IF NOT EXISTS idx_stock_category      ON stock(category);
+            CREATE INDEX IF NOT EXISTS idx_stock_model         ON stock(model);
             CREATE INDEX IF NOT EXISTS idx_holds_expires       ON holds(expires_at);
             CREATE INDEX IF NOT EXISTS idx_holds_sku           ON holds(sku);
             CREATE INDEX IF NOT EXISTS idx_holds_contact       ON holds(contact);
@@ -400,6 +401,26 @@ class Database:
                 """,
                 catalog_data,
             )
+
+            if replace_existing and catalog_data:
+                # Remove SKUs that are no longer present in the CSV so stale
+                # rows don't surface in the storefront or bot responses.
+                # Use a temp table to avoid a giant IN (...) clause for large catalogs.
+                self.cursor.execute(
+                    "CREATE TEMPORARY TABLE IF NOT EXISTS _csv_skus (sku TEXT PRIMARY KEY)"
+                )
+                self.cursor.execute("DELETE FROM _csv_skus")
+                self.cursor.executemany(
+                    "INSERT OR IGNORE INTO _csv_skus (sku) VALUES (?)",
+                    [(row[0],) for row in catalog_data],
+                )
+                deleted = self.cursor.execute(
+                    "DELETE FROM stock WHERE sku NOT IN (SELECT sku FROM _csv_skus)"
+                ).rowcount
+                self.cursor.execute("DROP TABLE IF EXISTS _csv_skus")
+                if deleted:
+                    logging.info("Removed %s stale SKUs no longer in catalog CSV", deleted)
+
             self.conn.commit()
             action = "Loaded" if replace_existing else "Merged missing"
             logging.info("%s %s products from catalog", action, len(catalog_data))
@@ -690,7 +711,40 @@ class Database:
     def load_stock(self) -> List[Dict[str, Any]]:
         """Load all stock items"""
         return [self._row_to_product(row) for row in self.cursor.execute("SELECT * FROM stock")]
-    
+
+    def load_stock_page(
+        self,
+        *,
+        page: int = 1,
+        limit: int = 50,
+        category: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Load one deterministic page of stock items."""
+        safe_page = max(1, int(page))
+        safe_limit = max(1, int(limit))
+        offset = (safe_page - 1) * safe_limit
+
+        params: list[Any] = []
+        sql = "SELECT * FROM stock"
+        if category:
+            sql += " WHERE category = ?"
+            params.append(category)
+        sql += " ORDER BY model COLLATE NOCASE ASC, sku ASC LIMIT ? OFFSET ?"
+        params.extend([safe_limit, offset])
+        rows = self.cursor.execute(sql, params).fetchall()
+        return [self._row_to_product(row) for row in rows]
+
+    def count_stock(self, category: str | None = None) -> int:
+        """Return total SKU count, optionally scoped to one category."""
+        if category:
+            row = self.cursor.execute(
+                "SELECT COUNT(*) FROM stock WHERE category = ?",
+                (category,),
+            ).fetchone()
+        else:
+            row = self.cursor.execute("SELECT COUNT(*) FROM stock").fetchone()
+        return int(row[0] or 0) if row else 0
+
     def get_all_products(self) -> List[Dict[str, Any]]:
         """Alias for load_stock (compatibility)"""
         return self.load_stock()
@@ -699,6 +753,30 @@ class Database:
         """Find all products in a category"""
         sql = "SELECT * FROM stock WHERE category = ?"
         return [self._row_to_product(row) for row in self.cursor.execute(sql, (category,)).fetchall()]
+
+    def find_product_variants(self, model: str) -> List[Dict[str, Any]]:
+        """Find variants for one product model without depending on storefront pagination."""
+        model_text = (model or "").strip()
+        if not model_text:
+            return []
+
+        exact_rows = self.cursor.execute(
+            "SELECT * FROM stock WHERE model = ? COLLATE NOCASE ORDER BY sku",
+            (model_text,),
+        ).fetchall()
+        if exact_rows:
+            return [self._row_to_product(row) for row in exact_rows]
+
+        like_pattern = f"%{model_text.lower()}%"
+        partial_rows = self.cursor.execute(
+            """
+            SELECT * FROM stock
+            WHERE lower(model) LIKE ?
+            ORDER BY model COLLATE NOCASE ASC, sku ASC
+            """,
+            (like_pattern,),
+        ).fetchall()
+        return [self._row_to_product(row) for row in partial_rows]
     
     def get_all_categories(self) -> List[str]:
         """Get list of all unique categories"""

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ipaddress
+import os
 from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
@@ -22,10 +24,60 @@ _TRAINING_RATE_LIMIT = 30
 _TRAINING_RATE_WINDOW = 60
 
 
+def _extract_forwarded_ip(header_value: str) -> str | None:
+    candidates = [part.strip() for part in header_value.split(",") if part.strip()]
+    if not candidates:
+        return None
+
+    raw_hops = (os.getenv("TRUSTED_PROXY_HOPS") or "").strip()
+    if raw_hops:
+        try:
+            trusted_hops = max(1, int(raw_hops))
+        except ValueError:
+            trusted_hops = 1
+    else:
+        trusted_hops = 2 if os.getenv("RAILWAY_ENVIRONMENT") else 1
+
+    for candidate in reversed(candidates[-trusted_hops:]):
+        try:
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            continue
+    return None
+
+
+def _training_get_ip() -> str:
+    """Same trust model as public_routes._get_request_ip — only honour XFF from private proxies."""
+    remote = (request.remote_addr or "unknown").strip()
+    try:
+        parsed = ipaddress.ip_address(remote)
+        is_proxy = not parsed.is_global
+    except ValueError:
+        is_proxy = False
+    if is_proxy:
+        real_ip = (request.headers.get("X-Real-IP") or "").strip()
+        try:
+            ipaddress.ip_address(real_ip)
+            return real_ip
+        except ValueError:
+            pass
+        for header_name in ("Fastly-Client-IP", "True-Client-IP", "CF-Connecting-IP", "Fly-Client-IP"):
+            candidate = (request.headers.get(header_name) or "").strip()
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass
+        forwarded = _extract_forwarded_ip(request.headers.get("X-Forwarded-For", ""))
+        if forwarded:
+            return forwarded
+    return remote
+
+
 def _training_rate_limit_check() -> bool:
     """Return True if the request is allowed, False if rate-limited."""
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
-    key = f"training_ip:{ip}"
+    key = f"training_ip:{_training_get_ip()}"
     return rate_limiter.allow(key, limit=_TRAINING_RATE_LIMIT, window_seconds=_TRAINING_RATE_WINDOW)
 
 

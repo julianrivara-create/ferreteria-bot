@@ -88,6 +88,18 @@ def test_conversation_busco_un_taladro_is_product_first(tmp_path):
         bot.close()
 
 
+def test_conversation_herramientas_electricas_browses_category(tmp_path):
+    bot = build_ferreteria_bot(tmp_path)
+    try:
+        reply = bot.process_message("sid_herramientas_cat", "herramientas electricas")
+        lower = reply.lower()
+        assert "no lo encontr" not in lower
+        assert "herramientas el" in lower
+        assert "stock" in lower
+    finally:
+        bot.close()
+
+
 def test_conversation_factura_a_hits_faq_before_planning(tmp_path):
     bot = build_ferreteria_bot(tmp_path)
     try:

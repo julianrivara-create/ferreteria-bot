@@ -9,6 +9,7 @@ from app.api.ferreteria_training_routes import ferreteria_training_api
 from app.api.channels import channels
 from app.api.public_routes import public_api
 from app.api.console_routes import console_api
+from bot_sales.connectors.storefront_tenant_api import storefront_tenant_bp
 from app.crm.api.routes import crm_api
 from app.crm.ui.routes import crm_ui
 from app.ui.ferreteria_admin_routes import ferreteria_admin_ui
@@ -54,6 +55,7 @@ def create_app() -> Flask:
     app.register_blueprint(ferreteria_training_api, url_prefix='/api/admin/ferreteria')
     app.register_blueprint(channels, url_prefix='/webhooks')
     app.register_blueprint(public_api, url_prefix='/api') # /api/stock/batch, /api/chat
+    app.register_blueprint(storefront_tenant_bp)          # /api/t/<slug>/storefront, /products, /chat
     app.register_blueprint(crm_api, url_prefix='/api/crm')
     app.register_blueprint(console_api, url_prefix='/api/console')
     app.register_blueprint(crm_ui)
@@ -94,6 +96,40 @@ def create_app() -> Flask:
             "railway_environment": os.getenv("RAILWAY_ENVIRONMENT"),
             "railway_service_name": os.getenv("RAILWAY_SERVICE_NAME"),
         })
+
+    @app.route("/diag/request-ip", methods=["GET"])
+    def diag_request_ip():
+        if not _diag_authorized():
+            return jsonify({"error": "Unauthorized"}), 401
+
+        from app.api.public_routes import _get_request_ip
+        from dashboard.app import _dashboard_request_ip
+
+        interesting_headers = {
+            name: request.headers.get(name)
+            for name in (
+                "X-Real-IP",
+                "X-Forwarded-For",
+                "Fastly-Client-IP",
+                "True-Client-IP",
+                "CF-Connecting-IP",
+                "Fly-Client-IP",
+                "Via",
+                "X-Forwarded-Proto",
+                "X-Forwarded-Host",
+            )
+            if request.headers.get(name) is not None
+        }
+
+        return jsonify(
+            {
+                "remote_addr": request.remote_addr,
+                "public_route_ip": _get_request_ip(),
+                "dashboard_ip": _dashboard_request_ip(),
+                "headers": interesting_headers,
+                "railway_service_name": os.getenv("RAILWAY_SERVICE_NAME"),
+            }
+        )
     # --- USER DIAGNOSTIC BLOCK END ---
 
     @app.route('/catalog', methods=['GET'])

@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import os
 from datetime import datetime
 from functools import wraps
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from flask import Blueprint, Flask, abort, jsonify, redirect, render_template, request, session, url_for
 
+from app.crm.services.rate_limiter import rate_limiter
 from bot_sales.core.tenancy import tenant_manager
 
 
@@ -23,6 +26,8 @@ def _admin_username() -> str:
 
 _DASHBOARD_SALT = b"ferreteria-dashboard-v1"
 _PBKDF2_ITERATIONS = 260_000
+_DASHBOARD_LOGIN_RATE_LIMIT = 10
+_DASHBOARD_LOGIN_RATE_WINDOW = 300
 
 
 def _admin_password_hash() -> bytes:
@@ -30,6 +35,72 @@ def _admin_password_hash() -> bytes:
     if not raw:
         raise RuntimeError("ADMIN_PASSWORD env var is required to run the dashboard.")
     return hashlib.pbkdf2_hmac("sha256", raw.encode(), _DASHBOARD_SALT, _PBKDF2_ITERATIONS)
+
+
+def _safe_next_path(raw_path: str | None, fallback: str) -> str:
+    candidate = (raw_path or "").strip()
+    if not candidate:
+        return fallback
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc or candidate.startswith("//"):
+        return fallback
+    if not candidate.startswith("/"):
+        return fallback
+    return candidate
+
+
+def _extract_forwarded_ip(header_value: str) -> str | None:
+    candidates = [part.strip() for part in header_value.split(",") if part.strip()]
+    if not candidates:
+        return None
+
+    raw_hops = (os.getenv("TRUSTED_PROXY_HOPS") or "").strip()
+    if raw_hops:
+        try:
+            trusted_hops = max(1, int(raw_hops))
+        except ValueError:
+            trusted_hops = 1
+    else:
+        trusted_hops = 2 if os.getenv("RAILWAY_ENVIRONMENT") else 1
+
+    for candidate in reversed(candidates[-trusted_hops:]):
+        try:
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            continue
+    return None
+
+
+def _dashboard_request_ip() -> str:
+    remote = (request.remote_addr or "unknown").strip()
+    try:
+        remote_ip = ipaddress.ip_address(remote)
+        trusted_proxy = not remote_ip.is_global
+    except ValueError:
+        trusted_proxy = False
+
+    if trusted_proxy:
+        real_ip = (request.headers.get("X-Real-IP") or "").strip()
+        try:
+            ipaddress.ip_address(real_ip)
+            return real_ip
+        except ValueError:
+            pass
+
+        for header_name in ("Fastly-Client-IP", "True-Client-IP", "CF-Connecting-IP", "Fly-Client-IP"):
+            candidate = (request.headers.get(header_name) or "").strip()
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass
+
+        forwarded = _extract_forwarded_ip(request.headers.get("X-Forwarded-For", ""))
+        if forwarded:
+            return forwarded
+
+    return remote
 
 
 def _login_required(fn):
@@ -76,9 +147,34 @@ def root_redirect():
 
 @dashboard_bp.route("/login", methods=["GET", "POST"])
 def login():
-    next_path = request.args.get("next") or url_for("dashboard.root_redirect")
+    next_path = _safe_next_path(
+        request.args.get("next") or request.form.get("next"),
+        url_for("dashboard.root_redirect"),
+    )
 
     if request.method == "POST":
+        client_ip = _dashboard_request_ip()
+        username = request.form.get("username", "").strip().lower() or "_anonymous"
+        ip_key = f"dashboard_login:ip:{client_ip}"
+        user_key = f"dashboard_login:user:{username}"
+        if not rate_limiter.allow(
+            ip_key,
+            limit=_DASHBOARD_LOGIN_RATE_LIMIT,
+            window_seconds=_DASHBOARD_LOGIN_RATE_WINDOW,
+        ) or not rate_limiter.allow(
+            user_key,
+            limit=_DASHBOARD_LOGIN_RATE_LIMIT,
+            window_seconds=_DASHBOARD_LOGIN_RATE_WINDOW,
+        ):
+            return (
+                render_template(
+                    "login.html",
+                    error="Demasiados intentos. Espera unos minutos e intenta nuevamente.",
+                    next=next_path,
+                ),
+                429,
+            )
+
         username = request.form.get("username", "")
         password = request.form.get("password", "")
         password_hash = hashlib.pbkdf2_hmac("sha256", password.encode(), _DASHBOARD_SALT, _PBKDF2_ITERATIONS)

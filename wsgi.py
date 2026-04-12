@@ -57,10 +57,16 @@ def _register_multitenant_extensions(app: Flask) -> None:
         app.register_blueprint(storefront_tenant_bp)
 
     website_dir = os.path.join(BASE_DIR, "website")
+    static_dir = os.path.join(BASE_DIR, "static")
 
     @app.get("/website/<path:asset_path>")
     def website_assets(asset_path: str):
         return send_from_directory(website_dir, asset_path)
+
+    @app.get("/widget_v2.html")
+    @app.get("/static/widget_v2.html")
+    def widget_v2():
+        return send_from_directory(static_dir, "widget_v2.html")
 
     @app.get("/t/<tenant_slug>")
     def tenant_storefront(tenant_slug: str):

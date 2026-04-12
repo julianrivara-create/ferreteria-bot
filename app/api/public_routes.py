@@ -1,4 +1,5 @@
 
+import ipaddress
 from collections import defaultdict, deque
 from flask import Blueprint, request, jsonify, make_response
 from app.db.session import SessionLocal
@@ -12,6 +13,7 @@ import unicodedata
 import re
 import hmac
 import math
+import os
 import time
 from threading import Lock
 
@@ -75,11 +77,65 @@ def _reset_public_chat_rate_limiter() -> None:
         _public_chat_rate_limiter = None
 
 
+def _is_trusted_proxy(ip: str) -> bool:
+    """Return True when the connected IP is a private/loopback address (i.e. a reverse proxy)."""
+    try:
+        parsed = ipaddress.ip_address(ip)
+        return not parsed.is_global
+    except ValueError:
+        return False
+
+
+def _extract_forwarded_ip(header_value: str) -> str | None:
+    candidates = [part.strip() for part in header_value.split(",") if part.strip()]
+    if not candidates:
+        return None
+
+    raw_hops = (os.getenv("TRUSTED_PROXY_HOPS") or "").strip()
+    if raw_hops:
+        try:
+            trusted_hops = max(1, int(raw_hops))
+        except ValueError:
+            trusted_hops = 1
+    else:
+        trusted_hops = 2 if os.getenv("RAILWAY_ENVIRONMENT") else 1
+
+    for candidate in reversed(candidates[-trusted_hops:]):
+        try:
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            continue
+    return None
+
+
 def _get_request_ip() -> str:
-    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip() or "unknown"
-    return (request.headers.get("X-Real-IP") or request.remote_addr or "unknown").strip() or "unknown"
+    """Return the real client IP.
+
+    X-Forwarded-For is only trusted when remote_addr is a private/loopback
+    address, meaning the connection came through a reverse proxy (Railway LB,
+    nginx, etc.). Clients connecting directly cannot set remote_addr, so they
+    can't spoof the key used for rate limiting.
+    """
+    remote = (request.remote_addr or "unknown").strip()
+    if _is_trusted_proxy(remote):
+        real_ip = (request.headers.get("X-Real-IP") or "").strip()
+        try:
+            ipaddress.ip_address(real_ip)
+            return real_ip
+        except ValueError:
+            pass
+        for header_name in ("Fastly-Client-IP", "True-Client-IP", "CF-Connecting-IP", "Fly-Client-IP"):
+            candidate = (request.headers.get(header_name) or "").strip()
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass
+        forwarded = _extract_forwarded_ip(request.headers.get("X-Forwarded-For", ""))
+        if forwarded:
+            return forwarded
+    return remote
 
 
 def _attach_public_chat_rate_limit_headers(response, info: dict):
@@ -154,7 +210,6 @@ def get_stock_batch():
 @public_api.route('/chat', methods=['POST'])
 def web_chat():
     """Tenant-aware web chat endpoint with legacy fallback."""
-    import os
     data = request.json or {}
     user_message = data.get('message')
     allowed, rate_limit_info = _get_public_chat_rate_limiter().check(f"ip:{_get_request_ip()}")
@@ -181,16 +236,17 @@ def web_chat():
     if not user_message:
         return _json_response({'error': 'No message'}, 400, rate_limit_info=rate_limit_info)
 
-    # Tenant: from request body → X-Tenant-Id header → DEFAULT_TENANT_ID env var.
-    # Callers should always pass tenant_id; the env fallback is for legacy deployments.
+    # Tenant must be explicit. `/api/chat` is kept only as a thin tenant-aware wrapper.
     tenant_id = (
         data.get('tenant_id')
+        or data.get('tenant_slug')
         or request.headers.get('X-Tenant-Id')
-        or os.getenv('DEFAULT_TENANT_ID', '')
+        or request.headers.get('X-Tenant-Slug')
+        or ''
     ).strip()
     if not tenant_id:
         return _json_response(
-            {'error': 'Missing tenant_id. Pass it in the request body, X-Tenant-Id header, or set DEFAULT_TENANT_ID env var.'},
+            {'error': 'Missing tenant_id. Pass tenant_id or tenant_slug in the request body, or X-Tenant-Id/X-Tenant-Slug in headers.'},
             400,
             rate_limit_info=rate_limit_info,
         )

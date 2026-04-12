@@ -87,10 +87,13 @@ async function loadRelatedProducts() {
     if (typeof relatedProducts === 'undefined') return;
 
     try {
-        const response = await fetch(`${API_URL}/products`);
+        const params = new URLSearchParams({ limit: 200 });
+        if (productData.category) params.set('category', productData.category);
+        const response = await fetch(`${API_URL}/products?${params}`);
         if (!response.ok) return;
 
-        const allProducts = await response.json();
+        const data = await response.json();
+        const allProducts = Array.isArray(data) ? data : (data.products || []);
         const related = await relatedProducts.fetchRelated(productData, allProducts);
 
         const productInfo = document.querySelector('.product-info-section');

@@ -137,6 +137,13 @@ class TrainingSessionService:
                     pass
 
     def _build_sandbox_bot(self, session: Dict[str, Any]) -> SalesBot:
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not api_key or "sk-" not in api_key:
+            raise ValueError(
+                "OPENAI_API_KEY no está configurada en el servidor. "
+                "El training requiere una API key válida de OpenAI. "
+                "Configurá la variable OPENAI_API_KEY en Railway → Variables."
+            )
         profile = dict(self.tenant_profile or {})
         paths = dict(profile.get("paths") or {})
         catalog_path = str(paths.get("catalog") or "")
@@ -155,7 +162,7 @@ class TrainingSessionService:
         profile["paths"]["db"] = temp_db_handle.name
         bot = SalesBot(
             db=db,
-            api_key=os.getenv("OPENAI_API_KEY", ""),
+            api_key=api_key,
             model=session.get("model_name") or self.costs.resolve_model(session.get("mode_profile") or "cheap"),
             tenant_id=self.tenant_id,
             tenant_profile=profile,

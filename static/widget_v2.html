@@ -259,7 +259,8 @@
 
                     try {
                         // Call backend API (relative URL — works in any deployment)
-                        const response = await fetch('/api/chat', {
+                        const tenantSlug = window.__TENANT_SLUG || 'ferreteria';
+                        const response = await fetch(`/api/t/${tenantSlug}/chat`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -279,7 +280,7 @@
 
                         const botMsg = {
                             role: 'bot',
-                            content: data.response || 'Lo siento, no pude procesar tu mensaje.',
+                            content: data.content || 'Lo siento, no pude procesar tu mensaje.',
                             time: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
                         };
 

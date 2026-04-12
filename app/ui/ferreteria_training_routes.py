@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 from functools import wraps
 from pathlib import Path
 import re
+from urllib.parse import urlparse
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 import yaml
@@ -15,6 +17,7 @@ from app.api.ferreteria_training_routes import (
     ALLOWED_SUGGESTION_DOMAINS,
     get_training_services,
 )
+from app.crm.services.rate_limiter import rate_limiter
 from bot_sales.knowledge.validators import KnowledgeValidationError
 
 
@@ -28,6 +31,8 @@ ferreteria_training_ui = Blueprint(
 _TRAINING_SESSION_KEY = "training_logged_in"
 _TRAINING_SALT = b"ferreteria-training-ui-v1"
 _PBKDF2_ITERATIONS = 260_000
+_TRAINING_LOGIN_RATE_LIMIT = 10
+_TRAINING_LOGIN_RATE_WINDOW = 300
 
 
 def _training_password_hash() -> bytes:
@@ -35,6 +40,68 @@ def _training_password_hash() -> bytes:
     if not raw:
         raise RuntimeError("ADMIN_PASSWORD env var is required.")
     return hashlib.pbkdf2_hmac("sha256", raw.encode(), _TRAINING_SALT, _PBKDF2_ITERATIONS)
+
+
+def _safe_next_path(raw_path: str | None, fallback: str) -> str:
+    candidate = (raw_path or "").strip()
+    if not candidate:
+        return fallback
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc or candidate.startswith("//"):
+        return fallback
+    if not candidate.startswith("/"):
+        return fallback
+    return candidate
+
+
+def _extract_forwarded_ip(header_value: str) -> str | None:
+    candidates = [part.strip() for part in header_value.split(",") if part.strip()]
+    if not candidates:
+        return None
+
+    raw_hops = (os.getenv("TRUSTED_PROXY_HOPS") or "").strip()
+    if raw_hops:
+        try:
+            trusted_hops = max(1, int(raw_hops))
+        except ValueError:
+            trusted_hops = 1
+    else:
+        trusted_hops = 2 if os.getenv("RAILWAY_ENVIRONMENT") else 1
+
+    for candidate in reversed(candidates[-trusted_hops:]):
+        try:
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            continue
+    return None
+
+
+def _training_login_request_ip() -> str:
+    remote = (request.remote_addr or "unknown").strip()
+    try:
+        parsed = ipaddress.ip_address(remote)
+        trusted_proxy = not parsed.is_global
+    except ValueError:
+        trusted_proxy = False
+    if trusted_proxy:
+        real_ip = (request.headers.get("X-Real-IP") or "").strip()
+        try:
+            ipaddress.ip_address(real_ip)
+            return real_ip
+        except ValueError:
+            pass
+        for header_name in ("Fastly-Client-IP", "True-Client-IP", "CF-Connecting-IP", "Fly-Client-IP"):
+            candidate = (request.headers.get(header_name) or "").strip()
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass
+        forwarded = _extract_forwarded_ip(request.headers.get("X-Forwarded-For", ""))
+        if forwarded:
+            return forwarded
+    return remote
 
 
 def training_login_required(f):
@@ -1559,11 +1626,21 @@ def _render_training_sandbox(*, error: str | None = None):
 
 @ferreteria_training_ui.route("/ops/ferreteria/training/login", methods=["GET", "POST"])
 def training_login():
-    next_path = request.args.get("next") or request.form.get("next") or url_for("ferreteria_training_ui.training_home_page")
+    next_path = _safe_next_path(
+        request.args.get("next") or request.form.get("next"),
+        url_for("ferreteria_training_ui.training_home_page"),
+    )
     if session.get(_TRAINING_SESSION_KEY):
         return redirect(next_path)
     error = None
     if request.method == "POST":
+        if not rate_limiter.allow(
+            f"training_ui_login:{_training_login_request_ip()}",
+            limit=_TRAINING_LOGIN_RATE_LIMIT,
+            window_seconds=_TRAINING_LOGIN_RATE_WINDOW,
+        ):
+            error = "Demasiados intentos. Esperá unos minutos antes de volver a probar."
+            return render_template("ferreteria_training/login.html", error=error, next=next_path), 429
         password = request.form.get("password", "")
         try:
             expected = _training_password_hash()

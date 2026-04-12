@@ -245,13 +245,25 @@ class TenantManager:
 
         from ..bot import SalesBot
 
+        # If no tenant-level key, fall back to global OPENAI_API_KEY env var
+        resolved_key = openai_key or os.getenv("OPENAI_API_KEY", "")
         bot = SalesBot(
             db=db,
-            api_key=openai_key,
+            api_key=resolved_key,
             tenant_id=tenant.id,
             tenant_profile=prompt_context,
         )
-        logger.info("Initialized SalesBot (OpenAI/GPT) for tenant %s", tenant_id)
+
+        chatgpt = getattr(bot, "chatgpt", None)
+        if chatgpt and getattr(chatgpt, "mock_mode", False):
+            logger.critical(
+                "bot_running_in_mock_mode_no_openai_key tenant=%s — "
+                "Configurá OPENAI_API_KEY en Railway → Variables.",
+                tenant_id,
+            )
+            logger.info("Initialized SalesBot for tenant %s", tenant_id)
+        else:
+            logger.info("Initialized SalesBot (OpenAI/GPT) for tenant %s", tenant_id)
 
         self._bot_cache[tenant_id] = bot
         return bot

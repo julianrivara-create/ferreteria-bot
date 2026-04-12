@@ -29,7 +29,7 @@ from .config import (
     MAX_CONTEXT_MESSAGES,
     ENABLE_DEBUG_COMMANDS,
 )
-from Planning.flow_manager import SalesFlowManager
+from bot_sales.planning.flow_manager import SalesFlowManager
 
 
 class _RedisSessionStore:

@@ -898,6 +898,38 @@ class SalesBot:
         if self._looks_like_project_request(normalized):
             return _done(fq.BROAD_REQUEST_REPLY, "fallback")
 
+        generic_category_browse_terms = {
+            "herramientas electricas",
+            "herramienta electrica",
+            "herramientas",
+            "herramienta",
+            "herramientas manuales",
+            "manual",
+            "tornilleria",
+            "fijaciones",
+            "mechas",
+            "brocas",
+            "pinturas",
+            "pintureria",
+            "electricidad",
+            "plomeria",
+            "seguridad",
+            "puntas y accesorios",
+        }
+        short_category = self._detect_ferreteria_browse_category(normalized)
+        if short_category and normalized in generic_category_browse_terms:
+            result = self.logic.buscar_por_categoria(short_category)
+            if result.get("status") == "found":
+                return _done(
+                    self._format_ferreteria_products_reply(
+                        result.get("products", []),
+                        heading=f"Te paso opciones de **{short_category}** con stock:",
+                        category_hint=short_category,
+                        query_hint=normalized,
+                    ),
+                    "deterministic",
+                )
+
         if self._looks_like_product_request(normalized):
             parsed_single = self._parse_quote_items(user_message)
             if len(parsed_single) == 1:

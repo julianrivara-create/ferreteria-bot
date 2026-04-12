@@ -120,3 +120,76 @@ def test_public_chat_returns_404_for_unknown_tenant(monkeypatch):
     assert resp.status_code == 404
     assert "Unknown tenant_id" in resp.get_json()["error"]
     assert resp.headers["X-RateLimit-Limit"] == "60"
+
+
+def test_public_chat_requires_explicit_tenant(monkeypatch):
+    client = _build_client()
+    _, _, manager = _tenant_runtime()
+
+    monkeypatch.setattr(public_routes, "_get_tenant_manager", lambda: manager)
+    monkeypatch.setattr(public_routes.settings, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", 60, raising=False)
+    public_routes._reset_public_chat_rate_limiter()
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "message": "Hola",
+            "user": "visitor-42",
+        },
+        headers={"X-Forwarded-For": "203.0.113.13"},
+    )
+
+    assert resp.status_code == 400
+    assert "Missing tenant_id" in resp.get_json()["error"]
+
+
+def test_public_chat_ignores_spoofed_xff_when_request_is_not_from_trusted_proxy(monkeypatch):
+    client = _build_client()
+    _, bot, manager = _tenant_runtime()
+
+    monkeypatch.setattr(public_routes, "_get_tenant_manager", lambda: manager)
+    monkeypatch.setattr(public_routes.settings, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", 60, raising=False)
+    public_routes._reset_public_chat_rate_limiter()
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "message": "Hola",
+            "user": "visitor-99",
+            "tenant_id": "ferreteria",
+        },
+        headers={"X-Forwarded-For": "198.51.100.77"},
+        environ_base={"REMOTE_ADDR": "8.8.8.8"},
+    )
+
+    assert resp.status_code == 200
+    limiter = public_routes._get_public_chat_rate_limiter()
+    assert "ip:198.51.100.77" not in limiter._requests
+    assert "ip:8.8.8.8" in limiter._requests
+    bot.process_message.assert_called_once()
+
+
+def test_public_chat_uses_rightmost_forwarded_ip_from_trusted_proxy(monkeypatch):
+    client = _build_client()
+    _, bot, manager = _tenant_runtime()
+
+    monkeypatch.setattr(public_routes, "_get_tenant_manager", lambda: manager)
+    monkeypatch.setattr(public_routes.settings, "PUBLIC_CHAT_RATE_LIMIT_PER_MINUTE", 60, raising=False)
+    public_routes._reset_public_chat_rate_limiter()
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "message": "Hola",
+            "user": "visitor-100",
+            "tenant_id": "ferreteria",
+        },
+        headers={"X-Forwarded-For": "198.51.100.10, 198.51.100.11"},
+        environ_base={"REMOTE_ADDR": "10.0.0.5"},
+    )
+
+    assert resp.status_code == 200
+    limiter = public_routes._get_public_chat_rate_limiter()
+    assert "ip:198.51.100.10" not in limiter._requests
+    assert "ip:198.51.100.11" in limiter._requests
+    bot.process_message.assert_called_once()

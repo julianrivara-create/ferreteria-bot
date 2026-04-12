@@ -259,7 +259,7 @@ class TestP0P1RateLimiting:
                 assert resp.status_code == 429
 
     def test_storefront_chat_calls_bot_with_runtime_signature(self, multi_tenant_setup):
-        """Regression: tenant chat must not pass unsupported kwargs to SalesBot.process_message."""
+        """Regression: tenant chat must use the web session namespace and runtime kwargs."""
         setup = multi_tenant_setup
         manager = TenantManager(str(setup["tenants_file"]))
 
@@ -278,7 +278,77 @@ class TestP0P1RateLimiting:
                 )
 
         assert resp.status_code == 200
-        ferreteria_bot.process_message.assert_called_once_with("signature_user", "Necesito ayuda")
+        ferreteria_bot.process_message.assert_called_once_with(
+            "web_signature_user",
+            "Necesito ayuda",
+            channel="web",
+            customer_ref="signature_user",
+        )
+
+    def test_products_endpoint_is_paginated_and_product_detail_ignores_page_boundaries(self, tmp_path):
+        ferreteria_dir = tmp_path / "ferreteria"
+        ferreteria_dir.mkdir(parents=True)
+        ferreteria_catalog = ferreteria_dir / "catalog.csv"
+        _write_csv(
+            ferreteria_catalog,
+            ["sku", "category", "name", "price_ars", "stock_qty"],
+            [
+                {
+                    "sku": f"SKU-{i:03d}",
+                    "category": "Herramientas Eléctricas" if i < 40 else "Plomería",
+                    "name": f"Producto {i:03d}",
+                    "price_ars": 1000 + i,
+                    "stock_qty": 10,
+                }
+                for i in range(60)
+            ],
+        )
+        ferreteria_profile = ferreteria_dir / "profile.yaml"
+        ferreteria_profile.write_text(
+            """
+slug: ferreteria
+business:
+  name: Ferreteria Central
+  industry: hardware
+""".strip()
+            + "\n",
+            encoding="utf-8",
+        )
+        tenants_file = tmp_path / "tenants.yaml"
+        tenants_file.write_text(
+            f"""
+tenants:
+  - id: ferreteria
+    slug: ferreteria
+    name: Ferreteria Central
+    profile_path: "{ferreteria_profile}"
+    db_file: "{tmp_path / 'ferreteria.db'}"
+    catalog_file: "{ferreteria_catalog}"
+    api_keys: {{}}
+""".strip()
+            + "\n",
+            encoding="utf-8",
+        )
+
+        manager = TenantManager(str(tenants_file))
+        app = Flask(__name__)
+        app.register_blueprint(storefront_tenant_bp)
+        client = app.test_client()
+
+        with patch("bot_sales.connectors.storefront_tenant_api.tenant_manager", manager):
+            page_two = client.get("/api/t/ferreteria/products?page=2&limit=10")
+            assert page_two.status_code == 200
+            payload = page_two.get_json()
+            assert payload["page"] == 2
+            assert payload["limit"] == 10
+            assert payload["count"] == 10
+            assert payload["total"] == 60
+            assert payload["pages"] == 6
+            assert payload["products"][0]["model"] == "Producto 010"
+
+            detail = client.get("/api/t/ferreteria/product?model=Producto%20059")
+            assert detail.status_code == 200
+            assert detail.get_json()["model"] == "Producto 059"
 
 
 class TestP1FAQTenantAwareness:

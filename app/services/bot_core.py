@@ -45,6 +45,17 @@ class BotCore:
             cls._bot_instance = SalesBot()
             cls._init_failed = False
             cls._init_error = None
+
+            # Detect mock mode: bot initialized but without a valid OpenAI API key.
+            # In mock mode the bot returns pre-canned responses — not real AI.
+            chatgpt = getattr(cls._bot_instance, "chatgpt", None)
+            if chatgpt and getattr(chatgpt, "mock_mode", False):
+                logger.critical(
+                    "bot_running_in_mock_mode_no_openai_key",
+                    message="OPENAI_API_KEY no está configurada. El bot responde con respuestas pre-escritas en lugar de IA real. "
+                            "Configurá OPENAI_API_KEY en Railway → ferreteria-bot → Variables.",
+                )
+
             logger.info("bot_core_initialized", bot_type="SalesBot", backend="postgres")
             return cls._bot_instance
         except Exception as e:

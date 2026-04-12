@@ -21,9 +21,13 @@ const PRODUCT_FALLBACK_IMAGE = 'images/product-placeholder.svg';
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    await Promise.all([fetchStorefront(), fetchProducts()]);
-    renderStorefront();
-    renderProducts();
+    // Fetch storefront first so categories are available for per-category product loading.
+    await fetchStorefront();
+    renderStorefront();   // renders nav + category links immediately
+
+    // Render category shells with loading placeholders, then fill each lazily.
+    renderProductShells();
+    await loadAllCategoryProducts();
 });
 
 async function fetchStorefront() {
@@ -42,20 +46,42 @@ async function fetchStorefront() {
     }
 }
 
-async function fetchProducts(category = '', page = 1, limit = 50) {
+async function fetchProductsByCategory(category, limit = 200) {
+    const params = new URLSearchParams({ limit });
+    if (category) params.set('category', category);
+    const response = await fetch(`${API_URL}/products?${params}`);
+    if (!response.ok) throw new Error(`products request failed for category: ${category}`);
+    const data = await response.json();
+    return Array.isArray(data) ? data : (data.products || []);
+}
+
+async function loadAllCategoryProducts() {
+    const categories = storefront.categories && storefront.categories.length
+        ? storefront.categories
+        : [];
+    if (!categories.length) return;
+
+    // Load categories in parallel batches of 4 to avoid overwhelming the server.
+    for (let i = 0; i < categories.length; i += 4) {
+        await Promise.allSettled(
+            categories.slice(i, i + 4).map(cat => loadOneCategoryProducts(cat))
+        );
+    }
+}
+
+async function loadOneCategoryProducts(category) {
+    const anchor = categoryAnchor(category);
+    const grid = document.getElementById(`grid-${anchor}`);
+    if (!grid) return;
+
     try {
-        const params = new URLSearchParams({ page, limit });
-        if (category) params.set('category', category);
-        const response = await fetch(`${API_URL}/products?${params}`);
-        if (!response.ok) throw new Error('products request failed');
-        const data = await response.json();
-        // API returns {products, page, limit, count}
-        catalog = Array.isArray(data) ? data : (data.products || []);
-    } catch (error) {
-        console.error('Error fetching products:', error);
-        catalog = [];
-        const sections = document.getElementById('dynamic-sections');
-        if (sections) sections.innerHTML = '<p style="color:red">Error cargando productos</p>';
+        const items = await fetchProductsByCategory(category);
+        // Merge into global catalog (replace any existing items for this category).
+        catalog = catalog.filter(p => p.category !== category).concat(items);
+        grid.innerHTML = renderCategoryGridContent(category);
+    } catch (e) {
+        console.error('Error loading category:', category, e);
+        grid.innerHTML = '<p class="specs">Error cargando productos.</p>';
     }
 }
 
@@ -117,26 +143,43 @@ function renderCategoryNav() {
     }
 }
 
-function renderProducts() {
+function renderProductShells() {
     const sectionsRoot = document.getElementById('dynamic-sections');
     if (!sectionsRoot) return;
 
     const categories = storefront.categories && storefront.categories.length
         ? storefront.categories
-        : [...new Set(catalog.map(item => item.category).filter(Boolean))];
+        : [];
 
     if (!categories.length) {
         sectionsRoot.innerHTML = '<section class="products"><div class="container"><p>Sin productos disponibles.</p></div></section>';
         return;
     }
 
+    // Render section shells with loading placeholders immediately so the page
+    // feels responsive. Product grids are filled by loadOneCategoryProducts().
     sectionsRoot.innerHTML = categories
-        .map((cat, idx) => renderCategorySection(cat, idx % 2 === 1))
+        .map((cat, idx) => renderCategoryShell(cat, idx % 2 === 1))
         .join('');
 }
 
-function renderCategorySection(category, dark) {
+function renderCategoryShell(category, dark) {
     const anchor = categoryAnchor(category);
+    return `
+    <section class="products" id="${anchor}" ${dark ? 'style="background: #111;"' : ''}>
+        <div class="container">
+            <div class="section-header-left">
+                <h2>${category}</h2>
+                <p>Productos disponibles en esta categoria.</p>
+            </div>
+            <div class="grid product-grid" id="grid-${anchor}">
+                <p class="specs" style="opacity:0.5">Cargando productos…</p>
+            </div>
+        </div>
+    </section>`;
+}
+
+function renderCategoryGridContent(category) {
     const categoryItems = catalog.filter(item => item.category === category);
 
     const byModel = new Map();
@@ -159,18 +202,7 @@ function renderCategorySection(category, dark) {
         });
     });
 
-    return `
-    <section class="products" id="${anchor}" ${dark ? 'style="background: #111;"' : ''}>
-        <div class="container">
-            <div class="section-header-left">
-                <h2>${category}</h2>
-                <p>Productos disponibles en esta categoria.</p>
-            </div>
-            <div class="grid product-grid" id="grid-${anchor}">
-                ${cards.length ? cards.join('') : '<p class="specs">Sin stock disponible.</p>'}
-            </div>
-        </div>
-    </section>`;
+    return cards.length ? cards.join('') : '<p class="specs">Sin stock disponible.</p>';
 }
 
 function createProductCard(item) {
