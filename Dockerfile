@@ -24,7 +24,11 @@ WORKDIR /app
 
 # Install dependencies system-wide
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    mv /usr/local/bin/gunicorn /usr/local/bin/gunicorn-real && \
+    echo '#!/bin/sh' > /usr/local/bin/gunicorn && \
+    echo 'eval exec gunicorn-real $*' >> /usr/local/bin/gunicorn && \
+    chmod +x /usr/local/bin/gunicorn
 
 # Copy application code — all directories required at runtime
 COPY app ./app
