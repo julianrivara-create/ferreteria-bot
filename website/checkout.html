@@ -147,17 +147,21 @@
             if (home) home.href = homeHref;
             if (cont) cont.href = homeHref;
 
-            try {
-                const resp = await fetch(`/api/t/${tenant}/storefront`);
-                if (!resp.ok) return;
-                const sf = await resp.json();
-                const storeName = sf.store_name || 'Salesbot Store';
-                document.title = `Checkout | ${storeName}`;
-                document.querySelectorAll('[data-store-name]').forEach((el) => {
-                    el.textContent = storeName;
-                });
-            } catch (e) {
-                console.warn('checkout storefront unavailable', e);
+            async function fetchBranding() {
+                try {
+                    const resp = await fetch(`/api/storefront?tenant=${tenant}`);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        const branding = data.branding || {};
+                        const storeName = branding.store_name || 'Salesbot Store';
+                        document.title = `Checkout | ${storeName}`;
+                        document.querySelectorAll('[data-store-name]').forEach((el) => {
+                            el.textContent = storeName;
+                        });
+                    }
+                } catch (e) {
+                    console.warn('checkout storefront unavailable', e);
+                }
             }
         })();
     </script>

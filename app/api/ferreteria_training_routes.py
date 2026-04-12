@@ -51,27 +51,17 @@ def _training_get_ip() -> str:
     """Same trust model as public_routes._get_request_ip — only honour XFF from private proxies."""
     remote = (request.remote_addr or "unknown").strip()
     try:
-        parsed = ipaddress.ip_address(remote)
-        is_proxy = not parsed.is_global
+        is_proxy = ipaddress.ip_address(remote).is_private
     except ValueError:
         is_proxy = False
     if is_proxy:
-        real_ip = (request.headers.get("X-Real-IP") or "").strip()
-        try:
-            ipaddress.ip_address(real_ip)
+        xff = request.headers.get("X-Forwarded-For", "").strip()
+        if xff:
+            ips = [ip.strip() for ip in xff.split(",") if ip.strip()]
+            return ips[-1] if ips else remote
+        real_ip = request.headers.get("X-Real-IP", "").strip()
+        if real_ip:
             return real_ip
-        except ValueError:
-            pass
-        for header_name in ("Fastly-Client-IP", "True-Client-IP", "CF-Connecting-IP", "Fly-Client-IP"):
-            candidate = (request.headers.get(header_name) or "").strip()
-            try:
-                ipaddress.ip_address(candidate)
-                return candidate
-            except ValueError:
-                pass
-        forwarded = _extract_forwarded_ip(request.headers.get("X-Forwarded-For", ""))
-        if forwarded:
-            return forwarded
     return remote
 
 

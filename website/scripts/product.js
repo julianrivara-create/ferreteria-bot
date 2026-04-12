@@ -12,7 +12,7 @@ function resolveTenantSlug() {
 }
 
 const TENANT_SLUG = resolveTenantSlug();
-const API_URL = `/api/t/${TENANT_SLUG}`;
+const API_URL = `/api`;
 const PRODUCT_FALLBACK_IMAGE = 'images/product-placeholder.svg';
 
 let productData = null;
@@ -34,9 +34,19 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProduct(model);
 });
 
+function slugify(text) {
+    if (!text) return "";
+    return String(text)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
+}
+
 async function loadProduct(model) {
     try {
-        const response = await fetch(`${API_URL}/product?model=${encodeURIComponent(model)}`);
+        const response = await fetch(`${API_URL}/catalog/detail?tenant=${TENANT_SLUG}&slug=${slugify(model)}`);
         if (!response.ok) {
             showError('Este producto no esta disponible actualmente.');
             return;
@@ -180,18 +190,18 @@ function updateUI(type, value) {
 
 async function updatePrice() {
     const priceElement = document.getElementById('dynamic-price');
+    if (!productData || !productData.variants) return;
+    
     try {
-        const params = new URLSearchParams({
-            model: productData.model,
-            ...(selectedVariant.color && { color: selectedVariant.color }),
-            ...(selectedVariant.storage && { storage: selectedVariant.storage })
-        });
+        const selectedStorageNum = selectedVariant.storage ? parseInt(selectedVariant.storage, 10) : null;
+        const matchingVariant = productData.variants.find(v => {
+            const colorMatch = !selectedVariant.color || v.color === selectedVariant.color;
+            const storageMatch = !selectedStorageNum || Number(v.storage_gb || 0) === selectedStorageNum;
+            return colorMatch && storageMatch;
+        }) || productData.variants[0];
 
-        const response = await fetch(`${API_URL}/product/price?${params}`);
-        const data = await response.json();
-
-        if (data.price !== undefined) {
-            priceElement.textContent = `$${formatPrice(data.price)} ${data.currency || 'ARS'}`;
+        if (matchingVariant && matchingVariant.price_ars !== undefined) {
+            priceElement.textContent = `$${formatPrice(matchingVariant.price_ars)} ARS`;
         }
     } catch (error) {
         console.error('Error updating price:', error);

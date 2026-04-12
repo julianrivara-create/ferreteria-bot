@@ -111,30 +111,20 @@ def _extract_forwarded_ip(header_value: str) -> str | None:
 
 def _get_request_ip() -> str:
     """Return the real client IP.
-
-    X-Forwarded-For is only trusted when remote_addr is a private/loopback
-    address, meaning the connection came through a reverse proxy (Railway LB,
-    nginx, etc.). Clients connecting directly cannot set remote_addr, so they
-    can't spoof the key used for rate limiting.
+    X-Forwarded-For lists IPs as: client, proxy1, proxy2...
+    If an attacker sends a fake XFF, the real proxy appends their actual IP to the end.
+    Taking index 0 allows spoofing. We must take the right-most IP (index -1) 
+    in a 1-hop proxy configuration.
     """
     remote = (request.remote_addr or "unknown").strip()
     if _is_trusted_proxy(remote):
-        real_ip = (request.headers.get("X-Real-IP") or "").strip()
-        try:
-            ipaddress.ip_address(real_ip)
+        xff = request.headers.get("X-Forwarded-For", "").strip()
+        if xff:
+            ips = [ip.strip() for ip in xff.split(",") if ip.strip()]
+            return ips[-1] if ips else remote
+        real_ip = request.headers.get("X-Real-IP", "").strip()
+        if real_ip:
             return real_ip
-        except ValueError:
-            pass
-        for header_name in ("Fastly-Client-IP", "True-Client-IP", "CF-Connecting-IP", "Fly-Client-IP"):
-            candidate = (request.headers.get(header_name) or "").strip()
-            try:
-                ipaddress.ip_address(candidate)
-                return candidate
-            except ValueError:
-                pass
-        forwarded = _extract_forwarded_ip(request.headers.get("X-Forwarded-For", ""))
-        if forwarded:
-            return forwarded
     return remote
 
 
@@ -287,6 +277,23 @@ def web_chat():
     if response.get("meta") is not None:
         payload["meta"] = response.get("meta")
     return _json_response(payload, 200, rate_limit_info=rate_limit_info)
+
+@public_api.route('/storefront', methods=['GET'])
+def get_storefront():
+    """Returns the store profile and branding for the frontend web storefront."""
+    tenant_id = (request.args.get('tenant') or request.headers.get('X-Tenant-Id') or os.getenv('DEFAULT_TENANT_ID', '')).strip()
+    tenant = _resolve_runtime_tenant(tenant_id)
+    if not tenant:
+        return jsonify({'error': 'Unknown tenant', 'store_name': 'Salesbot'}), 404
+        
+    profile = tenant.profile or {}
+    business = profile.get("business", {})
+    return jsonify({
+        'store_name': business.get('name', tenant.name or 'Store'),
+        'store_description': business.get('description', ''),
+        'categories': profile.get('categories', []),
+        'branding': tenant.branding or {}
+    }), 200
 
 @public_api.route('/health', methods=['GET'])
 def api_health():

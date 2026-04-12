@@ -15,7 +15,7 @@ function resolveTenantSlug() {
 }
 
 const TENANT_SLUG = resolveTenantSlug();
-const API_URL = `/api/t/${TENANT_SLUG}`;
+const API_URL = `/api`;
 window.__TENANT_SLUG = TENANT_SLUG;
 const PRODUCT_FALLBACK_IMAGE = 'images/product-placeholder.svg';
 
@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function fetchStorefront() {
     try {
-        const response = await fetch(`${API_URL}/storefront`);
+        const response = await fetch(`${API_URL}/storefront?tenant=${TENANT_SLUG}`);
         if (!response.ok) throw new Error('storefront request failed');
         storefront = await response.json();
     } catch (error) {
@@ -47,9 +47,9 @@ async function fetchStorefront() {
 }
 
 async function fetchProductsByCategory(category, limit = 200) {
-    const params = new URLSearchParams({ limit });
+    const params = new URLSearchParams({ limit, tenant: TENANT_SLUG });
     if (category) params.set('category', category);
-    const response = await fetch(`${API_URL}/products?${params}`);
+    const response = await fetch(`${API_URL}/catalog/grouped?${params}`);
     if (!response.ok) throw new Error(`products request failed for category: ${category}`);
     const data = await response.json();
     return Array.isArray(data) ? data : (data.products || []);

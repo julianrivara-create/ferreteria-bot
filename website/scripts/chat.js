@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!toggleBtn || !chatWindow || !messagesContainer) return;
 
     const tenantSlug = window.__TENANT_SLUG || 'default';
-    const chatApi = `/api/t/${tenantSlug}/chat`;
+    const chatApi = `/api/chat`;
 
     toggleBtn.addEventListener('click', () => {
         chatWindow.classList.toggle('open');
@@ -51,7 +51,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const response = await fetch(chatApi, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Tenant-Id': tenantSlug
+                },
                 body: JSON.stringify({ message: text, user: sessionId })
             });
 
