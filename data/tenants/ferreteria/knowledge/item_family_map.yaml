@@ -15,6 +15,9 @@ broca:
   - "Herramientas Electricas"
   - "Herramientas Manuales"
   - "Accesorios"
+widia:
+  - "Accesorios"
+  - "Herramientas Electricas"
 martillo:
   - "Herramientas Manuales"
 destornillador:
@@ -59,6 +62,8 @@ cano:
 caño:
   - "Plomeria"
 conexion:
+  - "Plomeria"
+electrovalvula:
   - "Plomeria"
 guante:
   - "Seguridad"

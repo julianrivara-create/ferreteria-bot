@@ -13,6 +13,9 @@ entries:
     family: cano
     aliases:
       - cano
+      - cano pvc
+      - caño pvc
+      - caño
   - canonical: sellador
     family: silicona
     aliases:
@@ -57,10 +60,11 @@ entries:
       - mecha metal
       - broca metal
   - canonical: broca para hormigon
-    family: broca
+    family: mecha
     aliases:
       - broca widia
       - broca hormigon
+      - widia
   - canonical: pintura blanca
     family: pintura
     aliases:
@@ -84,3 +88,9 @@ entries:
     family: guante
     aliases:
       - guante
+  - canonical: electrovalvula
+    family: electrovalvula
+    aliases:
+      - electrovalvula
+      - electrovalvula industrial
+      - valvula electrica

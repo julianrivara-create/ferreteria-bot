@@ -73,10 +73,11 @@ rules:
     required_dimensions:
       - size
       - use
-  cano:
-    prompt: "decime material y diametro"
+  electrovalvula:
+    prompt: "decime medida y voltaje (ej: 1 pulgada 220v, 24v, etc.)"
     examples:
-      - PVC 20mm
+      - 1 pulgada 220v
+      - 24v para riego
     required_dimensions:
-      - material
       - diameter
+      - voltage
