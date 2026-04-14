@@ -10,7 +10,7 @@ but uses SQLAlchemy models and app.db.session
 import time
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.db.session import ScopedSession
 from app.db.models import Product, Order, OrderStatus, OrderItem, Lead
@@ -46,16 +46,19 @@ class Database:
     def find_matches(
         self,
         model: Optional[str],
-        storage_gb: Optional[int],
-        color: Optional[str]
+        marca: Optional[str] = None,
+        medida: Optional[str] = None,
+        color: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Find products matching criteria"""
         query = self.session.query(Product).filter(Product.active == True)
         
         if model:
             query = query.filter(Product.model.ilike(f"%{model}%"))
-        if storage_gb:
-            query = query.filter(Product.storage_gb == storage_gb)
+        if marca:
+            query = query.filter(Product.brand.ilike(f"%{marca}%"))
+        if medida:
+            query = query.filter(Product.size.ilike(f"%{medida}%"))
         if color:
             query = query.filter(Product.color.ilike(f"%{color}%"))
         
@@ -66,9 +69,12 @@ class Database:
                 "sku": p.sku,
                 "category": p.category,
                 "model": p.model,
-                "storage_gb": p.storage_gb,
+                "brand": p.brand,
+                "material": p.material,
+                "size": p.size,
+                "unit_of_measure": p.unit_of_measure,
                 "color": p.color,
-                "stock_qty": p.on_hand_qty,  # Map to on_hand for compatibility
+                "stock_qty": p.on_hand_qty,
                 "price_ars": p.price_ars
             }
             for p in products
@@ -85,7 +91,10 @@ class Database:
             "sku": product.sku,
             "category": product.category,
             "model": product.model,
-            "storage_gb": product.storage_gb,
+            "brand": product.brand,
+            "material": product.material,
+            "size": product.size,
+            "unit_of_measure": product.unit_of_measure,
             "color": product.color,
             "stock_qty": product.on_hand_qty,
             "price_ars": product.price_ars
@@ -102,8 +111,12 @@ class Database:
             "modelo": "model",
             "category": "category",
             "categoria": "category",
-            "storage_gb": "storage_gb",
-            "almacenamiento": "storage_gb",
+            "brand": "brand",
+            "marca": "brand",
+            "material": "material",
+            "size": "size",
+            "medida": "size",
+            "unit_of_measure": "unit_of_measure",
             "color": "color",
             "price_ars": "price_ars",
             "precio": "price_ars",
@@ -116,7 +129,7 @@ class Database:
             if src_key not in updates:
                 continue
             value = updates[src_key]
-            if dst_key in {"price_ars", "on_hand_qty", "storage_gb"} and value not in (None, ""):
+            if dst_key in {"price_ars", "on_hand_qty"} and value not in (None, ""):
                 try:
                     value = int(float(value))
                 except Exception:
@@ -135,7 +148,6 @@ class Database:
             return False
 
         try:
-            storage_raw = data.get("storage_gb", data.get("almacenamiento", 0))
             price_raw = data.get("price_ars", data.get("precio", 0))
             stock_raw = data.get("on_hand_qty", data.get("stock", 0))
 
@@ -143,7 +155,10 @@ class Database:
                 sku=sku,
                 model=str(data.get("model", data.get("modelo", sku))).strip(),
                 category=str(data.get("category", data.get("categoria", "Others"))).strip() or "Others",
-                storage_gb=int(float(storage_raw)) if storage_raw not in (None, "") else 0,
+                brand=str(data.get("brand", data.get("marca", ""))).strip() or None,
+                material=str(data.get("material", "")).strip() or None,
+                size=str(data.get("size", data.get("medida", ""))).strip() or None,
+                unit_of_measure=str(data.get("unit_of_measure", "unidad")).strip(),
                 color=str(data.get("color", "")).strip(),
                 price_ars=int(float(price_raw)) if price_raw not in (None, "") else 0,
                 on_hand_qty=max(0, int(float(stock_raw)) if stock_raw not in (None, "") else 0),
@@ -216,7 +231,7 @@ class Database:
             user_name=name,
             user_phone=contact,
             user_email=email,
-            expires_at=datetime.utcnow() + timedelta(minutes=hold_minutes),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=hold_minutes),
             meta={"source": "bot"}
         )
         
@@ -254,7 +269,7 @@ class Database:
         """Remove expired holds and release stock"""
         expired_orders = self.session.query(Order).filter(
             Order.status == OrderStatus.HOLD,
-            Order.expires_at <= datetime.utcnow()
+            Order.expires_at <= datetime.now(timezone.utc)
         ).all()
         
         for order in expired_orders:
@@ -389,7 +404,10 @@ class Database:
                 "sku": p.sku,
                 "category": p.category,
                 "model": p.model,
-                "storage_gb": p.storage_gb,
+                "brand": p.brand,
+                "material": p.material,
+                "size": p.size,
+                "unit_of_measure": p.unit_of_measure,
                 "color": p.color,
                 "stock_qty": p.on_hand_qty,
                 "price_ars": p.price_ars
@@ -413,7 +431,10 @@ class Database:
                 "sku": p.sku,
                 "category": p.category,
                 "model": p.model,
-                "storage_gb": p.storage_gb,
+                "brand": p.brand,
+                "material": p.material,
+                "size": p.size,
+                "unit_of_measure": p.unit_of_measure,
                 "color": p.color,
                 "stock_qty": p.on_hand_qty,
                 "price_ars": p.price_ars

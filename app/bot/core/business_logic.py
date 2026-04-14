@@ -95,7 +95,9 @@ class BusinessLogic:
     def buscar_stock(
         self,
         modelo: str,
-        storage_gb: Optional[int] = None,
+        marca: Optional[str] = None,
+        medida: Optional[str] = None,
+        categoria: Optional[str] = None,
         color: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -111,13 +113,23 @@ class BusinessLogic:
         # Normalize model name
         modelo = self._normalize_model(modelo)
         
-        matches = self.db.find_matches(modelo, storage_gb, color)
+        matches = self.db.find_matches(modelo, marca=marca, medida=medida, color=color)
+        
+        # If a category filter was given, narrow down
+        if categoria and matches:
+            cat_lower = categoria.lower()
+            matches = [m for m in matches if cat_lower in (m.get('category') or '').lower()]
         
         if not matches:
+            search_desc = modelo
+            if marca:
+                search_desc += f" {marca}"
+            if medida:
+                search_desc += f" {medida}"
             return {
                 "status": "no_match",
                 "products": [],
-                "message": f"No encontré productos para {modelo} {storage_gb or ''}GB {color or ''}".strip()
+                "message": f"No encontré productos para '{search_desc}'"
             }
         
         # Check availability
@@ -133,7 +145,7 @@ class BusinessLogic:
             return {
                 "status": "no_stock",
                 "products": matches,
-                "message": f"El producto existe pero no hay stock disponible ahora"
+                "message": "El producto existe pero no hay stock disponible ahora"
             }
         
         return {
@@ -144,7 +156,7 @@ class BusinessLogic:
 
     def listar_modelos(self) -> Dict[str, Any]:
         """
-        List all available models
+        List all available models grouped by category
         
         Returns:
             {
@@ -164,21 +176,28 @@ class BusinessLogic:
             if model not in model_summary:
                 model_summary[model] = {
                     "model": model,
+                    "category": item.get('category', ''),
                     "available_count": 0,
-                    "storage_options": set(),
+                    "brand_options": set(),
+                    "size_options": set(),
                     "color_options": set()
                 }
             
             if avail > 0:
                 model_summary[model]["available_count"] += avail
-                model_summary[model]["storage_options"].add(item['storage_gb'])
-                model_summary[model]["color_options"].add(item['color'])
+                if item.get('brand'):
+                    model_summary[model]["brand_options"].add(item['brand'])
+                if item.get('size'):
+                    model_summary[model]["size_options"].add(item['size'])
+                if item.get('color'):
+                    model_summary[model]["color_options"].add(item['color'])
         
         # Convert sets to lists
         models = []
         for model_name, data in model_summary.items():
             if data["available_count"] > 0:
-                data["storage_options"] = sorted(list(data["storage_options"]))
+                data["brand_options"] = sorted(list(data["brand_options"]))
+                data["size_options"] = sorted(list(data["size_options"]))
                 data["color_options"] = sorted(list(data["color_options"]))
                 models.append(data)
         
@@ -191,7 +210,7 @@ class BusinessLogic:
     def buscar_alternativas(
         self,
         modelo: str,
-        storage_gb: Optional[int] = None,
+        marca: Optional[str] = None,
         color: Optional[str] = None,
         limit: int = 3
     ) -> Dict[str, Any]:
@@ -512,8 +531,13 @@ class BusinessLogic:
         CROSS_SELL_MAP = {
             'Herramientas Electricas': ('Discos Abrasivos', 5, 'para usar con tu herramienta'),
             'Bulonería': ('Tarugos y Tacos', 5, 'para complementar tu fijación'),
-            'Pinturas': ('Albañilería', 5, 'para la aplicación'),
+            'Pinturas': ('Rodillos y Pinceles', 5, 'para la aplicación'),
             'Llaves': ('Bocallaves y Dados', 5, 'para ampliar tu juego'),
+            'Plomería': ('Teflón y Adhesivos', 5, 'para sellar correctamente'),
+            'Electricidad': ('Cablecanal y Fichas', 5, 'para la instalación'),
+            'Jardinería': ('Mangueras', 5, 'para complementar'),
+            'Albañilería': ('Niveles y Cucharas', 5, 'para la obra'),
+            'Tornillería y Fijaciones': ('Tarugos y Tacos', 5, 'para completar la fijación'),
         }
 
         if category in CROSS_SELL_MAP:
@@ -698,7 +722,7 @@ Para coordinar esto, te paso con un asesor.
         }
 
     def _normalize_model(self, modelo: str) -> str:
-        """Normalize model name for consistent matching"""
+        """Normalize model name for consistent matching in ferretería context"""
         modelo = modelo.strip()
         
         # Common ferretería abbreviations/shortcuts
@@ -706,6 +730,15 @@ Para coordinar esto, te paso con un asesor.
             (r'\ballen\s*(\d+[\.,]?\d*)\s*mm', r'llave allen \1mm'),
             (r'\bmecha\s*(\d+[\.,]?\d*)\s*mm', r'mecha \1mm'),
             (r'\btarugo\s*(\d+)\s*mm', r'tarugo \1mm'),
+            (r'\bdestornillador\s*(philips|plano|estrella|torx)', r'destornillador \1'),
+            (r'\bllave\s*boca\s*(\d+)', r'llave boca \1mm'),
+            (r'\bdisco\s*de?\s*corte\s*(\d+)', r'disco de corte \1mm'),
+            (r'\bcinta\s*(\w+)', r'cinta \1'),
+            (r'\bb&d\b', 'Black+Decker'),
+            (r'\bbyd\b', 'Black+Decker'),
+            (r'\bdewalt\b', 'DeWalt'),
+            (r'\bbosch\b', 'Bosch'),
+            (r'\bstanley\b', 'Stanley'),
         ]
 
         for pattern, replacement in patterns:
@@ -862,11 +895,11 @@ Para coordinar esto, te paso con un asesor.
 
     def obtener_upselling(self, sku_actual: str) -> Dict[str, Any]:
         """
-        Smart Upselling: Find a 'better' version of the current product.
+        Smart Upselling for ferretería: Find a 'better' version of the current product.
         Logic:
-        1. Higher Storage (same model, same color if possible)
-        2. Pro version (if current is regular)
-        3. Next Generation (if current is older)
+        1. Same category, better brand (higher price)
+        2. Same product, larger size/quantity
+        3. Kit version of individual product
         """
         current_product = self.db.get_product_by_sku(sku_actual)
         if not current_product:
@@ -877,21 +910,12 @@ Para coordinar esto, te paso con un asesor.
         
         current_price = current_product['price_ars']
         current_model = current_product['model']
-        current_storage = current_product['storage_gb']
+        current_category = current_product.get('category', '')
         
-        # 1. Look for same model, MORE storage
-        same_model_higher_storage = [
-            p for p in all_stock 
-            if p['model'] == current_model 
-            and p['storage_gb'] > current_storage
-            and self.db.available_for_sku(p['sku']) > 0
-        ]
-        potential_upsells.extend(same_model_higher_storage)
-        
-        # 2. Look for same category, higher price range (upsell to better brand/model)
+        # 1. Same category, higher price (better brand/model)
         same_category_better = [
             p for p in all_stock
-            if p.get('category') == current_product.get('category')
+            if p.get('category') == current_category
             and p['sku'] != current_product['sku']
             and p['price_ars'] > current_price
             and self.db.available_for_sku(p['sku']) > 0
@@ -920,11 +944,12 @@ Para coordinar esto, te paso con un asesor.
              return {"status": "none", "message": "No hay oportunidades de upsell lógicas"}
 
         best_upsell = valid_upsells[0]
+        brand_info = f" ({best_upsell.get('brand')})" if best_upsell.get('brand') else ""
         
         return {
             "status": "found",
             "upsell_product": best_upsell,
-            "message": f"Por solo {best_upsell['price_diff_formatted']} más, llevate el {best_upsell['model']} de {best_upsell['storage_gb']}GB!"
+            "message": f"Por solo {best_upsell['price_diff_formatted']} más, llevate el {best_upsell['model']}{brand_info}!"
         }
 
     def comparar_productos(self, sku1: str, sku2: str) -> Dict[str, Any]:

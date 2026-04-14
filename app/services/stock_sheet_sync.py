@@ -1,7 +1,7 @@
 """
 Strict Single-Sheet Stock Sync Service
 Enforces Real Stock logic from Google Sheets.
-Contract: sku | name | category | price_ars | stock | color | storage_gb
+Contract: sku | name | category | price_ars | stock | color | brand | material | size | unit_of_measure
 """
 import gspread
 from google.oauth2.service_account import Credentials
@@ -89,11 +89,10 @@ class StockSheetSync:
                 name = str(data.get('name', sku)).strip()
                 category = str(data.get('category', 'Others')).strip()
                 color = str(data.get('color', '')).strip()
-                storage_raw = data.get('storage_gb', 0)
-                try:
-                    storage = int(str(storage_raw).replace('GB', '').strip() or 0)
-                except:
-                    storage = 0
+                brand = str(data.get('brand', data.get('marca', ''))).strip()
+                material = str(data.get('material', '')).strip()
+                size = str(data.get('size', data.get('medida', ''))).strip()
+                unit_of_measure = str(data.get('unit_of_measure', 'unidad')).strip()
 
                 # DB Operations
                 product = session.query(Product).filter_by(sku=sku).first()
@@ -104,7 +103,10 @@ class StockSheetSync:
                     product.price_ars = price
                     product.on_hand_qty = stock # Use existing DB field
                     product.color = color
-                    product.storage_gb = storage
+                    product.brand = brand or product.brand
+                    product.material = material or product.material
+                    product.size = size or product.size
+                    product.unit_of_measure = unit_of_measure or product.unit_of_measure
                     stats['updated'] += 1
                 else:
                     # Create
@@ -115,7 +117,10 @@ class StockSheetSync:
                         price_ars=price,
                         on_hand_qty=stock,
                         color=color,
-                        storage_gb=storage
+                        brand=brand or None,
+                        material=material or None,
+                        size=size or None,
+                        unit_of_measure=unit_of_measure or 'unidad',
                     )
                     session.add(new_prod)
                     stats['created'] += 1

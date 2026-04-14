@@ -142,19 +142,19 @@ def idempotent_webhook(f):
                     return jsonify(existing.response_json or {}), 200
                 elif existing.status == 'PROCESSING':
                     # Check TTL (5 mins)
-                    if existing.locked_until and existing.locked_until < datetime.utcnow():
-                         existing.locked_until = datetime.utcnow() + timedelta(minutes=5)
+                    if existing.locked_until and existing.locked_until < datetime.now(timezone.utc):
+                         existing.locked_until = datetime.now(timezone.utc) + timedelta(minutes=5)
                          session.commit()
                     else:
                          return jsonify({"error": "Processing"}), 409
             
             if not existing:
-                new_key = IdempotencyKey(
+                existing = IdempotencyKey(
                     key=key, status='PROCESSING',
-                    created_at=datetime.utcnow(),
-                    locked_until=datetime.utcnow() + timedelta(minutes=5)
+                    created_at=datetime.now(timezone.utc),
+                    locked_until=datetime.now(timezone.utc) + timedelta(minutes=5)
                 )
-                session.add(new_key)
+                session.add(existing)
                 session.commit()
             
             result = f(*args, **kwargs)
@@ -171,14 +171,12 @@ def idempotent_webhook(f):
             elif isinstance(result, dict):
                 response_json = result
 
-            # Mark complete
-            track = session.get(IdempotencyKey, key)
-            if track:
-                track.status = 'COMPLETED'
-                track.completed_at = datetime.utcnow()
-                track.response_json = response_json
-                track.locked_until = None
-                session.commit()
+            # Mark complete — reuse 'existing' reference (already locked or just created)
+            existing.status = 'COMPLETED'
+            existing.completed_at = datetime.now(timezone.utc)
+            existing.response_json = response_json
+            existing.locked_until = None
+            session.commit()
             
             return result
         except Exception as e:
@@ -189,7 +187,7 @@ def idempotent_webhook(f):
                 k = clean_sess.get(IdempotencyKey, key)
                 if k:
                     k.status = "FAILED"
-                    k.completed_at = datetime.utcnow()
+                    k.completed_at = datetime.now(timezone.utc)
                     k.locked_until = None
                     clean_sess.commit()
             finally:

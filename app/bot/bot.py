@@ -433,7 +433,9 @@ class SalesBot:
             if func_name == "buscar_stock":
                 result = self.logic.buscar_stock(
                     modelo=args.get("modelo"),
-                    storage_gb=args.get("storage_gb"),
+                    marca=args.get("marca"),
+                    medida=args.get("medida"),
+                    categoria=args.get("categoria"),
                     color=args.get("color")
                 )
                 # Track product queries
@@ -452,7 +454,7 @@ class SalesBot:
             elif func_name == "buscar_alternativas":
                 return self.logic.buscar_alternativas(
                     modelo=args.get("modelo"),
-                    storage_gb=args.get("storage_gb"),
+                    marca=args.get("marca"),
                     color=args.get("color")
                 )
             

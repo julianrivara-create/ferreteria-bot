@@ -12,8 +12,8 @@ class ProductComparator:
         
         # Features importantes para comparación
         self.key_features = [
-            'storage_gb', 'color', 'generation', 'camera_mp',
-            'price_usd', 'price_ars', 'category'
+            'brand', 'material', 'size', 'color',
+            'price_ars', 'category'
         ]
     
     def compare_products(self, sku1: str, sku2: str) -> Dict[str, Any]:
@@ -54,14 +54,14 @@ class ProductComparator:
             'comparison_table': self._format_comparison_table(p1, p2, differences)
         }
     
-    def compare_by_criteria(self, modelo1: str, modelo2: str, 
-                           storage1: int = None, storage2: int = None) -> Dict:
+    def compare_by_criteria(self, modelo1: str, modelo2: str,
+                           marca1: str = None, marca2: str = None) -> Dict:
         """
-        Compara por modelo y storage (más flexible)
+        Compara por modelo y marca (más flexible)
         """
         # Buscar productos
-        matches1 = self.db.find_matches(modelo1, storage1, None)
-        matches2 = self.db.find_matches(modelo2, storage2, None)
+        matches1 = self.db.find_matches(modelo1, marca=marca1)
+        matches2 = self.db.find_matches(modelo2, marca=marca2)
         
         if not matches1 or not matches2:
             return {
@@ -78,19 +78,32 @@ class ProductComparator:
         """
         diffs = {}
         
-        # Storage
-        if p1.get('storage_gb') != p2.get('storage_gb'):
-            diffs['storage'] = {
-                'p1': p1.get('storage_gb'),
-                'p2': p2.get('storage_gb'),
-                'winner': 'p1' if p1.get('storage_gb', 0) > p2.get('storage_gb', 0) else 'p2'
+        # Marca
+        if p1.get('brand') != p2.get('brand'):
+            diffs['brand'] = {
+                'p1': p1.get('brand') or 'Sin marca',
+                'p2': p2.get('brand') or 'Sin marca',
+            }
+        
+        # Material
+        if p1.get('material') != p2.get('material'):
+            diffs['material'] = {
+                'p1': p1.get('material') or '-',
+                'p2': p2.get('material') or '-',
+            }
+        
+        # Medida
+        if p1.get('size') != p2.get('size'):
+            diffs['size'] = {
+                'p1': p1.get('size') or '-',
+                'p2': p2.get('size') or '-',
             }
         
         # Precio
         price1 = p1.get('price_ars', 0)
         price2 = p2.get('price_ars', 0)
         if price1 != price2:
-            diff_pct = abs(price1 - price2) / min(price1, price2) * 100
+            diff_pct = abs(price1 - price2) / max(min(price1, price2), 1) * 100
             diffs['price'] = {
                 'p1': price1,
                 'p2': price2,
@@ -99,14 +112,11 @@ class ProductComparator:
                 'cheaper': 'p1' if price1 < price2 else 'p2'
             }
         
-        # Generación (detectar del modelo)
-        gen1 = self._extract_generation(p1.get('model', ''))
-        gen2 = self._extract_generation(p2.get('model', ''))
-        if gen1 != gen2:
-            diffs['generation'] = {
-                'p1': gen1,
-                'p2': gen2,
-                'newer': 'p1' if gen1 > gen2 else 'p2'
+        # Categoría
+        if p1.get('category') != p2.get('category'):
+            diffs['category'] = {
+                'p1': p1.get('category'),
+                'p2': p2.get('category')
             }
         
         # Color
@@ -137,18 +147,17 @@ class ProductComparator:
                 cheaper = 'product1' if diffs['price']['cheaper'] == 'p1' else 'product2'
                 recommendations.append(f"✅ {p1['model'] if cheaper == 'product1' else p2['model']} tiene mejor precio ({price_diff_pct}% más barato)")
         
-        # Más moderno
-        if 'generation' in diffs:
-            newer = 'product1' if diffs['generation']['newer'] == 'p1' else 'product2'
-            model_newer = p1['model'] if newer == 'product1' else p2['model']
-            recommendations.append(f"🆕 {model_newer} es más nuevo")
+        # Marca diferente
+        if 'brand' in diffs:
+            recommendations.append(f"🏷️ Marcas distintas: {diffs['brand']['p1']} vs {diffs['brand']['p2']}")
         
-        # Más storage
-        if 'storage' in diffs:
-            more_storage = 'product1' if diffs['storage']['winner'] == 'p1' else 'product2'
-            model_storage = p1['model'] if more_storage == 'product1' else p2['model']
-            storage = p1['storage_gb'] if more_storage == 'product1' else p2['storage_gb']
-            recommendations.append(f"💾 {model_storage} tiene más capacidad ({storage}GB)")
+        # Material
+        if 'material' in diffs:
+            recommendations.append(f"🔧 Material: {diffs['material']['p1']} vs {diffs['material']['p2']}")
+        
+        # Medida
+        if 'size' in diffs:
+            recommendations.append(f"📏 Medida: {diffs['size']['p1']} vs {diffs['size']['p2']}")
         
         if not recommendations:
             return "Ambos productos son muy similares. Elegí según tu preferencia de color o disponibilidad."
@@ -167,14 +176,20 @@ class ProductComparator:
         # Modelo
         lines.append(f"{'Modelo':<15} | {p1.get('model', '-'):<20} | {p2.get('model', '-'):<20}")
         
-        # Storage
-        s1 = f"{p1.get('storage_gb', 0)}GB"
-        s2 = f"{p2.get('storage_gb', 0)}GB"
-        winner = " ✓" if diffs.get('storage', {}).get('winner') == 'p1' else ""
-        s1 += winner
-        winner = " ✓" if diffs.get('storage', {}).get('winner') == 'p2' else ""
-        s2 += winner
-        lines.append(f"{'Storage':<15} | {s1:<20} | {s2:<20}")
+        # Marca
+        b1 = p1.get('brand') or '-'
+        b2 = p2.get('brand') or '-'
+        lines.append(f"{'Marca':<15} | {b1:<20} | {b2:<20}")
+        
+        # Medida
+        sz1 = p1.get('size') or '-'
+        sz2 = p2.get('size') or '-'
+        lines.append(f"{'Medida':<15} | {sz1:<20} | {sz2:<20}")
+        
+        # Material
+        m1 = p1.get('material') or '-'
+        m2 = p2.get('material') or '-'
+        lines.append(f"{'Material':<15} | {m1:<20} | {m2:<20}")
         
         # Precio
         price1 = f"${p1.get('price_ars', 0):,}".replace(",", ".")

@@ -105,7 +105,6 @@ class CatalogService:
             sku = str(row.get("sku", "")).strip()
             model = str(row.get("name") or row.get("model") or "").strip()
             color = str(row.get("color", "")).strip()
-            storage = str(row.get("storage_gb", "")).strip()
             image_url = str(row.get("image_url", "")).strip()
 
             if sku in self._blocked_skus:
@@ -133,7 +132,7 @@ class CatalogService:
             sanitized.append(row)
 
             if sku:
-                sku_variants.setdefault(sku, set()).add((model, color, storage))
+                sku_variants.setdefault(sku, set()).add((model, color))
 
         for sku, variants in sku_variants.items():
             if len(variants) > 1:
@@ -362,15 +361,12 @@ class CatalogService:
 
                 try:
                     # Strict Parsing
-                    price_raw = str(data.get('price_ars', 0)).replace(',', '').replace('.', '').replace('$', '').strip()
+                    price_raw = str(data.get('price_ars', data.get('price', 0))).replace(',', '').replace('.', '').replace('$', '').strip()
                     price = int(float(price_raw)) if price_raw else 0
                     
                     stock_raw = str(data.get('stock', 0)).strip()
                     stock = int(float(stock_raw)) if stock_raw else 0
                     if stock < 0: stock = 0
-
-                    storage_raw = str(data.get('storage_gb', '0')).upper().replace('GB', '').strip()
-                    storage = int(float(storage_raw)) if storage_raw and storage_raw.replace('.','',1).isdigit() else 0
 
                     # Apply MEP conversion: Column D is now treated as USD
                     price_ars = int(round(price * mep_rate))
@@ -381,13 +377,15 @@ class CatalogService:
                         "sku": sku,
                         "name": str(data.get('name', sku)).strip(),
                         "category": str(data.get('category', 'Others')).strip(),
+                        "brand": str(data.get('brand', data.get('marca', ''))).strip(),
+                        "material": str(data.get('material', '')).strip(),
+                        "size": str(data.get('size', data.get('medida', ''))).strip(),
+                        "unit_of_measure": str(data.get('unit_of_measure', 'unidad')).strip(),
                         "price_ars": price_ars,
-                        "price_usd": price, # Keep the original USD value
+                        "price_usd": price,
                         "stock": stock,
-                        "available_qty": stock, # Compat
+                        "available_qty": stock,
                         "color": str(data.get('color', '')).strip(),
-                        "storage_gb": storage,
-                        # Optional extras if present, but strictly keeping to contract
                         "image_url": str(data.get('image_url', '')).strip(),
                         "description": str(data.get('description', '')).strip()
                     }

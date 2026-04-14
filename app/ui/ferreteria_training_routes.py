@@ -42,16 +42,20 @@ def _training_password_hash() -> bytes:
     return hashlib.pbkdf2_hmac("sha256", raw.encode(), _TRAINING_SALT, _PBKDF2_ITERATIONS)
 
 
+from urllib.parse import urljoin
 def _safe_next_path(raw_path: str | None, fallback: str) -> str:
     candidate = (raw_path or "").strip()
     if not candidate:
         return fallback
-    parsed = urlparse(candidate)
-    if parsed.scheme or parsed.netloc or candidate.startswith("//"):
-        return fallback
-    if not candidate.startswith("/"):
-        return fallback
-    return candidate
+    from flask import request
+    try:
+        ref_url = urlparse(request.host_url)
+        test_url = urlparse(urljoin(request.host_url, candidate))
+        if test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc:
+            return candidate
+    except Exception:
+        pass
+    return fallback
 
 
 def _extract_forwarded_ip(header_value: str) -> str | None:
