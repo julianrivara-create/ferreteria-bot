@@ -1,0 +1,74 @@
+# Mapping of product types/stems to their allowed categories.
+# This is used for strict scoring and category detection.
+
+taladro:
+  - "Herramientas Electricas"
+amoladora:
+  - "Herramientas Electricas"
+atornillador:
+  - "Herramientas Electricas"
+mecha:
+  - "Herramientas Electricas"
+  - "Herramientas Manuales"
+  - "Accesorios"
+broca:
+  - "Herramientas Electricas"
+  - "Herramientas Manuales"
+  - "Accesorios"
+martillo:
+  - "Herramientas Manuales"
+destornillador:
+  - "Herramientas Manuales"
+llave:
+  - "Herramientas Manuales"
+tornillo:
+  - "Tornilleria"
+autoperforante:
+  - "Tornilleria"
+buloneria:
+  - "Tornilleria"
+  - "Fijaciones"
+tarugo:
+  - "Fijaciones"
+taco:
+  - "Fijaciones"
+fijacion:
+  - "Fijaciones"
+pintura:
+  - "Pintureria"
+latex:
+  - "Pintureria"
+esmalte:
+  - "Pintureria"
+rodillo:
+  - "Pintureria"
+pincel:
+  - "Pintureria"
+brocha:
+  - "Pintureria"
+bandeja:
+  - "Pintureria"
+silicona:
+  - "Plomeria"
+sellador:
+  - "Plomeria"
+teflon:
+  - "Plomeria"
+cano:
+  - "Plomeria"
+caño:
+  - "Plomeria"
+conexion:
+  - "Plomeria"
+guante:
+  - "Seguridad"
+casco:
+  - "Seguridad"
+lente:
+  - "Seguridad"
+cable:
+  - "Electricidad"
+interruptor:
+  - "Electricidad"
+toma:
+  - "Electricidad"

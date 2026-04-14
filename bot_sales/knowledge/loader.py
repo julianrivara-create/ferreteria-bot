@@ -22,6 +22,8 @@ from .defaults import (
     DEFAULT_LANGUAGE_PATTERNS,
     DEFAULT_SUBSTITUTE_RULES,
     DEFAULT_SYNONYM_ENTRIES,
+    DEFAULT_ITEM_FAMILY_MAP,
+    DEFAULT_CATEGORY_ALIASES,
 )
 from .validators import (
     KnowledgeValidationError,
@@ -127,6 +129,8 @@ class KnowledgeLoader:
             "language_patterns.yaml",
             "acceptance_patterns.yaml",
             "faqs.yaml",
+            "item_family_map.yaml",
+            "category_aliases.yaml",
         )
         mtimes = {}
         for filename in files:
@@ -149,6 +153,8 @@ class KnowledgeLoader:
             "language_patterns": str(self._path("language_patterns.yaml")),
             "acceptance": str(self._path("acceptance_patterns.yaml")),
             "faqs": str(self._path("faqs.yaml")),
+            "item_family_map": str(self._path("item_family_map.yaml")),
+            "category_aliases": str(self._path("category_aliases.yaml")),
         }
 
     def load(self, force: bool = False) -> Dict[str, Any]:
@@ -211,6 +217,8 @@ class KnowledgeLoader:
             ),
             "acceptance": validate_acceptance_patterns(self._read_yaml(self._path("acceptance_patterns.yaml")) or DEFAULT_ACCEPTANCE_PATTERNS),
             "faqs": validate_faqs(self._read_yaml(self._path("faqs.yaml")) or self._read_fallback_faqs()),
+            "item_family_map": self._read_yaml(self._path("item_family_map.yaml")) or DEFAULT_ITEM_FAMILY_MAP,
+            "category_aliases": self._read_yaml(self._path("category_aliases.yaml")) or DEFAULT_CATEGORY_ALIASES,
         }
 
         self._cache = deepcopy(knowledge)

@@ -52,6 +52,8 @@ from bot_sales.knowledge.defaults import (
     DEFAULT_COMPLEMENTARY_RULES,
     DEFAULT_FAMILY_RULES,
     DEFAULT_SYNONYM_ENTRIES,
+    DEFAULT_ITEM_FAMILY_MAP,
+    DEFAULT_CATEGORY_ALIASES,
 )
 
 # ---------------------------------------------------------------------------
@@ -112,78 +114,22 @@ def _normalize(text: str) -> str:
     return normalize_basic(text)
 
 
-# ---------------------------------------------------------------------------
-# Category-family gate
-# ---------------------------------------------------------------------------
-# Maps significant item keywords → the ONLY acceptable catalog categories.
-# If the matched product's category is NOT in the set, the match is rejected.
+def _knowledge_map_item_family(knowledge: Optional[Dict[str, Any]]) -> Dict[str, set]:
+    merged = dict(DEFAULT_ITEM_FAMILY_MAP)
+    # If the tenant knowledge provides its own item_family_map, merge it
+    tenant_map = _knowledge_map(knowledge).get("item_family_map", {})
+    if tenant_map:
+        for k, v in tenant_map.items():
+            if isinstance(v, list):
+                merged[k] = set(v)
+            else:
+                merged[k] = v
+    return merged
 
-_ITEM_FAMILY_MAP: Dict[str, set] = {
-    "taladro":          {"Herramientas Electricas"},
-    "amoladora":        {"Herramientas Electricas"},
-    "atornillador":     {"Herramientas Electricas"},
-    "mecha":            {"Herramientas Electricas", "Herramientas Manuales", "Accesorios"},
-    "broca":            {"Herramientas Electricas", "Herramientas Manuales", "Accesorios"},
-    "martillo":         {"Herramientas Manuales"},
-    "destornillador":   {"Herramientas Manuales"},
-    "llave":            {"Herramientas Manuales"},
-    "tornillo":         {"Tornilleria"},
-    "autoperforante":   {"Tornilleria"},
-    "buloneria":        {"Tornilleria", "Fijaciones"},
-    "tarugo":           {"Fijaciones"},
-    "taco":             {"Fijaciones"},
-    "fijacion":         {"Fijaciones"},
-    "pintura":          {"Pintureria"},
-    "latex":            {"Pintureria"},
-    "esmalte":          {"Pintureria"},
-    "rodillo":          {"Pintureria"},
-    "pincel":           {"Pintureria"},
-    "brocha":           {"Pintureria"},
-    "bandeja":          {"Pintureria"},
-    "silicona":         {"Plomeria"},
-    "sellador":         {"Plomeria"},
-    "teflon":           {"Plomeria"},
-    "cano":             {"Plomeria"},
-    "caño":             {"Plomeria"},
-    "conexion":         {"Plomeria"},
-    "guante":           {"Seguridad"},
-    "casco":            {"Seguridad"},
-    "lente":            {"Seguridad"},
-    "cable":            {"Electricidad"},
-    "interruptor":      {"Electricidad"},
-    "toma":             {"Electricidad"},
-}
-
-# Category aliases the DB may return
-_CATEGORY_ALIASES: Dict[str, str] = {
-    "taladro":          "Herramientas Electricas",
-    "amoladora":        "Herramientas Electricas",
-    "atornillador":     "Herramientas Electricas",
-    "martillo":         "Herramientas Manuales",
-    "destornillador":   "Herramientas Manuales",
-    "llave":            "Herramientas Manuales",
-    "tornillo":         "Tornilleria",
-    "autoperforante":   "Tornilleria",
-    "tarugo":           "Fijaciones",
-    "taco":             "Fijaciones",
-    "fijacion":         "Fijaciones",
-    "pintura":          "Pintureria",
-    "latex":            "Pintureria",
-    "esmalte":          "Pintureria",
-    "rodillo":          "Pintureria",
-    "pincel":           "Pintureria",
-    "brocha":           "Pintureria",
-    "silicona":         "Plomeria",
-    "sellador":         "Plomeria",
-    "teflon":           "Plomeria",
-    "cano":             "Plomeria",
-    "conexion":         "Plomeria",
-    "guante":           "Seguridad",
-    "mecha":            "Herramientas Electricas",
-    "broca":            "Herramientas Electricas",
-    "llave":            "Herramientas Manuales",
-    "cable":            "Electricidad",
-}
+def _knowledge_map_category_aliases(knowledge: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    merged = dict(DEFAULT_CATEGORY_ALIASES)
+    merged.update(_knowledge_map(knowledge).get("category_aliases", {}))
+    return merged
 
 
 def _detect_category(normalized: str, knowledge: Optional[Dict[str, Any]] = None) -> Optional[str]:
@@ -192,7 +138,7 @@ def _detect_category(normalized: str, knowledge: Optional[Dict[str, Any]] = None
         categories = (get_family_rule(family, knowledge).get("allowed_categories") or [])
         if categories:
             return categories[0]
-    for token, cat in _CATEGORY_ALIASES.items():
+    for token, cat in _knowledge_map_category_aliases(knowledge).items():
         if token in normalized:
             return cat
     for family, rule in _family_rules(knowledge).items():
@@ -205,8 +151,7 @@ def _detect_category(normalized: str, knowledge: Optional[Dict[str, Any]] = None
 
 def _get_expected_families(normalized: str, knowledge: Optional[Dict[str, Any]] = None) -> set:
     """Return the union of acceptable categories for all item keywords found."""
-    families: set = set()
-    family_map = dict(_ITEM_FAMILY_MAP)
+    family_map = _knowledge_map_item_family(knowledge)
     for family, rule in _family_rules(knowledge).items():
         allowed = set(rule.get("allowed_categories") or [])
         if allowed:
@@ -362,6 +307,15 @@ def _score_product(
             score -= 8.0
 
     score += _score_dimension_alignment(product, requested_dimensions or {})
+
+    # ── Semantic Search Bonus ──────────────────────────────────────────────
+    # If the product was retrieved via hybrid search, it might have a _vector_score.
+    # Cosine similarity is usually 0.7-1.0 for relevant results.
+    vector_score = product.get("_vector_score", 0.0)
+    if vector_score > 0.7:
+        # Scale: 0.7 -> +0 | 0.85 -> +2.5 | 1.0 -> +5
+        bonus = (vector_score - 0.7) * 16.6 # (1.0-0.7)*16.6 ~= 5.0
+        score += max(0.0, bonus)
 
     return max(0.0, min(10.0, score))
 
@@ -528,7 +482,8 @@ def get_cross_sell_suggestions(
 
 _FILLER_RE = re.compile(
     r"^(?:quiero|necesito|busco|dame|pasame|paseme|"
-    r"ten[eé]s|tienen|tene[sn]|"
+    r"ten[eé]s|tienen|tene[sn]|hay|tenes\s+stock|tenes\s+precio|"
+    r"cuanto\s+esta|cuanto\s+cuesta|precio\s+de|precio|"
     r"presupuesto\s+para|presupuesto|me\s+das|podes\s+darme)\s+",
     re.IGNORECASE,
 )
@@ -536,7 +491,13 @@ _FILLER_RE = re.compile(
 _FILLER_WORDS = frozenset({
     "quiero", "necesito", "busco", "dame", "pasame", "paseme",
     "presupuesto", "para", "me", "que", "de", "del",
-    "la", "el", "los", "las",
+    "la", "el", "los", "las", "stock", "precio", "tenes", "tenés",
+    "hay", "cuanto", "cuánto", "esta", "está", "cuesta",
+})
+
+_SENSITIVE_INTENT_WORDS = frozenset({
+    "stock", "precio", "cuanto", "cuánto", "tenes", "tenés", "hay",
+    "pedido", "hacer", "cuanto", "sale", "tenes", "tenia", "tengo",
 })
 
 # ---------------------------------------------------------------------------
@@ -594,6 +555,12 @@ def parse_quote_items(message: str) -> List[Dict[str, Any]]:
         seen.add(token)
 
         qty, qty_explicit, unit_hint, item_text = _extract_qty_and_item(token)
+        
+        # Guard: if after stripping fillers the item is just a sensitive intent word, skip it.
+        clean_item = _normalize(item_text).strip()
+        if clean_item in _SENSITIVE_INTENT_WORDS or not any(w for w in clean_item.split() if w not in _FILLER_WORDS):
+            continue
+
         items.append({
             "raw":          token,
             "normalized":   item_text.strip(),
@@ -1457,13 +1424,27 @@ def looks_like_clarification(message: str, open_items: List[QuoteItem]) -> bool:
     norm = _normalize(message.strip())
     words = norm.split()
     if len(words) > 9:
-        return False
-    fresh_verbs = {"quiero", "necesito", "busco", "dame", "pasame", "presupuesto"}
-    if words and words[0] in fresh_verbs:
-        return False
-    if re.search(r"\b(y|e)\b.+\b(y|e)\b", norm):
-        return False
     return True
+
+
+def detect_option_selection(text: str) -> Optional[int]:
+    """
+    Return the 0-indexed option number if the user text looks like:
+    "A", "B", "la A", "el primero", "la primera opcion", etc.
+    Returns None if no clear selection is found.
+    """
+    norm = _normalize(text.strip())
+    # Option letters
+    m_letter = re.match(r"^\s*(?:la|el|opcion|opción)?\s*([a-e])(?:\)|\.|\s|,|$)", norm)
+    if m_letter:
+        return ord(m_letter.group(1)) - ord('a')
+    
+    # Ordinals
+    if any(p in norm for p in ("primero", "primera", "1ro", "1ra", "el 1")): return 0
+    if any(p in norm for p in ("segundo", "segunda", "2do", "2da", "el 2")): return 1
+    if any(p in norm for p in ("tercero", "tercera", "3ro", "3ra", "el 3")): return 2
+    
+    return None
 
 
 def needs_disambiguation(message: str, open_items: List[QuoteItem]) -> Optional[str]:

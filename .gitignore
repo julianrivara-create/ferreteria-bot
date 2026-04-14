@@ -23,6 +23,9 @@ data/*.db
 analytics_test_export.csv
 .playwright-cli/
 .claude/
+.codex/
+.antigravity/
 /Planning/
-tmp/unresolved_terms*.jsonl
+tmp/
+unresolved_terms*.jsonl
 carniceria_bot/

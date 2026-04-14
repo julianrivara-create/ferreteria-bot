@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     
     # Admin
     ADMIN_TOKEN: str = Field(default="REDACTED")
+
+    # Tenant routing
+    DEFAULT_TENANT_ID: str = Field(
+        default_factory=lambda: os.getenv("DEFAULT_TENANT_ID", os.getenv("BOT_TENANT_ID", ""))
+    )
     
     # Google Sheets Stock Sync (NEW - Robust Implementation)
     GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON: str = Field(default="")  # Full JSON string from GCP

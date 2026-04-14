@@ -6,19 +6,29 @@ Contract: sku | name | category | price_ars | stock | color | brand | material |
 import gspread
 from google.oauth2.service_account import Credentials
 from sqlalchemy.orm import Session
+from app.core.config import get_settings
 from app.db.models import Product
 import json
 import os
 import structlog
 import time
+from typing import Optional
 
 logger = structlog.get_logger()
+settings = get_settings()
 
 class StockSheetSync:
-    def __init__(self, spreadsheet_id, service_account_json=None, service_account_path=None):
+    def __init__(self, spreadsheet_id, service_account_json=None, service_account_path=None, tenant_id: Optional[str] = None):
         self.spreadsheet_id = spreadsheet_id
         self.worksheet_name = "STOCK" # Fixed contract
+        self.tenant_id = str(tenant_id or settings.DEFAULT_TENANT_ID or "").strip()
         self.client = self._auth_gspread(service_account_json, service_account_path)
+
+    def _resolved_tenant_id(self, tenant_id: Optional[str] = None) -> str:
+        resolved = str(tenant_id or self.tenant_id or "").strip()
+        if not resolved:
+            raise ValueError("tenant_id is required for stock sheet sync")
+        return resolved
 
     def _auth_gspread(self, json_str, file_path):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
@@ -33,12 +43,13 @@ class StockSheetSync:
             raise Exception("No valid credentials provided for Sheets")
         return gspread.authorize(creds)
 
-    def sync_to_database(self, session: Session):
+    def sync_to_database(self, session: Session, tenant_id: Optional[str] = None):
         """
         Reads sheet, validtes rows, upserts to DB.
         Returns detailed stats.
         """
         try:
+            resolved_tenant_id = self._resolved_tenant_id(tenant_id)
             sheet = self.client.open_by_key(self.spreadsheet_id)
             try:
                 ws = sheet.worksheet(self.worksheet_name)
@@ -95,7 +106,7 @@ class StockSheetSync:
                 unit_of_measure = str(data.get('unit_of_measure', 'unidad')).strip()
 
                 # DB Operations
-                product = session.query(Product).filter_by(sku=sku).first()
+                product = session.query(Product).filter_by(tenant_id=resolved_tenant_id, sku=sku).first()
                 if product:
                     # Update
                     product.model = name # Map name -> model
@@ -111,6 +122,7 @@ class StockSheetSync:
                 else:
                     # Create
                     new_prod = Product(
+                        tenant_id=resolved_tenant_id,
                         sku=sku,
                         model=name,
                         category=category,

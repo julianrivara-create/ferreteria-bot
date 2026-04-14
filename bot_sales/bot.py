@@ -429,6 +429,24 @@ class SalesBot:
         if customer_ref:
             self.sessions[session_id]["customer_ref"] = customer_ref
 
+        from .core.intent_classifier import IntentClassifier
+        classifier = IntentClassifier(self.chatgpt)
+        intent_result = classifier.classify(user_message, context_summary=None)
+        self.sessions[session_id]["last_intent"] = intent_result
+        logging.info("intent_classified session=%s intent=%s", session_id, intent_result.get("intent"))
+
+        # Pre-process logic based on dynamic intent
+        # If the user is just chatting, introducing themselves or saying hello,
+        # bypass the deterministic search to let the LLM handle personality.
+        bypass_intents = {"GREETING_CHAT", "CUSTOMER_INFO", "HANDOFF_REQUEST"}
+        
+        if intent_result.get("intent") in bypass_intents:
+             # Track as conversational
+             self._record_user_turn(session_id, user_message)
+             self._reset_turn_meta(session_id)
+             response_text = self._chat_with_functions(session_id)
+             return self._append_assistant_turn(session_id, response_text)
+
         if self._is_ferreteria_runtime():
             self._load_active_quote_from_store(session_id)
 
@@ -493,33 +511,34 @@ class SalesBot:
         if faq_result.get("status") == "found":
             return _done(str(faq_result.get("respuesta") or ""), "faq")
 
-        # ── 0.1. Conversational intent guard ─────────────────────────────────
-        # If the message is a greeting, personal info, general question or
-        # conversational phrase — let Carlos (the LLM) handle it naturally.
-        # Do NOT forward to the quote engine or catalog lookup.
-        _GREETINGS = {
-            "hola", "buen", "buenas", "buenos", "buenas tardes", "buenas noches",
-            "buenas dias", "buenos dias", "buen dia", "buen día",
-            "hey", "hi", "saludos", "qué tal", "que tal", "como andas",
-            "como estas", "cómo estás", "cómo andás",
-        }
-        _CONVERSATIONAL_PATTERNS = re.compile(
-            r"^\s*(hola|hey|hi|saludos|buenos?\s*(dias?|tardes?|noches?)|qu[eé]\s*tal|"
-            r"c[oó]mo\s*(est[aá]s?|and[aá]s?)|gracias|perfecto|ok|dale|genial|"
-            r"me\s+llamo|mi\s+nombre|soy\s+\w+|trabajo\s+en|mi\s+empresa|"
-            r"estoy\s+en|vivo\s+en|somos\s+de|vengo\s+de|mi\s+rubro)\b",
-            re.IGNORECASE,
-        )
-        words = [w for w in normalized.split() if w]
-        # Short messages with no catalog-specific terms → LLM
-        if _CONVERSATIONAL_PATTERNS.match(text):
+        # ── 0. Intent-based pre-routing ──────────────────────────────────────
+        # Use LLM classification to distinguish between quoting and non-quoting
+        intent_result = sess.get("last_intent", {})
+        intent = intent_result.get("intent", "QUOTATION")
+        
+        # ── 0.1. FAQ Handling ────────────────────────────────────────────────
+        if intent == "FAQ":
+            faq_result = self.logic.consultar_faq(text)
+            if faq_result.get("status") == "found":
+                return _done(str(faq_result.get("respuesta") or ""), "faq_llm_guided")
+
+        # ── 0.2. Conversational bypass ───────────────────────────────────────
+        # GREETING_CHAT, CUSTOMER_INFO are handled in process_message bypass,
+        # but we double check here if we should yield to the main LLM flow.
+        bypass_intents = {"GREETING_CHAT", "CUSTOMER_INFO", "HANDOFF_REQUEST"}
+        if intent in bypass_intents:
             return None  # Let Carlos handle it
-        # Multi-word messages where all words look like common Spanish words
-        # (no product-specific terms) → LLM
-        if not open_quote and len(words) <= 4:
+
+        # ── 0.3. Heuristic fallbacks for short/vague messages ────────────────
+        if not open_quote and intent == "GREETING_CHAT":
+            return None
+
+        # Even if not explicitly GREETING_CHAT, if it's very short and not a product...
+        words = [w for w in normalized.split() if w]
+        if not open_quote and len(words) <= 3:
             catalog_hint = self._looks_like_product_request(normalized)
             if not catalog_hint:
-                return None  # Let Carlos handle it
+                return None  # Hand back to general LLM (Carlos)
 
         if not open_quote:
             if self._looks_like_price_objection(normalized):

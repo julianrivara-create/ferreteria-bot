@@ -1,4 +1,5 @@
 import logging
+import os
 from flask import Flask, request, jsonify
 from typing import Dict, Any, Optional
 
@@ -381,8 +382,10 @@ def get_whatsapp_blueprint(bot_instance, connector: WhatsAppConnector) -> Bluepr
                     if audio_path:
                         transcriber = AudioTranscriber()
                         transcript = transcriber.transcribe(audio_path)
-                        try: os.unlink(audio_path) 
-                        except: pass
+                        try:
+                            os.unlink(audio_path)
+                        except OSError as exc:
+                            logging.warning("audio_tempfile_cleanup_failed path=%s error=%s", audio_path, exc)
                         
                         if transcript:
                             message = transcript
@@ -416,8 +419,10 @@ def get_whatsapp_blueprint(bot_instance, connector: WhatsAppConnector) -> Bluepr
                         with open(image_path, "rb") as img_file:
                             b64_data = base64.b64encode(img_file.read()).decode('utf-8')
                         
-                        try: os.unlink(image_path) 
-                        except: pass
+                        try:
+                            os.unlink(image_path)
+                        except OSError as exc:
+                            logging.warning("image_tempfile_cleanup_failed path=%s error=%s", image_path, exc)
                         
                         public_url = f"data:image/jpeg;base64,{b64_data}" # OpenAI supports this
                         

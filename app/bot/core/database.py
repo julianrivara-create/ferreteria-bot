@@ -12,6 +12,7 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
+from app.core.config import get_settings
 from app.db.session import ScopedSession
 from app.db.models import Product, Order, OrderStatus, OrderItem, Lead
 from sqlalchemy import or_, and_
@@ -34,10 +35,34 @@ class Database:
     Mimics the old SQLite interface for bot compatibility
     """
     
-    def __init__(self, *_args, **_kwargs):
+    def __init__(self, *_args, tenant_id: Optional[str] = None, **_kwargs):
         """Initialize DB adapter (legacy args are accepted and ignored)."""
         self.session = ScopedSession()
+        configured_tenant_id = (
+            tenant_id
+            or _kwargs.pop("tenant_id", None)
+            or get_settings().DEFAULT_TENANT_ID
+            or ""
+        )
+        self.tenant_id = str(configured_tenant_id).strip()
+        if not self.tenant_id:
+            logger.warning("database_adapter_missing_tenant_id")
         logger.info("database_adapter_initialized", backend="postgres")
+
+    def _require_tenant_id(self) -> str:
+        if not self.tenant_id:
+            raise RuntimeError(
+                "Database adapter requires tenant_id or DEFAULT_TENANT_ID for multi-tenant operations."
+            )
+        return self.tenant_id
+
+    def _product_query(self):
+        tenant_id = self._require_tenant_id()
+        return self.session.query(Product).filter(Product.tenant_id == tenant_id)
+
+    def _order_query(self):
+        tenant_id = self._require_tenant_id()
+        return self.session.query(Order).filter(Order.tenant_id == tenant_id)
     
     def log_event(self, event: str, data: Dict[str, Any] = None) -> None:
         """Log business events"""
@@ -51,7 +76,7 @@ class Database:
         color: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Find products matching criteria"""
-        query = self.session.query(Product).filter(Product.active == True)
+        query = self._product_query().filter(Product.active == True)
         
         if model:
             query = query.filter(Product.model.ilike(f"%{model}%"))
@@ -82,7 +107,7 @@ class Database:
     
     def get_product_by_sku(self, sku: str) -> Optional[Dict[str, Any]]:
         """Get product details by SKU"""
-        product = self.session.query(Product).filter(Product.sku == sku).first()
+        product = self._product_query().filter(Product.sku == sku).first()
         
         if not product:
             return None
@@ -102,7 +127,7 @@ class Database:
 
     def update_product(self, sku: str, updates: Dict[str, Any]) -> bool:
         """Update product fields using legacy-compatible keys."""
-        product = self.session.query(Product).filter(Product.sku == sku).first()
+        product = self._product_query().filter(Product.sku == sku).first()
         if not product:
             return False
 
@@ -141,10 +166,11 @@ class Database:
 
     def insert_product(self, data: Dict[str, Any]) -> bool:
         """Insert product using legacy-compatible payload keys."""
+        tenant_id = self._require_tenant_id()
         sku = str(data.get("sku", "")).strip()
         if not sku:
             return False
-        if self.session.query(Product).filter(Product.sku == sku).first():
+        if self._product_query().filter(Product.sku == sku).first():
             return False
 
         try:
@@ -152,6 +178,7 @@ class Database:
             stock_raw = data.get("on_hand_qty", data.get("stock", 0))
 
             product = Product(
+                tenant_id=tenant_id,
                 sku=sku,
                 model=str(data.get("model", data.get("modelo", sku))).strip(),
                 category=str(data.get("category", data.get("categoria", "Others"))).strip() or "Others",
@@ -180,7 +207,7 @@ class Database:
         except Exception:
             return None
 
-        order = self.session.query(Order).filter(Order.id == oid).first()
+        order = self._order_query().filter(Order.id == oid).first()
         if not order or not order.items:
             return None
 
@@ -200,7 +227,7 @@ class Database:
     
     def available_for_sku(self, sku: str) -> int:
         """Calculate available stock for a SKU"""
-        product = self.session.query(Product).filter(Product.sku == sku).first()
+        product = self._product_query().filter(Product.sku == sku).first()
         
         if not product:
             return 0
@@ -216,16 +243,18 @@ class Database:
         hold_minutes: int = 30
     ) -> Optional[Dict[str, Any]]:
         """Create a hold/reservation by creating an Order with status HOLD"""
+        tenant_id = self._require_tenant_id()
         if self.available_for_sku(sku) <= 0:
             return None
         
-        product = self.session.query(Product).filter(Product.sku == sku).with_for_update().first()
+        product = self._product_query().filter(Product.sku == sku).with_for_update().first()
         
         if not product or product.available_qty <= 0:
             return None
         
         # Create Order with HOLD status
         order = Order(
+            tenant_id=tenant_id,
             user_id=contact,
             status=OrderStatus.HOLD,
             user_name=name,
@@ -237,6 +266,7 @@ class Database:
         
         # Create OrderItem
         item = OrderItem(
+            tenant_id=tenant_id,
             sku=sku,
             quantity=1,
             price_at_purchase=product.price_ars
@@ -267,14 +297,14 @@ class Database:
     
     def cleanup_holds(self) -> None:
         """Remove expired holds and release stock"""
-        expired_orders = self.session.query(Order).filter(
+        expired_orders = self._order_query().filter(
             Order.status == OrderStatus.HOLD,
             Order.expires_at <= datetime.now(timezone.utc)
         ).all()
         
         for order in expired_orders:
             for item in order.items:
-                product = self.session.query(Product).filter(Product.sku == item.sku).with_for_update().first()
+                product = self._product_query().filter(Product.sku == item.sku).with_for_update().first()
                 if product and product.reserved_qty >= item.quantity:
                     product.reserved_qty -= item.quantity
             
@@ -291,13 +321,13 @@ class Database:
         except:
             return False
         
-        order = self.session.query(Order).filter(Order.id == order_id, Order.status == OrderStatus.HOLD).first()
+        order = self._order_query().filter(Order.id == order_id, Order.status == OrderStatus.HOLD).first()
         
         if not order:
             return False
         
         for item in order.items:
-            product = self.session.query(Product).filter(Product.sku == item.sku).with_for_update().first()
+            product = self._product_query().filter(Product.sku == item.sku).with_for_update().first()
             if product and product.reserved_qty >= item.quantity:
                 product.reserved_qty -= item.quantity
         
@@ -319,14 +349,14 @@ class Database:
         except:
             return False, "Hold ID inválido"
         
-        order = self.session.query(Order).filter(Order.id == order_id, Order.status == OrderStatus.HOLD).first()
+        order = self._order_query().filter(Order.id == order_id, Order.status == OrderStatus.HOLD).first()
         
         if not order:
             return False, "Hold expirado o no encontrado."
         
         # Check physical stock
         for item in order.items:
-            product = self.session.query(Product).filter(Product.sku == item.sku).with_for_update().first()
+            product = self._product_query().filter(Product.sku == item.sku).with_for_update().first()
             if not product or product.on_hand_qty <= 0:
                 return False, "Error crítico: Sin stock físico disponible."
         
@@ -356,9 +386,11 @@ class Database:
     
     def upsert_lead(self, name: str, contact: str, note: str = "") -> Optional[str]:
         """Create a lead (for handoff scenarios) - Persists in DB."""
+        tenant_id = self._require_tenant_id()
         lead_id: Optional[str] = None
         try:
             lead = Lead(
+                tenant_id=tenant_id,
                 name=name,
                 contact=contact,
                 note=note,
@@ -397,7 +429,7 @@ class Database:
     
     def load_stock(self) -> List[Dict[str, Any]]:
         """Load all stock items"""
-        products = self.session.query(Product).filter(Product.active == True).all()
+        products = self._product_query().filter(Product.active == True).all()
         
         return [
             {

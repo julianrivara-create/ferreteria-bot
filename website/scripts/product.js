@@ -274,21 +274,7 @@ function updateProductImage(color) {
 }
 
 function getProductImage(product) {
-    const category = String(product.category || '').toLowerCase();
-    const color = String(product.color || '').toLowerCase();
-
-    if (category.includes('smartphone') || category.includes('telefono') || category.includes('celular') || category.includes('mobile')) {
-        if (color.includes('blue') || color.includes('azul')) return 'images/iphone-blue.png';
-        if (color.includes('pink') || color.includes('rosa')) return 'images/iphone-pink.png';
-        if (color.includes('black') || color.includes('negro')) return 'images/iphone-black.png';
-        if (color.includes('white') || color.includes('blanco')) return 'images/iphone-white.png';
-        return 'images/iphone-black.png';
-    }
-
-    if (category.includes('laptop') || category.includes('notebook') || category.includes('macbook')) return 'images/macbook-space-black.png';
-    if (category.includes('tablet') || category.includes('ipad')) return 'images/ipad-blue.png';
-    if (category.includes('audio') || category.includes('airpod')) return 'images/airpods-white.png';
-    if (category.includes('playstation') || category.includes('gaming')) return 'images/ps5-digital-white.png';
+    if (product.image_url) return product.image_url;
     return PRODUCT_FALLBACK_IMAGE;
 }
 

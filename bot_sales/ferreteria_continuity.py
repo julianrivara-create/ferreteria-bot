@@ -205,6 +205,46 @@ def apply_followup_to_open_quote(
     if classification.get("kind") != "followup":
         return {"status": "not_followup", "items": list(open_items)}
 
+    # Phase 2: Handle option selection (A, B, C or "el primero")
+    option_idx = fq.detect_option_selection(message)
+    if option_idx is not None and pending_target_ids:
+        # User is picking an option for a recently asked clarification
+        target_id = pending_target_ids[0]  # Focus on the most recent/first one
+        updated_items: List[Dict[str, Any]] = []
+        improved_line_ids: List[str] = []
+        for line in open_items:
+            if line.get("line_id") != target_id:
+                updated_items.append(line)
+                continue
+            
+            # Resolve to the specific product index
+            candidates = line.get("products") or []
+            if option_idx < len(candidates):
+                chosen_prod = candidates[option_idx]
+                unit_price, subtotal = fq._compute_subtotal(chosen_prod, line.get("qty", 1))
+                new_line = dict(line)
+                new_line.update({
+                    "status": "resolved",
+                    "products": [chosen_prod],
+                    "unit_price": unit_price,
+                    "subtotal": subtotal,
+                    "clarification": None,
+                    "notes": None,
+                    "issue_type": None,
+                })
+                improved_line_ids.append(str(target_id))
+                updated_items.append(new_line)
+            else:
+                updated_items.append(line)
+        
+        if improved_line_ids:
+            return {
+                "status": "updated",
+                "items": updated_items,
+                "target_line_ids": [target_id],
+                "improved_line_ids": improved_line_ids,
+            }
+
     chosen = choose_target_lines(message, open_items, knowledge=knowledge, pending_target_ids=pending_target_ids)
     if chosen["status"] == "no_target":
         return {"status": "no_target", "items": list(open_items), "ranked": chosen["ranked"]}

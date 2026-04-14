@@ -95,23 +95,7 @@ class SearchEngine {
     }
 
     getProductThumbnail(product) {
-        const category = (product.category || '').toLowerCase();
-        const color = (product.color || 'white')
-            .toLowerCase()
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .replace(/titanio\s*/gi, '')
-            .replace(/negro\s*espacial/gi, 'black')
-            .replace(/plata/gi, 'silver')
-            .replace(/\s+/g, '-')
-            .trim();
-
-        if (category.includes('smartphone') || category.includes('telefono') || category.includes('celular') || category.includes('iphone')) return `images/iphone-${color || 'black'}.png`;
-        if (category.includes('macbook') || category.includes('laptop') || category.includes('notebook')) return `images/macbook-${color || 'space-black'}.png`;
-        if (category.includes('ipad') || category.includes('tablet')) return `images/ipad-${color || 'blue'}.png`;
-        if (category.includes('airpod') || category.includes('audio')) return 'images/airpods-white.png';
-        if (category.includes('playstation') || category.includes('gaming')) return 'images/ps5-white.png';
-
-        return 'images/product-placeholder.svg';
+        return product.image_url || 'images/product-placeholder.svg';
     }
 }
 

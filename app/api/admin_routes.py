@@ -54,17 +54,21 @@ def sync_sheet():
     # Check config
     if not settings.GOOGLE_SHEETS_SPREADSHEET_ID:
         return jsonify({"status": "error", "message": "Missing GOOGLE_SHEETS_SPREADSHEET_ID"}), 500
+    tenant_id = (request.args.get("tenant_id") or settings.DEFAULT_TENANT_ID or "").strip()
+    if not tenant_id:
+        return jsonify({"status": "error", "message": "Missing tenant_id or DEFAULT_TENANT_ID"}), 400
         
     try:
         syncer = StockSheetSync(
             spreadsheet_id=settings.GOOGLE_SHEETS_SPREADSHEET_ID,
             service_account_json=settings.GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON,
-            service_account_path=settings.GOOGLE_SHEETS_SERVICE_ACCOUNT_PATH
+            service_account_path=settings.GOOGLE_SHEETS_SERVICE_ACCOUNT_PATH,
+            tenant_id=tenant_id,
         )
         
         session = SessionLocal()
         try:
-            result = syncer.sync_to_database(session)
+            result = syncer.sync_to_database(session, tenant_id=tenant_id)
             status_code = 200 if result.get('status') == 'ok' else 400
             return jsonify(result), status_code
         finally:
