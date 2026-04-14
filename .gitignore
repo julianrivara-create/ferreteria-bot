@@ -29,3 +29,5 @@ analytics_test_export.csv
 tmp/
 unresolved_terms*.jsonl
 carniceria_bot/
+*.db-shm
+*.db-wal

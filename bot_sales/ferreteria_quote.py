@@ -1423,8 +1423,8 @@ def looks_like_clarification(message: str, open_items: List[QuoteItem]) -> bool:
         return False
     norm = _normalize(message.strip())
     words = norm.split()
-    if len(words) > 9:
-    return True
+    return len(words) <= 9
+
 
 
 def detect_option_selection(text: str) -> Optional[int]:
