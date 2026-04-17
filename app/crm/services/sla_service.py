@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.crm.domain.enums import DealStatus, TaskStatus
 from app.crm.models import CRMDeal, CRMPipelineStage, CRMSLABreach, CRMTask
+from app.crm.time import utc_now_naive
 
 
 class SLAService:
@@ -14,7 +15,7 @@ class SLAService:
         self.tenant_id = tenant_id
 
     def check_stage_breaches(self) -> list[CRMSLABreach]:
-        now = datetime.utcnow()
+        now = utc_now_naive()
         stages = (
             self.session.query(CRMPipelineStage)
             .filter(CRMPipelineStage.tenant_id == self.tenant_id, CRMPipelineStage.sla_hours.is_not(None))
@@ -113,6 +114,6 @@ class SLAService:
         if breach is None:
             return None
         breach.status = "resolved"
-        breach.resolved_at = datetime.utcnow()
+        breach.resolved_at = utc_now_naive()
         self.session.flush()
         return breach

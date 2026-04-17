@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.crm.domain.enums import TaskStatus
 from app.crm.models import CRMTask
 from app.crm.repositories.base import TenantRepository
+from app.crm.time import utc_now_naive
 
 
 class TaskRepository(TenantRepository):
@@ -31,7 +32,7 @@ class TaskRepository(TenantRepository):
         if assigned_to := filters.get("assigned_to_user_id"):
             query = query.filter(CRMTask.assigned_to_user_id == assigned_to)
         if due_scope := filters.get("due_scope"):
-            now = datetime.utcnow()
+            now = utc_now_naive()
             if due_scope == "today":
                 start = now.replace(hour=0, minute=0, second=0, microsecond=0)
                 end = start + timedelta(days=1)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import app.crm.jobs.scheduler as scheduler
 from app.crm.domain.enums import AutomationTrigger, DealStatus
@@ -12,6 +12,7 @@ from app.crm.models import (
     CRMDealScoreEvent,
     CRMTask,
 )
+from app.crm.time import utc_now_naive
 from tests.crm.utils import seed_tenant_with_user
 
 
@@ -45,7 +46,7 @@ def test_inactivity_job_is_idempotent(session_factory, monkeypatch):
                 owner_user_id=user.id,
                 status="lead",
                 score=0,
-                last_activity_at=datetime.utcnow() - timedelta(hours=2),
+                last_activity_at=utc_now_naive() - timedelta(hours=2),
                 metadata_json={},
             )
         )

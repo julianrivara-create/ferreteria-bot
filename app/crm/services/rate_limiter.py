@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from threading import Lock
 
 import structlog
+from app.crm.time import utc_now_naive
 
 try:
     import redis
@@ -23,7 +24,7 @@ class InMemoryRateLimiter:
         self._hits: dict[str, deque[datetime]] = defaultdict(deque)
 
     def allow(self, key: str, limit: int, window_seconds: int) -> bool:
-        now = datetime.utcnow()
+        now = utc_now_naive()
         threshold = now - timedelta(seconds=window_seconds)
 
         with self._lock:

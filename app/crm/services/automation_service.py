@@ -25,6 +25,7 @@ from app.crm.models import (
 )
 from app.crm.repositories.automations import AutomationRepository
 from app.crm.services.condition_eval import matches_conditions
+from app.crm.time import utc_now_naive
 
 
 class AutomationService:
@@ -108,7 +109,7 @@ class AutomationService:
                     run.status = "success"
                     run.result_payload = result
                     run.actions_count = len(result.get("actions", []))
-                    automation.last_run_at = datetime.utcnow()
+                    automation.last_run_at = utc_now_naive()
             except Exception as exc:  # pragma: no cover - defensive path
                 run.status = "failed"
                 run.error_message = str(exc)
@@ -121,7 +122,7 @@ class AutomationService:
     def _is_allowed_by_cooldown(self, automation: CRMAutomation) -> bool:
         if not automation.cooldown_minutes or not automation.last_run_at:
             return True
-        threshold = datetime.utcnow() - timedelta(minutes=automation.cooldown_minutes)
+        threshold = utc_now_naive() - timedelta(minutes=automation.cooldown_minutes)
         return automation.last_run_at <= threshold
 
     def _is_automation_loop(self, event: dict[str, Any]) -> bool:
@@ -145,7 +146,7 @@ class AutomationService:
         return max(1, cap)
 
     def _actions_executed_last_minute(self) -> int:
-        since = datetime.utcnow() - timedelta(minutes=1)
+        since = utc_now_naive() - timedelta(minutes=1)
         value = (
             self.session.query(func.coalesce(func.sum(CRMAutomationRun.actions_count), 0))
             .filter(
@@ -372,7 +373,7 @@ class AutomationService:
         due_minutes = int(payload.get("due_in_minutes", 60))
         assigned_user_id = payload.get("assigned_to_user_id") or event.get("owner_user_id") or event.get("actor_user_id") or "system"
         creator_user_id = event.get("actor_user_id") or assigned_user_id
-        now_utc = datetime.utcnow()
+        now_utc = utc_now_naive()
         due_at = now_utc + timedelta(minutes=due_minutes)
         reminder_at = now_utc + timedelta(minutes=max(1, due_minutes - 15))
         is_followup = self._is_followup_payload(payload, default=False)
@@ -442,7 +443,7 @@ class AutomationService:
 
         if payload.get("mark_won"):
             deal.status = DealStatus.WON
-            deal.closed_at = datetime.utcnow()
+            deal.closed_at = utc_now_naive()
 
         self.session.add(
             CRMDealEvent(
@@ -510,7 +511,7 @@ class AutomationService:
 
     def _action_schedule_draft(self, payload: dict[str, Any], event: dict[str, Any]) -> CRMOutboundDraft | None:
         schedule_minutes = int(payload.get("schedule_in_minutes", 0))
-        now_utc = datetime.utcnow()
+        now_utc = utc_now_naive()
         scheduled_for = now_utc + timedelta(minutes=schedule_minutes)
         conversation_id = payload.get("conversation_id") or event.get("conversation_id")
         deal_id = payload.get("deal_id") or event.get("deal_id")
@@ -579,7 +580,7 @@ class AutomationService:
         reminder_minutes = int(payload.get("remind_in_minutes", 120))
         assigned_user_id = payload.get("assigned_to_user_id") or event.get("owner_user_id") or event.get("actor_user_id") or "system"
         creator_user_id = event.get("actor_user_id") or assigned_user_id
-        now_utc = datetime.utcnow()
+        now_utc = utc_now_naive()
         due_at = now_utc + timedelta(minutes=reminder_minutes)
         is_followup = self._is_followup_payload(payload, default=False)
         conversation_id = payload.get("conversation_id") or event.get("conversation_id")

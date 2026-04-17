@@ -29,7 +29,14 @@ def _legacy_fallback_allowed() -> bool:
     explicit = os.getenv("ALLOW_LEGACY_FALLBACK")
     if explicit is not None:
         return _is_truthy(explicit)
-    environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+    environment = (
+        os.getenv("ENVIRONMENT")
+        or os.getenv("FLASK_ENV")
+        or os.getenv("RAILWAY_ENVIRONMENT")
+        or ""
+    ).strip().lower()
+    if not environment:
+        return False
     return environment in {"development", "dev", "local", "test"}
 
 

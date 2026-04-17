@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 from functools import wraps
 
 from flask import g, jsonify, request
@@ -37,12 +38,54 @@ def _normalize_ip(raw_value: str | None) -> str | None:
     return candidate
 
 
-def _rate_limit_ip() -> str:
-    for header in ("X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP"):
-        parsed = _normalize_ip(request.headers.get(header))
+def _is_trusted_proxy(ip: str) -> bool:
+    try:
+        parsed = ipaddress.ip_address(ip)
+        return not parsed.is_global
+    except ValueError:
+        return False
+
+
+def _extract_forwarded_ip(header_value: str) -> str | None:
+    candidates = [part.strip() for part in header_value.split(",") if part.strip()]
+    if not candidates:
+        return None
+
+    raw_hops = (os.getenv("TRUSTED_PROXY_HOPS") or "").strip()
+    if raw_hops:
+        try:
+            trusted_hops = max(1, int(raw_hops))
+        except ValueError:
+            trusted_hops = 1
+    else:
+        trusted_hops = 2 if os.getenv("RAILWAY_ENVIRONMENT") else 1
+
+    for candidate in reversed(candidates[-trusted_hops:]):
+        parsed = _normalize_ip(candidate)
         if parsed:
             return parsed
-    fallback = _normalize_ip(request.remote_addr or "")
+    return None
+
+
+def _rate_limit_ip() -> str:
+    remote = _normalize_ip(request.remote_addr or "")
+    if remote and _is_trusted_proxy(remote):
+        for header in (
+            "CF-Connecting-IP",
+            "True-Client-IP",
+            "Fastly-Client-IP",
+            "Fly-Client-IP",
+            "X-Real-IP",
+        ):
+            parsed = _normalize_ip(request.headers.get(header))
+            if parsed:
+                return parsed
+
+        forwarded = _extract_forwarded_ip(request.headers.get("X-Forwarded-For", ""))
+        if forwarded:
+            return forwarded
+
+    fallback = remote
     return fallback or (request.remote_addr or "unknown")
 
 

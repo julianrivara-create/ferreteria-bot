@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.crm.models import CRMWhatsAppTemplate, CRMWhatsAppTemplateApproval
+from app.crm.time import utc_now_naive
 
 
 class WhatsAppTemplateService:
@@ -83,12 +82,12 @@ class WhatsAppTemplateService:
         approval.decision = decision
         approval.reviewed_by_user_id = reviewer_user_id
         approval.comment = comment
-        approval.reviewed_at = datetime.utcnow()
+        approval.reviewed_at = utc_now_naive()
 
         if decision == "approved":
             row.status = "approved"
             row.approved_by_user_id = reviewer_user_id
-            row.approved_at = datetime.utcnow()
+            row.approved_at = utc_now_naive()
         else:
             row.status = "rejected"
 

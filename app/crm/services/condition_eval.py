@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
+
+from app.crm.time import utc_now
 
 
 def _eval_rule(rule: dict[str, Any], ctx: dict[str, Any]) -> bool:
@@ -64,7 +65,7 @@ def matches_conditions(conditions: dict[str, Any], context: dict[str, Any]) -> b
             return False
 
     if time_window := conditions.get("time_window"):
-        now = datetime.utcnow().time()
+        now = utc_now().time()
         start = time_window.get("start", "00:00")
         end = time_window.get("end", "23:59")
         start_h, start_m = [int(x) for x in start.split(":", 1)]

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.crm.models import CRMContact, CRMInternalNotification, CRMInventorySignal, CRMOutboundDraft, CRMProductInterest
+from app.crm.time import utc_now_naive
 
 
 class InventorySignalService:
@@ -57,7 +58,7 @@ class InventorySignalService:
                 conversation_id=None,
                 channel="web",
                 body=body,
-                scheduled_for=datetime.utcnow() + timedelta(minutes=5),
+                scheduled_for=utc_now_naive() + timedelta(minutes=5),
                 status="scheduled",
                 metadata_json={"source": "inventory_signal", "signal_id": row.id, "product_sku": row.product_sku},
             )

@@ -19,6 +19,7 @@ from app.crm.models import (
     CRMProductInterest,
     CRMTask,
 )
+from app.crm.time import utc_now_naive
 
 
 class ReportingService:
@@ -228,7 +229,7 @@ class ReportingService:
                 last_stage_by_deal[evt.deal_id] = next_stage
                 last_time_by_deal[evt.deal_id] = evt.created_at
 
-        now = datetime.utcnow()
+        now = utc_now_naive()
         for deal_id, stage in last_stage_by_deal.items():
             started = last_time_by_deal.get(deal_id)
             if not started:

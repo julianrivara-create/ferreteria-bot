@@ -30,6 +30,7 @@ from app.crm.domain.enums import (
     TaskStatus,
     UserRole,
 )
+from app.crm.time import utc_now_naive
 
 
 def _uuid() -> str:
@@ -40,8 +41,8 @@ JSONType = JSON().with_variant(JSONB, "postgresql")
 
 
 class TimeStampedMixin:
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now_naive, nullable=False, index=True)
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive, nullable=False)
 
 
 class SoftDeleteMixin:
@@ -162,7 +163,7 @@ class CRMConversation(CRMBase, TimeStampedMixin):
     contact_id = Column(String(36), nullable=False, index=True)
     channel = Column(String(32), nullable=False, index=True)
     external_id = Column(String(255), nullable=True)
-    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=False, default=utc_now_naive)
     last_message_at = Column(DateTime, nullable=True, index=True)
     is_open = Column(Boolean, nullable=False, default=True)
     metadata_json = Column(JSONType, nullable=False, default=dict)
@@ -193,7 +194,7 @@ class CRMMessage(CRMBase):
     idempotency_key = Column(String(255), nullable=True)
     metadata_json = Column(JSONType, nullable=False, default=dict)
     sent_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_crm_messages_tenant_id_id"),
@@ -332,7 +333,7 @@ class CRMContactTag(CRMBase):
     tenant_id = Column(String(36), primary_key=True)
     contact_id = Column(String(36), primary_key=True)
     tag_id = Column(String(36), primary_key=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "contact_id"], ["crm_contacts.tenant_id", "crm_contacts.id"], ondelete="CASCADE"),
@@ -346,7 +347,7 @@ class CRMDealTag(CRMBase):
     tenant_id = Column(String(36), primary_key=True)
     deal_id = Column(String(36), primary_key=True)
     tag_id = Column(String(36), primary_key=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "deal_id"], ["crm_deals.tenant_id", "crm_deals.id"], ondelete="CASCADE"),
@@ -437,7 +438,7 @@ class CRMOrderItem(CRMBase):
     quantity = Column(Integer, nullable=False, default=1)
     unit_price = Column(Float, nullable=False)
     metadata_json = Column(JSONType, nullable=False, default=dict)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "order_id"], ["crm_orders.tenant_id", "crm_orders.id"], ondelete="CASCADE"),
@@ -482,7 +483,7 @@ class CRMAutomationRun(CRMBase):
     event_payload = Column(JSONType, nullable=False, default=dict)
     result_payload = Column(JSONType, nullable=False, default=dict)
     error_message = Column(Text, nullable=True)
-    executed_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    executed_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "automation_id"], ["crm_automations.tenant_id", "crm_automations.id"], ondelete="CASCADE"),
@@ -521,7 +522,7 @@ class CRMDealScoreEvent(CRMBase):
     new_score = Column(Integer, nullable=False)
     reason = Column(String(255), nullable=False)
     metadata_json = Column(JSONType, nullable=False, default=dict)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "deal_id"], ["crm_deals.tenant_id", "crm_deals.id"], ondelete="CASCADE"),
@@ -539,7 +540,7 @@ class CRMDealEvent(CRMBase):
     event_type = Column(String(80), nullable=False, index=True)
     stage_reason = Column(String(255), nullable=True, index=True)
     payload = Column(JSONType, nullable=False, default=dict)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "deal_id"], ["crm_deals.tenant_id", "crm_deals.id"], ondelete="CASCADE"),
@@ -556,7 +557,7 @@ class CRMTaskEvent(CRMBase):
     actor_user_id = Column(String(36), nullable=True, index=True)
     event_type = Column(String(80), nullable=False, index=True)
     payload = Column(JSONType, nullable=False, default=dict)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "task_id"], ["crm_tasks.tenant_id", "crm_tasks.id"], ondelete="CASCADE"),
@@ -581,7 +582,7 @@ class CRMMessageEvent(CRMBase):
     stage_progress_within_7d = Column(Boolean, nullable=True, index=True)
     final_outcome = Column(String(16), nullable=True, index=True)
     payload = Column(JSONType, nullable=False, default=dict)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "message_id"], ["crm_messages.tenant_id", "crm_messages.id"], ondelete="CASCADE"),
@@ -608,7 +609,7 @@ class CRMAuditLog(CRMBase):
     after_data = Column(JSONType, nullable=True)
     metadata_json = Column(JSONType, nullable=False, default=dict)
     request_id = Column(String(128), nullable=True, index=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         Index("ix_crm_audit_logs_tenant_entity_created", "tenant_id", "entity_type", "created_at"),
@@ -626,10 +627,10 @@ class CRMWebhookEvent(CRMBase):
     payload = Column(JSONType, nullable=False, default=dict)
     status = Column(String(24), nullable=False, default="received", index=True)
     duplicate_count = Column(Integer, nullable=False, default=0)
-    last_received_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    last_received_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
     error_message = Column(Text, nullable=True)
     processed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "source", "event_type", "event_key", name="uq_crm_webhook_events_tenant_source_type_key"),
@@ -681,7 +682,7 @@ class CRMSLABreach(CRMBase):
     deal_id = Column(String(36), nullable=False, index=True)
     stage_id = Column(String(36), nullable=False, index=True)
     threshold_hours = Column(Integer, nullable=False)
-    breached_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    breached_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
     resolved_at = Column(DateTime, nullable=True, index=True)
     status = Column(String(24), nullable=False, default="open", index=True)
     metadata_json = Column(JSONType, nullable=False, default=dict)
@@ -755,7 +756,7 @@ class CRMWhatsAppTemplateApproval(CRMBase):
     reviewed_by_user_id = Column(String(36), nullable=True, index=True)
     decision = Column(String(24), nullable=False, default="pending", index=True)
     comment = Column(String(500), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
     reviewed_at = Column(DateTime, nullable=True, index=True)
 
     __table_args__ = (
@@ -791,7 +792,7 @@ class CRMCustomerValueSnapshot(CRMBase):
     total_orders = Column(Integer, nullable=False, default=0)
     total_revenue = Column(Float, nullable=False, default=0)
     clv_value = Column(Float, nullable=False, default=0)
-    as_of_date = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    as_of_date = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
 
     __table_args__ = (
         ForeignKeyConstraint(["tenant_id", "contact_id"], ["crm_contacts.tenant_id", "crm_contacts.id"], ondelete="CASCADE"),
@@ -823,8 +824,8 @@ class CRMDailyKpiRollup(CRMBase):
     bucket_date = Column(DateTime, nullable=False, index=True)
     timezone = Column(String(64), nullable=False)
     payload_json = Column(JSONType, nullable=False, default=dict)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utc_now_naive, index=True)
+    updated_at = Column(DateTime, nullable=False, default=utc_now_naive, onupdate=utc_now_naive)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "bucket_date", name="uq_crm_daily_kpi_rollups_tenant_bucket"),

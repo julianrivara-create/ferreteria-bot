@@ -9,11 +9,13 @@ from statistics import median
 from typing import Any
 
 from flask import Blueprint, g, jsonify, request
+from pydantic import ValidationError
 from sqlalchemy import and_, case, func, or_, text
 from sqlalchemy.orm import Session
 
 from app.crm.api.auth import crm_auth_required, parse_pagination_args, permission_required
 from app.crm.api.routes import _process_bot_event
+from app.crm.domain.schemas import TenantSettingsUpdate
 from app.crm.domain.enums import DealStatus, MessageDirection, TaskStatus, UserRole
 from app.crm.domain.permissions import Permission, ROLE_PERMISSIONS, has_permission
 from app.crm.models import (
@@ -36,9 +38,10 @@ from app.crm.models import (
     CRMWebhookEvent,
 )
 from app.crm.repositories.tasks import TaskRepository
-from app.crm.services.ab_variant_service import ABVariantService
+from app.crm.services.ab_variant_service import ABVariantService, merge_sales_policy
 from app.crm.services.audit_service import AuditService
 from app.crm.services.sla_service import SLAService
+from app.crm.services.tenant_settings import merge_integration_settings, redact_integration_settings
 from app.db.session import SessionLocal
 from maintenance.paths import watchdog_state_candidates
 
@@ -2714,7 +2717,7 @@ def update_tenant_settings():
             "followup_min_interval_minutes": tenant.followup_min_interval_minutes,
             "webhook_auth_mode": tenant.webhook_auth_mode,
             "channels": tenant.channels,
-            "integration_settings": tenant.integration_settings,
+            "integration_settings": redact_integration_settings(tenant.integration_settings),
         }
 
         allowed_fields = {
@@ -2724,10 +2727,24 @@ def update_tenant_settings():
             "followup_min_interval_minutes",
             "webhook_auth_mode",
             "channels",
+            "integration_settings",
         }
-        for key in allowed_fields:
-            if key in payload:
-                setattr(tenant, key, payload[key])
+        schema_payload = {key: payload[key] for key in allowed_fields if key in payload}
+        try:
+            body = TenantSettingsUpdate.model_validate(schema_payload)
+        except ValidationError as exc:
+            return _json_error(f"Invalid payload: {exc.errors()}", 422)
+
+        updates = body.model_dump(exclude_none=True, exclude={"integration_settings"})
+        for key, value in updates.items():
+            setattr(tenant, key, value)
+
+        if body.integration_settings is not None:
+            merged = merge_integration_settings(tenant.integration_settings, body.integration_settings)
+            raw_policy = merged.get("sales_policy")
+            if isinstance(raw_policy, dict):
+                merged["sales_policy"] = merge_sales_policy(raw_policy)
+            tenant.integration_settings = merged
 
         if "thresholds" in payload and isinstance(payload["thresholds"], dict):
             integration = tenant.integration_settings or {}
@@ -2744,7 +2761,7 @@ def update_tenant_settings():
             "followup_min_interval_minutes": tenant.followup_min_interval_minutes,
             "webhook_auth_mode": tenant.webhook_auth_mode,
             "channels": tenant.channels,
-            "integration_settings": tenant.integration_settings,
+            "integration_settings": redact_integration_settings(tenant.integration_settings),
         }
 
         AuditService(session, tenant_id, actor_id).log(

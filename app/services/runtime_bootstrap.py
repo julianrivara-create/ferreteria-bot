@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from app.core.config import get_settings
 from app.crm.domain.enums import UserRole
 from app.crm.models import CRMPipelineStage, CRMTenant, CRMUser
 from app.crm.services.auth_service import CRMAuthService
@@ -48,6 +49,20 @@ def _admin_email_for_slug(slug: str) -> str:
     return f"admin+{slug_clean}@salesbot.local"
 
 
+def _bootstrap_default_admin_enabled() -> bool:
+    explicit = os.getenv("BOOTSTRAP_CREATE_DEFAULT_ADMIN")
+    if explicit is not None:
+        return explicit.strip().lower() in {"1", "true", "yes", "on"}
+    return not get_settings().is_production
+
+
+def _bootstrap_reset_admin_password_enabled() -> bool:
+    explicit = os.getenv("BOOTSTRAP_RESET_ADMIN_PASSWORD")
+    if explicit is None:
+        return False
+    return explicit.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def ensure_runtime_bootstrap() -> dict[str, Any]:
     """Ensure DB schema + CRM tenants/users for local and staging runs.
 
@@ -62,13 +77,19 @@ def ensure_runtime_bootstrap() -> dict[str, Any]:
         return {"tenants_processed": 0, "admins_created": 0}
 
     auth = CRMAuthService()
-    admin_password = os.getenv("ADMIN_PASSWORD")
-    if not admin_password:
-        raise ValueError("ADMIN_PASSWORD env var REQUIRED. Aborting bootstrap.")
-    password_hash = auth.hash_password(admin_password)
+    create_default_admin = _bootstrap_default_admin_enabled()
+    reset_admin_password = _bootstrap_reset_admin_password_enabled()
+    admin_password = (os.getenv("ADMIN_PASSWORD") or "").strip()
+    if (create_default_admin or reset_admin_password) and not admin_password:
+        raise ValueError(
+            "ADMIN_PASSWORD env var is required when bootstrap admin creation or reset is enabled."
+        )
+    password_hash = auth.hash_password(admin_password) if admin_password else None
 
     processed = 0
     admins_created = 0
+    admins_skipped = 0
+    admins_password_reset = 0
     with SessionLocal() as session:
         for entry in tenants:
             tenant_id = str(entry.get("id") or entry.get("slug") or "").strip()
@@ -127,24 +148,37 @@ def ensure_runtime_bootstrap() -> dict[str, Any]:
                 .first()
             )
             if admin_user is None:
-                admin_user = CRMUser(
-                    tenant_id=tenant_id,
-                    full_name=f"Admin {business_name}",
-                    email=admin_email,
-                    role=UserRole.ADMIN,
-                    password_hash=password_hash,
-                    is_active=True,
-                )
-                session.add(admin_user)
-                admins_created += 1
+                if create_default_admin:
+                    admin_user = CRMUser(
+                        tenant_id=tenant_id,
+                        full_name=f"Admin {business_name}",
+                        email=admin_email,
+                        role=UserRole.ADMIN,
+                        password_hash=password_hash,
+                        is_active=True,
+                    )
+                    session.add(admin_user)
+                    admins_created += 1
+                else:
+                    admins_skipped += 1
+                    logger.warning(
+                        "runtime_bootstrap_admin_creation_skipped tenant_id=%s email=%s",
+                        tenant_id,
+                        admin_email,
+                    )
             else:
-                # Keep bootstrap deterministic across runs/sessions.
-                admin_user.password_hash = password_hash
-                admin_user.is_active = True
                 if not admin_user.full_name:
                     admin_user.full_name = f"Admin {business_name}"
+                if reset_admin_password and password_hash:
+                    admin_user.password_hash = password_hash
+                    admins_password_reset += 1
             processed += 1
 
         session.commit()
 
-    return {"tenants_processed": processed, "admins_created": admins_created}
+    return {
+        "tenants_processed": processed,
+        "admins_created": admins_created,
+        "admins_skipped": admins_skipped,
+        "admins_password_reset": admins_password_reset,
+    }

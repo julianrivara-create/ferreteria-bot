@@ -49,6 +49,7 @@ def test_webhook_auth_mode_token_accepts_token_and_rejects_signature_only(client
         )
         assert token_ok.status_code == 200
         assert token_ok.get_json()["auth_method"] == "token"
+        token_ok.close()
 
         bad_payload = {
             "tenant_id": tenant.id,
@@ -62,6 +63,7 @@ def test_webhook_auth_mode_token_accepts_token_and_rejects_signature_only(client
         sign_headers, raw = _signature_headers("auth-secret", bad_payload)
         sign_reject = client.post("/api/crm/messages/webhook", data=raw, headers=sign_headers)
         assert sign_reject.status_code == 401
+        sign_reject.close()
 
         audit = (
             session.query(CRMAuditLog)
@@ -107,6 +109,7 @@ def test_webhook_auth_mode_hmac_accepts_signature_and_rejects_token_only(client,
             headers=_token_headers("auth-secret"),
         )
         assert token_reject.status_code == 401
+        token_reject.close()
 
         good_payload = {
             "tenant_id": tenant.id,
@@ -121,6 +124,7 @@ def test_webhook_auth_mode_hmac_accepts_signature_and_rejects_token_only(client,
         sign_ok = client.post("/api/crm/messages/webhook", data=raw, headers=sign_headers)
         assert sign_ok.status_code == 200
         assert sign_ok.get_json()["auth_method"] == "hmac"
+        sign_ok.close()
 
         audit = (
             session.query(CRMAuditLog)
@@ -174,6 +178,7 @@ def test_webhook_auth_mode_both_accepts_either_and_logs_weaker_token_warning(
         )
         assert token_ok.status_code == 200
         assert token_ok.get_json()["auth_method"] == "token"
+        token_ok.close()
 
         token_warnings = [
             rec
@@ -195,5 +200,6 @@ def test_webhook_auth_mode_both_accepts_either_and_logs_weaker_token_warning(
         sign_ok = client.post("/api/crm/messages/webhook", data=raw, headers=sign_headers)
         assert sign_ok.status_code == 200
         assert sign_ok.get_json()["auth_method"] == "hmac"
+        sign_ok.close()
     finally:
         session.close()

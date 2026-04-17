@@ -179,6 +179,8 @@ class TestP0TenantIsolation:
         assert len(farmacia_stock) > 0
         assert ferreteria_stock[0]["category"] == "Llaves"
         assert farmacia_stock[0]["category"] == "Analgésicos"
+        ferreteria_db.close()
+        farmacia_db.close()
 
 
 class TestP0P1RateLimiting:

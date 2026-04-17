@@ -1,14 +1,19 @@
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import text
 
 from app.crm.domain.enums import UserRole
+from app.crm.time import utc_now_naive
 from tests.crm.utils import seed_tenant_with_user
 
 
 def _auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def _sqlite_dt(value) -> str:
+    return value.isoformat(sep=" ")
 
 
 def _create_maintenance_tables(session) -> None:
@@ -61,7 +66,7 @@ def test_watchdog_health_prefers_maintenance_runs_with_staged_thresholds(client,
         )
         _create_maintenance_tables(session)
 
-        now = datetime.utcnow()
+        now = utc_now_naive()
         session.execute(
             text(
                 """
@@ -80,8 +85,8 @@ def test_watchdog_health_prefers_maintenance_runs_with_staged_thresholds(client,
                 "process_name": "runner",
                 "service_id": "svc-runner",
                 "outcome": "OK",
-                "started_at": now - timedelta(minutes=72),
-                "finished_at": now - timedelta(minutes=70),
+                "started_at": _sqlite_dt(now - timedelta(minutes=72)),
+                "finished_at": _sqlite_dt(now - timedelta(minutes=70)),
                 "consecutive_fail_count": 0,
                 "first_seen_at": None,
                 "last_seen_at": None,
@@ -108,8 +113,8 @@ def test_watchdog_health_prefers_maintenance_runs_with_staged_thresholds(client,
                 "process_name": "watchdog",
                 "service_id": "svc-watchdog",
                 "outcome": "OK",
-                "started_at": now - timedelta(minutes=9),
-                "finished_at": now - timedelta(minutes=8),
+                "started_at": _sqlite_dt(now - timedelta(minutes=9)),
+                "finished_at": _sqlite_dt(now - timedelta(minutes=8)),
                 "consecutive_fail_count": 0,
                 "first_seen_at": None,
                 "last_seen_at": None,
@@ -151,7 +156,7 @@ def test_watchdog_alerts_report_dependency_error_from_runner_outcome(client, ses
         )
         _create_maintenance_tables(session)
 
-        now = datetime.utcnow()
+        now = utc_now_naive()
         session.execute(
             text(
                 """
@@ -170,8 +175,8 @@ def test_watchdog_alerts_report_dependency_error_from_runner_outcome(client, ses
                 "process_name": "runner",
                 "service_id": "svc-runner",
                 "outcome": "DEPENDENCY_ERROR",
-                "started_at": now - timedelta(minutes=6),
-                "finished_at": now - timedelta(minutes=5),
+                "started_at": _sqlite_dt(now - timedelta(minutes=6)),
+                "finished_at": _sqlite_dt(now - timedelta(minutes=5)),
                 "consecutive_fail_count": 0,
                 "first_seen_at": None,
                 "last_seen_at": None,

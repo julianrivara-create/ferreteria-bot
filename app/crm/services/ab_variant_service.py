@@ -7,6 +7,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.crm.models import CRMMessage, CRMMessageEvent, CRMTenant
+from app.crm.time import utc_now_naive
 
 
 DEFAULT_SALES_POLICY: dict[str, Any] = {
@@ -43,7 +44,7 @@ class ABVariantService:
         self.tenant_id = tenant_id
 
     def evaluate(self, *, apply: bool = False, now: datetime | None = None) -> dict[str, Any]:
-        now = now or datetime.utcnow()
+        now = now or utc_now_naive()
         tenant = self.session.query(CRMTenant).filter(CRMTenant.id == self.tenant_id).first()
         settings = dict((tenant.integration_settings or {}) if tenant else {})
         policy = merge_sales_policy((settings.get("sales_policy") or {}) if isinstance(settings.get("sales_policy"), dict) else {})

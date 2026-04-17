@@ -83,6 +83,12 @@ from app.crm.services.inventory_signal_service import InventorySignalService
 from app.crm.services.playbook_service import PlaybookService
 from app.crm.services.reporting_service import ReportingService
 from app.crm.services.scoring_service import ScoringService
+from app.crm.services.tenant_settings import (
+    get_tenant_crm_webhook_secret,
+    merge_integration_settings,
+    redact_integration_settings,
+)
+from app.crm.time import utc_now, utc_now_naive
 from app.crm.services.sla_service import SLAService
 from app.crm.services.webhook_service import WebhookIngestionService
 from app.crm.services.whatsapp_template_service import WhatsAppTemplateService
@@ -345,7 +351,7 @@ def _is_owner_or_admin() -> bool:
 
 
 def _parse_occurred_at(value: Any, *, fallback: datetime | None = None) -> datetime:
-    fallback_value = fallback or datetime.utcnow().replace(tzinfo=timezone.utc)
+    fallback_value = fallback or utc_now()
     if value is None:
         return fallback_value
     if isinstance(value, datetime):
@@ -528,7 +534,7 @@ def crm_login():
         if user is None or not auth_service.verify_password(body.password, user.password_hash):
             return _json_error("Invalid credentials", 401)
 
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = utc_now_naive()
         token = auth_service.issue_token(user)
         audit = AuditService(session, tenant_id=tenant_id, actor_user_id=user.id)
         audit.log(entity_type="auth", entity_id=user.id, action="login", metadata_json={"email": user.email})
@@ -563,7 +569,7 @@ def crm_register_owner():
                 timezone=payload.get("timezone", "America/Argentina/Buenos_Aires"),
                 currency=payload.get("currency", "USD"),
                 channels=payload.get("channels", ["web", "instagram"]),
-                integration_settings=payload.get("integration_settings", {}),
+                integration_settings=merge_integration_settings({}, payload.get("integration_settings", {})),
                 pipeline_config=[],
                 quiet_hours_start=payload.get("quiet_hours_start", "22:00"),
                 quiet_hours_end=payload.get("quiet_hours_end", "08:00"),
@@ -862,7 +868,7 @@ def delete_contact(contact_id: str):
             return _json_error("Contact not found", 404)
 
         before = _contact_to_dict(contact)
-        repo.soft_delete(contact, datetime.utcnow())
+        repo.soft_delete(contact, utc_now_naive())
         AuditService(session, tenant_id, actor_id).log(
             entity_type="contact",
             entity_id=contact.id,
@@ -956,7 +962,7 @@ def create_deal():
     try:
         repo = DealRepository(session, tenant_id)
         payload_mapped = _map_metadata_field(body.model_dump(exclude_none=True))
-        now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
+        now_utc = utc_now()
         deal = repo.create(payload_mapped)
         deal.last_activity_at = _max_timestamp(deal.last_activity_at, now_utc)
         deal.last_stage_changed_at = _max_timestamp(deal.last_stage_changed_at, now_utc)
@@ -1109,7 +1115,7 @@ def update_deal(deal_id: str):
                 trigger_event_key=f"stage:{deal.id}:{before['stage_id']}:{body.stage_id}",
             )
 
-            recent_cutoff = datetime.utcnow() - timedelta(days=7)
+            recent_cutoff = utc_now_naive() - timedelta(days=7)
             conv_ids = [
                 row.id
                 for row in _tenant_query(session, tenant_id, CRMConversation, include_deleted=True)
@@ -1131,7 +1137,7 @@ def update_deal(deal_id: str):
 
         if body.status == DealStatus.WON:
             if not deal.closed_at:
-                deal.closed_at = datetime.utcnow()
+                deal.closed_at = utc_now_naive()
         if body.status and body.status != before["status"]:
             session.add(
                 CRMDealEvent(
@@ -1219,7 +1225,7 @@ def _apply_segment_filters(query, filters: dict[str, Any]):
     if min_score := filters.get("min_score"):
         query = query.filter(CRMContact.score >= int(min_score))
     if inactive_days := filters.get("inactive_days"):
-        threshold = datetime.utcnow() - timedelta(days=int(inactive_days))
+        threshold = utc_now_naive() - timedelta(days=int(inactive_days))
         query = query.filter((CRMContact.last_activity_at.is_(None)) | (CRMContact.last_activity_at <= threshold))
     if search := filters.get("search"):
         pattern = f"%{search.lower()}%"
@@ -1315,7 +1321,7 @@ def export_segment(segment_id: str):
 
         filters_json = segment.filters_json or {}
         rows_count = _apply_segment_filters(_tenant_query(session, tenant_id, CRMContact), filters_json).count()
-        segment.last_exported_at = datetime.utcnow()
+        segment.last_exported_at = utc_now_naive()
         AuditService(session, tenant_id, actor_id).log(
             entity_type="segment",
             entity_id=segment.id,
@@ -1440,7 +1446,7 @@ def update_task(task_id: str):
         before = _task_to_dict(task)
         patch = _map_metadata_field(body.model_dump(exclude_none=True))
         if patch.get("status") == TaskStatus.DONE and task.completed_at is None:
-            patch["completed_at"] = datetime.utcnow()
+            patch["completed_at"] = utc_now_naive()
         updated = repo.update(task, patch)
         after = _task_to_dict(updated)
 
@@ -1483,7 +1489,7 @@ def bulk_complete_tasks():
     session = _get_session()
     try:
         repo = TaskRepository(session, tenant_id)
-        now = datetime.utcnow()
+        now = utc_now_naive()
         count = repo.bulk_mark_done(task_ids, now)
         rows = _tenant_query(session, tenant_id, CRMTask).filter(CRMTask.id.in_(task_ids)).all()
         for row in rows:
@@ -2404,7 +2410,7 @@ def get_settings_endpoint():
             .order_by(CRMScoringRule.created_at.desc())
             .all()
         )
-        integration_settings = dict(tenant.integration_settings or {})
+        integration_settings = redact_integration_settings(tenant.integration_settings or {})
         raw_policy = integration_settings.get("sales_policy")
         integration_settings["sales_policy"] = merge_sales_policy(raw_policy if isinstance(raw_policy, dict) else {})
 
@@ -2476,7 +2482,7 @@ def update_settings_endpoint():
             "timezone": tenant.timezone,
             "currency": tenant.currency,
             "channels": tenant.channels,
-            "integration_settings": tenant.integration_settings,
+            "integration_settings": redact_integration_settings(tenant.integration_settings),
             "data_retention_days": tenant.data_retention_days,
             "quiet_hours_start": tenant.quiet_hours_start,
             "quiet_hours_end": tenant.quiet_hours_end,
@@ -2486,7 +2492,7 @@ def update_settings_endpoint():
 
         for key, value in body.model_dump(exclude_none=True).items():
             if key == "integration_settings" and isinstance(value, dict):
-                tmp = dict(value)
+                tmp = merge_integration_settings(tenant.integration_settings, value)
                 raw_policy = tmp.get("sales_policy")
                 tmp["sales_policy"] = merge_sales_policy(raw_policy if isinstance(raw_policy, dict) else {})
                 value = tmp
@@ -2497,7 +2503,7 @@ def update_settings_endpoint():
             "timezone": tenant.timezone,
             "currency": tenant.currency,
             "channels": tenant.channels,
-            "integration_settings": tenant.integration_settings,
+            "integration_settings": redact_integration_settings(tenant.integration_settings),
             "data_retention_days": tenant.data_retention_days,
             "quiet_hours_start": tenant.quiet_hours_start,
             "quiet_hours_end": tenant.quiet_hours_end,
@@ -3260,15 +3266,15 @@ def ingest_message_webhook():
 
     session = _get_session()
     raw_body = request.get_data(cache=True) or b""
-    secret = settings.CRM_WEBHOOK_SECRET or ""
-    if not settings.is_secret_configured(secret):
-        session.close()
-        return _json_error("CRM webhook secret not configured", 503)
 
     try:
         tenant = session.query(CRMTenant).filter(CRMTenant.id == tenant_id).first()
         if tenant is None:
             return _json_error("Unauthorized webhook", 401)
+
+        secret = get_tenant_crm_webhook_secret(tenant)
+        if not settings.is_secret_configured(secret):
+            return _json_error("CRM webhook secret not configured", 503)
 
         auth_mode = (tenant.webhook_auth_mode or "token").strip().lower()
         auth_ok, auth_method, reject_reason, weak_method_used = _verify_webhook_auth(

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.crm.models import CRMCustomerValueSnapshot, CRMOrder
+from app.crm.time import utc_now_naive
 
 
 class CLVService:
@@ -29,7 +28,7 @@ class CLVService:
             by_contact[order.contact_id].append(order)
 
         snapshots: list[CRMCustomerValueSnapshot] = []
-        now = datetime.utcnow()
+        now = utc_now_naive()
 
         for contact_id, rows in by_contact.items():
             total_orders = len(rows)
@@ -79,5 +78,5 @@ class CLVService:
 
         return {
             "cohorts": [{"cohort": cohort, **data} for cohort, data in sorted(cohort_data.items())],
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utc_now_naive().isoformat(),
         }

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.crm.domain.enums import DealStatus, MessageDirection, TaskStatus, UserRole
 from app.crm.models import (
@@ -9,6 +9,7 @@ from app.crm.models import (
     CRMPipelineStage,
     CRMTask,
 )
+from app.crm.time import utc_now_naive
 from tests.crm.utils import seed_tenant_with_user
 
 
@@ -47,8 +48,8 @@ def test_console_home_and_search_are_tenant_scoped(client, session_factory):
             status=DealStatus.OPEN,
             score=80,
             source_channel="web",
-            last_activity_at=datetime.utcnow(),
-            last_stage_changed_at=datetime.utcnow(),
+            last_activity_at=utc_now_naive(),
+            last_stage_changed_at=utc_now_naive(),
         )
         session.add(deal)
         session.flush()
@@ -63,7 +64,7 @@ def test_console_home_and_search_are_tenant_scoped(client, session_factory):
                 title="Follow up now",
                 status=TaskStatus.TODO,
                 priority="high",
-                due_at=datetime.utcnow() - timedelta(hours=1),
+                due_at=utc_now_naive() - timedelta(hours=1),
                 metadata_json={"kind": "followup"},
             )
         )
@@ -74,7 +75,7 @@ def test_console_home_and_search_are_tenant_scoped(client, session_factory):
             channel="web",
             external_id="web-1",
             is_open=True,
-            last_message_at=datetime.utcnow(),
+            last_message_at=utc_now_naive(),
             metadata_json={"unread": True},
         )
         session.add(conversation)
@@ -89,7 +90,7 @@ def test_console_home_and_search_are_tenant_scoped(client, session_factory):
                 direction=MessageDirection.INBOUND,
                 body="Necesito precio",
                 metadata_json={"intent": "price_request", "high_intent": True},
-                created_at=datetime.utcnow(),
+                created_at=utc_now_naive(),
             )
         )
 

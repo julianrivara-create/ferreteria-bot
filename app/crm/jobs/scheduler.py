@@ -13,6 +13,7 @@ from app.crm.services.automation_service import AutomationService
 from app.crm.services.reporting_service import ReportingService
 from app.crm.services.scoring_service import ScoringService
 from app.crm.services.sla_service import SLAService
+from app.crm.time import utc_now, utc_now_naive
 from app.db.session import SessionLocal
 
 
@@ -46,7 +47,7 @@ def _run_inactivity_automations() -> None:
                 continue
 
             minimum_minutes = min(int((a.conditions_json or {}).get("inactivity_minutes", 60)) for a in automations)
-            threshold = datetime.utcnow() - timedelta(minutes=minimum_minutes)
+            threshold = utc_now_naive() - timedelta(minutes=minimum_minutes)
             contacts = (
                 session.query(CRMContact)
                 .filter(
@@ -60,7 +61,7 @@ def _run_inactivity_automations() -> None:
             )
 
             service = AutomationService(session, tenant.id)
-            now = datetime.utcnow()
+            now = utc_now_naive()
             for contact in contacts:
                 inactivity_minutes = int(max(0, (now - contact.last_activity_at).total_seconds() // 60))
                 trigger_event_key = (
@@ -105,7 +106,7 @@ def _run_daily_rollups() -> None:
         tenants = session.query(CRMTenant).filter(CRMTenant.is_active.is_(True)).all()
         for tenant in tenants:
             tz = ZoneInfo(tenant.timezone or "UTC")
-            local_now = datetime.utcnow().replace(tzinfo=ZoneInfo("UTC")).astimezone(tz)
+            local_now = utc_now().astimezone(tz)
             bucket_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
             bucket_prev = bucket_local - timedelta(days=1)
 

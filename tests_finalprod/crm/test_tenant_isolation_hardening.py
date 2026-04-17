@@ -110,6 +110,7 @@ def test_cross_tenant_access_deals_tasks_conversations_messages_is_blocked(clien
         list_deals_cross = client.get(f"/api/crm/deals?contact_id={contact_b}", headers=_auth_headers(token_a))
         assert list_deals_cross.status_code == 200
         assert list_deals_cross.get_json()["items"] == []
+        list_deals_cross.close()
 
         patch_task_cross = client.patch(
             f"/api/crm/tasks/{task_b}",
@@ -117,17 +118,21 @@ def test_cross_tenant_access_deals_tasks_conversations_messages_is_blocked(clien
             headers=_auth_headers(token_a),
         )
         assert patch_task_cross.status_code == 404
+        patch_task_cross.close()
 
         conv_messages_cross = client.get(f"/api/crm/conversations/{conv_b.id}/messages", headers=_auth_headers(token_a))
         assert conv_messages_cross.status_code == 200
         assert conv_messages_cross.get_json()["items"] == []
+        conv_messages_cross.close()
 
         global_messages_cross = client.get(f"/api/crm/messages?contact_id={contact_b}", headers=_auth_headers(token_a))
         assert global_messages_cross.status_code == 200
         assert global_messages_cross.get_json()["items"] == []
+        global_messages_cross.close()
 
         contact_cross = client.get(f"/api/crm/contacts/{contact_b}", headers=_auth_headers(token_a))
         assert contact_cross.status_code == 404
+        contact_cross.close()
     finally:
         session.close()
 
@@ -145,16 +150,19 @@ def test_reports_and_exports_are_tenant_scoped(client, session_factory):
         dashboard_a = client.get("/api/crm/reports/dashboard", headers=_auth_headers(token_a))
         assert dashboard_a.status_code == 200
         assert dashboard_a.get_json()["leads_created"] == 1
+        dashboard_a.close()
 
         dashboard_b = client.get("/api/crm/reports/dashboard", headers=_auth_headers(token_b))
         assert dashboard_b.status_code == 200
         assert dashboard_b.get_json()["leads_created"] == 1
+        dashboard_b.close()
 
         export_a = client.get("/api/crm/reports/export.csv", headers=_auth_headers(token_a))
         assert export_a.status_code == 200
         body = export_a.data.decode()
         assert "leads_created,1" in body
         assert "leads_created,2" not in body
+        export_a.close()
     finally:
         session.close()
 
@@ -252,9 +260,12 @@ def test_cross_tenant_segment_export_returns_not_found(client, session_factory):
 
         export_cross = client.get(f"/api/crm/segments/{segment_b_id}/export.csv", headers=_auth_headers(token_a))
         assert export_cross.status_code == 404
+        export_cross.close()
 
         # Owner/Admin only export check remains true for same tenant.
         export_self = client.get(f"/api/crm/segments/{segment_b_id}/export.csv", headers=_auth_headers(token_b))
         assert export_self.status_code == 200
+        _ = export_self.data
+        export_self.close()
     finally:
         session.close()
