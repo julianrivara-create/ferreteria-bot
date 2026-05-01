@@ -78,7 +78,7 @@ class SalesFlowManager:
 
         self._update_objection_loop(working_state, objection_type)
 
-        missing_fields = compute_missing_fields(working_state["entities"])
+        missing_fields = compute_missing_fields(working_state["entities"], intent_name=intent.value)
         current_stage = PipelineStage(working_state["stage"])
         stage_decision = decide_stage(
             current_stage=current_stage,
