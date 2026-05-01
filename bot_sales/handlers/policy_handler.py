@@ -29,6 +29,9 @@ class PolicyHandler:
         if not topic:
             topic = self.policy_service.infer_topic_from_message(user_message)
 
+        if not messages:
+            logger.warning("PolicyHandler: empty messages context for session")
+
         policy_ctx = self.policy_service.build_turn_policy_context(topic)
 
         # Append policy context as a final system reminder — highest recency in attention (H1)

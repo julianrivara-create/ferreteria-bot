@@ -63,7 +63,7 @@ class EscalationHandler:
     def _infer_reason(self, interpretation: Any) -> str:
         tone = getattr(interpretation, "tone", "neutral")
         intent = getattr(interpretation, "intent", "unknown")
-        if intent == "escalate":
+        if intent in ("escalate", "escalation_signal"):
             return "customer_requested"
         if tone == "frustrated":
             return "frustration_detected"

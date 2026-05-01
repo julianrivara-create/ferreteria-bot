@@ -2,24 +2,24 @@
 # This is used for strict scoring and category detection.
 
 taladro:
-  - "Herramientas Electricas"
+  - "Herramientas Eléctricas"
 amoladora:
-  - "Herramientas Electricas"
+  - "Herramientas Eléctricas"
 atornillador:
-  - "Herramientas Electricas"
+  - "Herramientas Eléctricas"
 mecha:
   - "Mechas y Brocas"
-  - "Herramientas Electricas"
+  - "Herramientas Eléctricas"
   - "Herramientas Manuales"
   - "Accesorios"
 broca:
   - "Mechas y Brocas"
-  - "Herramientas Electricas"
+  - "Herramientas Eléctricas"
   - "Herramientas Manuales"
   - "Accesorios"
 widia:
   - "Accesorios"
-  - "Herramientas Electricas"
+  - "Herramientas Eléctricas"
 martillo:
   - "Herramientas Manuales"
 destornillador:
@@ -28,14 +28,11 @@ llave:
   - "Herramientas Manuales"
 tornillo:
   - "Tornillería y Fijaciones"
-  - "Tornilleria"
   - "Mechas y Brocas"
 autoperforante:
   - "Tornillería y Fijaciones"
-  - "Tornilleria"
 buloneria:
   - "Tornillería y Fijaciones"
-  - "Tornilleria"
   - "Fijaciones"
 tarugo:
   - "Tornillería y Fijaciones"
@@ -47,33 +44,33 @@ fijacion:
   - "Tornillería y Fijaciones"
   - "Fijaciones"
 pintura:
-  - "Pintureria"
+  - "Pinturas y Acabados"
 latex:
-  - "Pintureria"
+  - "Pinturas y Acabados"
 esmalte:
-  - "Pintureria"
+  - "Pinturas y Acabados"
 rodillo:
-  - "Pintureria"
+  - "Pinturas y Acabados"
 pincel:
-  - "Pintureria"
+  - "Pinturas y Acabados"
 brocha:
-  - "Pintureria"
+  - "Pinturas y Acabados"
 bandeja:
-  - "Pintureria"
+  - "Pinturas y Acabados"
 silicona:
-  - "Plomeria"
+  - "Plomería"
 sellador:
-  - "Plomeria"
+  - "Plomería"
 teflon:
-  - "Plomeria"
+  - "Plomería"
 cano:
-  - "Plomeria"
+  - "Plomería"
 caño:
-  - "Plomeria"
+  - "Plomería"
 conexion:
-  - "Plomeria"
+  - "Plomería"
 electrovalvula:
-  - "Plomeria"
+  - "Plomería"
 guante:
   - "Seguridad"
 casco:

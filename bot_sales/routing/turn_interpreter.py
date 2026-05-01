@@ -221,12 +221,9 @@ class TurnInterpreter:
                 self.llm.temperature = 0.0
                 response = self.llm.send_message(messages=messages)
             finally:
-                if orig_model is not None:
-                    self.llm.model = orig_model
-                if orig_max_tokens is not None:
-                    self.llm.max_tokens = orig_max_tokens
-                if orig_temperature is not None:
-                    self.llm.temperature = orig_temperature
+                self.llm.model = orig_model
+                self.llm.max_tokens = orig_max_tokens
+                self.llm.temperature = orig_temperature
             return self._parse_response(response)
         except Exception as exc:
             logger.warning("TurnInterpreter failed: %s", exc)
@@ -281,5 +278,9 @@ class TurnInterpreter:
             lines = text.splitlines()
             text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
 
-        parsed = json.loads(text)
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            logger.warning("TurnInterpreter JSON parse failed text=%r error=%s", text[:300], exc)
+            return TurnInterpretation.unknown()
         return TurnInterpretation.from_dict(parsed)

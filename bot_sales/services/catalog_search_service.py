@@ -150,7 +150,8 @@ class CatalogSearchService:
             logger.warning("DB search by_use failed: %s", exc)
             return CatalogSearchResult(status="no_match", reason_codes=["db_error"])
 
-        candidates = self._apply_post_filters(raw[:20], need)
+        candidates = self._score_and_filter(raw, need)
+        candidates = self._apply_post_filters(candidates, need)
         return self._build_result(candidates, need, applied_mode="by_use")
 
     def _search_browse(self, need: ProductNeed) -> CatalogSearchResult:
@@ -243,7 +244,10 @@ class CatalogSearchService:
                 if need.brand.lower() not in product_brand:
                     continue
             result.append(p)
-        return result if result else filtered  # never return empty if we had matches
+        # If brand was requested and nothing matched, hard fail — don't return wrong brands
+        if not result and need.brand:
+            return []
+        return result if result else filtered
 
     def _build_result(
         self, candidates: list, need: ProductNeed, applied_mode: str = "exact"

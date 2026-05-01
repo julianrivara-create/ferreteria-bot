@@ -52,7 +52,7 @@ class PolicyService:
                 if current_lines:
                     sections[current_header] = "\n".join(current_lines).strip()
                 current_header = re.sub(r"^#+\s*", "", line).strip().lower()
-                current_lines = [line]
+                current_lines = []
             else:
                 current_lines.append(line)
 

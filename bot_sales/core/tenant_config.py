@@ -89,8 +89,8 @@ class TenantConfig:
         return {
             "store_name": "Ferretería",
             "bot_name": "Asesor",
-            "store_description": "Tienda de Tecnología",
-            "store_type": "tecnología",
+            "store_description": "Tienda",
+            "store_type": "general",
             "country": "Argentina",
             "personality_style": "Argentino informal (vos, che, dale, etc.)",
             "emojis": "📱 💳 ✅",
