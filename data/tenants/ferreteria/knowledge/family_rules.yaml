@@ -34,7 +34,7 @@ families:
       - Mechas y Brocas
       - Herramientas Eléctricas
       - Herramientas Manuales
-      - Accesorios
+      - Puntas y Accesorios
     required_dimensions:
       - size
       - material
@@ -47,7 +47,7 @@ families:
       - Mechas y Brocas
       - Herramientas Eléctricas
       - Herramientas Manuales
-      - Accesorios
+      - Puntas y Accesorios
     required_dimensions:
       - size
       - material

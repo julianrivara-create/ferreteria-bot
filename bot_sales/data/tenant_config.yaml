@@ -15,50 +15,42 @@ target_audience: "Clientes de ferretería, constructores, profesionales y uso do
 
 # Product Categories (from catalog)
 product_categories:
-  - Llaves
-  - Bocallaves y Dados
-  - Destornilladores
-  - Pinzas y Alicates
-  - Martillos
-  - Herramientas Electricas
-  - Sierras
-  - Bulonería
-  - Tarugos y Tacos
-  - Discos Abrasivos
-  - Pinturas
-  - Albañilería
-  - Soldadura
-  - Sujeción
-  - Medición
-  - Juegos y Sets
-  - Sanitaria
-  - Iluminación
-  - Soportes
-  - Cintas y Precintos
-  - Varios
+  - General
+  - Electricidad
+  - Mechas y Brocas
+  - Herramientas Manuales
+  - Plomería
+  - Puntas y Accesorios
+  - Discos y Hojas
+  - Tornillería y Fijaciones
+  - Pinturas y Acabados
+  - Cintas y Adhesivos
+  - Herramientas Eléctricas
+  - Lijas y Abrasivos
+  - Seguridad
 
 # Cross-sell Rules
 # Cuando el cliente compra de la categoría X, ofrecer productos de la categoría Y
 cross_sell_rules:
-  - source_category: Herramientas Electricas
-    target_category: Discos Abrasivos
+  - source_category: Herramientas Eléctricas
+    target_category: Discos y Hojas
     discount_percent: 5
     reason: "para tu herramienta eléctrica"
 
-  - source_category: Bulonería
-    target_category: Tarugos y Tacos
+  - source_category: Tornillería y Fijaciones
+    target_category: Puntas y Accesorios
     discount_percent: 5
     reason: "para complementar tu fijación"
 
-  - source_category: Pinturas
-    target_category: Albañilería
+  - source_category: Pinturas y Acabados
+    target_category: Lijas y Abrasivos
     discount_percent: 5
-    reason: "para la aplicación"
+    reason: "para la preparación de superficie"
 
-  - source_category: Llaves
-    target_category: Bocallaves y Dados
+  - source_category: Plomería
+    target_category: Tornillería y Fijaciones
     discount_percent: 5
-    reason: "para ampliar tu juego de llaves"
+    reason: "para el montaje"
 
 # Comparison Feature Keys (attributes to compare for this store)
 comparison_features:

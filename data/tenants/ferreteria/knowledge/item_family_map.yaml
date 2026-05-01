@@ -11,14 +11,14 @@ mecha:
   - "Mechas y Brocas"
   - "Herramientas Eléctricas"
   - "Herramientas Manuales"
-  - "Accesorios"
+  - "Puntas y Accesorios"
 broca:
   - "Mechas y Brocas"
   - "Herramientas Eléctricas"
   - "Herramientas Manuales"
-  - "Accesorios"
+  - "Puntas y Accesorios"
 widia:
-  - "Accesorios"
+  - "Puntas y Accesorios"
   - "Herramientas Eléctricas"
 martillo:
   - "Herramientas Manuales"
@@ -33,16 +33,12 @@ autoperforante:
   - "Tornillería y Fijaciones"
 buloneria:
   - "Tornillería y Fijaciones"
-  - "Fijaciones"
 tarugo:
   - "Tornillería y Fijaciones"
-  - "Fijaciones"
 taco:
   - "Tornillería y Fijaciones"
-  - "Fijaciones"
 fijacion:
   - "Tornillería y Fijaciones"
-  - "Fijaciones"
 pintura:
   - "Pinturas y Acabados"
 latex:
