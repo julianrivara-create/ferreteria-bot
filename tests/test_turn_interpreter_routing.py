@@ -224,26 +224,15 @@ class TestShouldBypassSalesIntelligence:
 
 class TestCriticalBypassRouting:
     """
-    Verify the 3 conversational intents previously handled by core/IntentClassifier
-    bypass continue to work correctly after the refactor.
-
-    Strategy: mock IntentClassifier.classify() to return QUOTATION (non-bypass)
-    so TurnInterpreter always runs even in current code. Mock TurnInterpreter and
-    handlers. Assertions are behavior-based (no questionnaire, correct response).
+    Verify the 3 conversational intents are routed correctly by TurnInterpreter.
+    The core/IntentClassifier bypass has been removed; TurnInterpreter is the sole
+    routing entry point. Tests mock TurnInterpreter and handlers directly.
     """
-
-    def _mock_no_bypass(self, monkeypatch):
-        """Force core/IntentClassifier to return QUOTATION so the bypass never fires."""
-        monkeypatch.setattr(
-            "bot_sales.core.intent_classifier.IntentClassifier.classify",
-            lambda self, msg, **kw: {"intent": "QUOTATION", "confidence": 0.5},
-        )
 
     def test_greeting_routes_to_offtopic_handler(self, tmp_path, monkeypatch):
         """'hola' -> small_talk (high confidence) -> OfftopicHandler, not a questionnaire."""
         bot = build_bot(tmp_path, "t_greeting.db")
         try:
-            self._mock_no_bypass(monkeypatch)
             monkeypatch.setattr(
                 bot.turn_interpreter, "interpret",
                 lambda *a, **kw: TurnInterpretation(intent="small_talk", confidence=0.92),
@@ -265,12 +254,11 @@ class TestCriticalBypassRouting:
     def test_customer_info_does_not_hit_offtopic_fallback(self, tmp_path, monkeypatch):
         """
         'Me llamo Juan' must NOT get "fuera de lo que manejo" (OfftopicHandler fallback).
-        Path: unknown/customer_info (low confidence) -> falls through ->
+        Path: unknown (low confidence) -> all handler guards fail ->
         _should_bypass_sales_intelligence() matches 'me llamo' -> _chat_with_functions().
         """
         bot = build_bot(tmp_path, "t_custinfo.db")
         try:
-            self._mock_no_bypass(monkeypatch)
             # Low confidence unknown -> all handler guards fail -> falls through to bypass check
             monkeypatch.setattr(
                 bot.turn_interpreter, "interpret",
@@ -290,13 +278,12 @@ class TestCriticalBypassRouting:
 
     def test_customer_info_falls_through_to_main_llm(self, tmp_path, monkeypatch):
         """
-        'Me llamo Juan' with customer_info intent (Commit 2+) must NOT hit OfftopicHandler.
-        It falls through _try_ferreteria_intent_route() -> None ->
+        'Me llamo Juan' with customer_info intent must NOT hit OfftopicHandler.
+        Falls through _try_ferreteria_intent_route() -> None ->
         _should_bypass_sales_intelligence() matches 'me llamo' -> _chat_with_functions().
         """
         bot = build_bot(tmp_path, "t_custinfo2.db")
         try:
-            self._mock_no_bypass(monkeypatch)
             monkeypatch.setattr(
                 bot.turn_interpreter, "interpret",
                 lambda *a, **kw: TurnInterpretation(intent="customer_info", confidence=0.88),
@@ -319,7 +306,6 @@ class TestCriticalBypassRouting:
         """
         bot = build_bot(tmp_path, "t_escalate.db")
         try:
-            self._mock_no_bypass(monkeypatch)
             monkeypatch.setattr(
                 bot.turn_interpreter, "interpret",
                 lambda *a, **kw: TurnInterpretation(intent="escalate", confidence=0.92),
