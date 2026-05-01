@@ -497,30 +497,6 @@ class SalesBot:
             state_before=_state_v2_init.state,
         )
 
-        from .core.intent_classifier import IntentClassifier
-        classifier = IntentClassifier(self.chatgpt)
-        intent_result = classifier.classify(user_message, context_summary=None)
-        self.sessions[session_id]["last_intent"] = intent_result
-        logging.info("intent_classified session=%s intent=%s", session_id, intent_result.get("intent"))
-
-        # Pre-process logic based on dynamic intent
-        # If the user is just chatting, introducing themselves or saying hello,
-        # bypass the deterministic search to let the LLM handle personality.
-        bypass_intents = {"GREETING_CHAT", "CUSTOMER_INFO", "HANDOFF_REQUEST"}
-
-        if intent_result.get("intent") in bypass_intents:
-             # Track as conversational
-             self._record_user_turn(session_id, user_message)
-             self._reset_turn_meta(session_id)
-             response_text = self._chat_with_functions(session_id)
-             result = self._append_assistant_turn(session_id, response_text)
-             turn_event.handler = "bypass_conversational"
-             turn_event.state_after = StateStore.load(self.sessions.get(session_id, {})).state
-             turn_event.log()
-             record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
-             record_latency_bucket(turn_event.latency_ms)
-             return result
-
         if self._is_ferreteria_runtime():
             self._load_active_quote_from_store(session_id)
 
