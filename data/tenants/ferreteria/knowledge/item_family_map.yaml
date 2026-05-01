@@ -8,10 +8,12 @@ amoladora:
 atornillador:
   - "Herramientas Electricas"
 mecha:
+  - "Mechas y Brocas"
   - "Herramientas Electricas"
   - "Herramientas Manuales"
   - "Accesorios"
 broca:
+  - "Mechas y Brocas"
   - "Herramientas Electricas"
   - "Herramientas Manuales"
   - "Accesorios"
@@ -25,17 +27,24 @@ destornillador:
 llave:
   - "Herramientas Manuales"
 tornillo:
+  - "Tornillería y Fijaciones"
   - "Tornilleria"
+  - "Mechas y Brocas"
 autoperforante:
+  - "Tornillería y Fijaciones"
   - "Tornilleria"
 buloneria:
+  - "Tornillería y Fijaciones"
   - "Tornilleria"
   - "Fijaciones"
 tarugo:
+  - "Tornillería y Fijaciones"
   - "Fijaciones"
 taco:
+  - "Tornillería y Fijaciones"
   - "Fijaciones"
 fijacion:
+  - "Tornillería y Fijaciones"
   - "Fijaciones"
 pintura:
   - "Pintureria"

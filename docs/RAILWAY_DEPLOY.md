@@ -1,73 +1,75 @@
-# 🚀 Guía de Deploy en Railway
+# Railway Deploy Canonico
 
-Esta guía te permite subir tu bot a **Railway** para que funcione 24/7 sin depender de tu computadora ni de Ngrok.
+Servicio de produccion oficial: `ferreteria-bot`.
 
-## 1. Preparación (Ya realizada) ✅
+`ferreteria-bot-clean` no es el runtime canonico. Solo puede vivir como staging o backup si se decide de forma explicita.
 
-He preparado el código para que sea "Cloud Ready":
--   `wsgi.py`: Punto de entrada para servidor de producción.
--   `requirements.txt`: Agregado `gunicorn`.
--   `Dockerfile`: Configurado para escuchar en el puerto que asigne Railway.
+## Lo que Railway despliega
 
-## 2. Crear Proyecto en Railway
+- El deploy sale del arbol local actual.
+- `.env`, `.env.*`, `.db` y `.sqlite` no se suben. Eso es intencional.
+- La paridad con local se resuelve con variables + estrategia de datos, no copiando el entorno de desarrollo.
+- Si Railway sigue conectado a GitHub, un auto-deploy desde `main` puede pisar un `railway up` manual. El chequeo de paridad lo marca para que esa deriva no pase desapercibida.
 
-1.  Entrá a [railway.app](https://railway.app/) y logueate (GitHub recomendado).
-2.  Click en **+ New Project** → **Github Repo**.
-3.  Seleccioná el repositorio donde subiste este código.
-    - *Si no lo subiste a GitHub, hacelo primero.*
+## Dependencias
 
-## 3. Configuración de Variables
+- `requirements.txt`: runtime HTTP/productivo.
+- `requirements-dev.txt`: testing, lint, tooling y multimedia opcional local.
 
-Una vez creado, andá a la pestaña **Variables** y agregá estas (son las mismas de tu `.env`):
+No metas `pytest`, `black`, `flake8`, `bandit`, `openai-whisper`, `torch`, `pydub` ni `soundfile` en la imagen del servicio web canonico.
 
-| Variable | Valor (Ejemplo) |
-|----------|-----------------|
-| `LLM_CLIENT` | `chatgpt` (o `auto`) |
-| `OPENAI_API_KEY` | `sk-...` |
-| `WHATSAPP_PROVIDER` | `mock`, `twilio` o `meta` |
-| `PORT` | (No agregar, Railway la pone sola) |
+## Variables minimas de produccion
 
-*Opcionales (según provider):*
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, etc.
+Estas deben existir de forma explicita en Railway para `ferreteria-bot`:
 
-## 4. Deploy del Dashboard (Opcional)
+- `ENVIRONMENT=production`
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `ADMIN_TOKEN`
+- `OPENAI_API_KEY`
+- `CORS_ORIGINS`
 
-Si querés el Dashboard también online:
-1.  En el mismo proyecto, click **+ New Service**.
-2.  Seleccioná el mismo repo.
-3.  En **Settings** de este nuevo servicio:
-    - **Build Command**: `pip install -r requirements.txt` (o dejar auto)
-    - **Start Command**: `gunicorn --bind 0.0.0.0:$PORT dashboard.app:app`
-    - **Root Directory**: `/dashboard` (IMPORTANTE)
+Variables operativas segun integraciones:
 
-## 5. Obtener tu URL Pública
+- WhatsApp: `WHATSAPP_PROVIDER` mas credenciales Meta o Twilio
+- Sheets / stock sync
+- MercadoPago
+- SendGrid
 
-1.  En la pestaña **Settings** → **Domains**.
-2.  Click **Generate Domain**.
-3.  Te dará un link tipo: `iphone-bot-production.up.railway.app`.
+Notas:
 
-¡Ese es tu Webhook! 🎉
+- `DATABASE_URL` debe ser explicita. Produccion no puede depender del fallback SQLite local.
+- Si se usa SQLite en Railway, debe apuntar al volumen, por ejemplo `sqlite:////app/data/finalprod.db`.
+- Si `WHATSAPP_PROVIDER` queda en `mock`, el servicio sigue arrancando pero la paridad operativa queda en `WARN`.
 
-## 6. Conectar con WhatsApp
+## Datos
 
--   **Twilio/Meta**: Andá a la configuración de tu proveedor y pegá el link de Railway + `/webhooks/meta`.
-    -   Ej: `https://iphone-bot-production.up.railway.app/webhooks/meta`
+- Catalogos y policies viajan con la imagen (`config/` y `data/tenants/ferreteria/`).
+- La base productiva no viaja con la imagen.
+- Si se usa SQLite en Railway, la fuente de verdad debe vivir en el volumen montado.
+- Si se usa Postgres, la fuente de verdad es `DATABASE_URL`.
 
----
+## Checklist de release
 
-### Fallback sin GitHub (Railway CLI)
-
-Si no querés usar GitHub, instalá la CLI de Railway en tu Mac:
+1. Correr el chequeo local/remoto:
 
 ```bash
-# 1. Instalar
-brew install railway
-
-# 2. Login
-railway login
-
-# 3. Subir desde tu carpeta
-railway up
+python3 scripts/check_railway_parity.py --service ferreteria-bot
 ```
 
-¡Listo! Tu bot vive en la nube. ☁️
+2. Verificar que el resultado final no tenga `FAIL`.
+
+3. Deploy del servicio canonico:
+
+```bash
+railway up -s ferreteria-bot -e production -m "Deploy canonical ferreteria bot"
+```
+
+## Endpoints de verificacion
+
+- `/health`
+- `/api/health`
+- `/diag/db` con `X-Admin-Token`
+- `/diag/runtime-integrity` con `X-Admin-Token`
+
+`X-Runtime-Stack` debe devolver `final`.

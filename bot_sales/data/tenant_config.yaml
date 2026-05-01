@@ -3,6 +3,7 @@
 
 # Store Identity
 store_name: "Ferretería"
+bot_name: "Ferretero"
 store_description: "Ferretería con herramientas, bulonería, pinturas y más"
 store_type: "ferretería"
 country: "Argentina"

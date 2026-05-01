@@ -1,5 +1,6 @@
 id: ferreteria
 slug: ferreteria
+bot_name: "Ferretero"
 business:
   name: Ferreteria Central
   description: Herramientas, fijaciones, pintureria y soluciones para obra, taller y hogar.

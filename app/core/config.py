@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
+DEFAULT_DATABASE_URL = "sqlite:///data/finalprod_local.db"
+CANONICAL_RAILWAY_SERVICE = "ferreteria-bot"
 UNSAFE_SECRET_VALUES = {
     "",
     "REDACTED",
@@ -14,6 +16,29 @@ UNSAFE_SECRET_VALUES = {
     "dev-secret-key-change-in-production",
 }
 UNSAFE_SECRET_VALUES_LOWER = {v.lower() for v in UNSAFE_SECRET_VALUES}
+
+
+def is_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def is_secret_value_configured(value: str | None) -> bool:
+    if value is None:
+        return False
+    normalized = value.strip()
+    if not normalized:
+        return False
+    return normalized not in UNSAFE_SECRET_VALUES and normalized.lower() not in UNSAFE_SECRET_VALUES_LOWER
+
+
+def is_database_url_explicit(value: str | None, *, environ: dict[str, str] | None = None) -> bool:
+    candidate = (value or "").strip()
+    if not candidate:
+        return False
+    current_env = os.environ if environ is None else environ
+    if (current_env.get("DATABASE_URL") or "").strip():
+        return True
+    return candidate != DEFAULT_DATABASE_URL
 
 
 class Settings(BaseSettings):
@@ -30,12 +55,17 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development")
     LOG_LEVEL: str = Field(default="INFO")
     OPENAI_MODEL: str = Field(default="gpt-4o")
+    CANONICAL_RAILWAY_SERVICE: str = Field(default=CANONICAL_RAILWAY_SERVICE)
+    RAILWAY_SERVICE_NAME: str = Field(default="")
+    RAILWAY_PUBLIC_DOMAIN: str = Field(default="")
+    RAILWAY_VOLUME_MOUNT_PATH: str = Field(default="")
+    WHATSAPP_PROVIDER: str = Field(default="")
     
     # Database
     # Railway/production should set DATABASE_URL explicitly.
     # Local default enables zero-config bootstrapping for demos/onboarding.
     DATABASE_URL: str = Field(
-        default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///data/finalprod_local.db")
+        default_factory=lambda: os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
     )
     
     # Redis
@@ -76,6 +106,9 @@ class Settings(BaseSettings):
     META_APP_SECRET: str = Field(default="")
     WHATSAPP_PHONE_NUMBER_ID: str = Field(default="")
     IG_PAGE_ID: str = Field(default="")
+    TWILIO_ACCOUNT_SID: str = Field(default="")
+    TWILIO_AUTH_TOKEN: str = Field(default="")
+    TWILIO_WHATSAPP_NUMBER: str = Field(default="")
 
     # Email (SendGrid)
     SENDGRID_API_KEY: str = Field(default="REDACTED")
@@ -96,16 +129,15 @@ class Settings(BaseSettings):
 
     @staticmethod
     def is_secret_configured(value: str | None) -> bool:
-        if value is None:
-            return False
-        normalized = value.strip()
-        if not normalized:
-            return False
-        return normalized not in UNSAFE_SECRET_VALUES and normalized.lower() not in UNSAFE_SECRET_VALUES_LOWER
+        return is_secret_value_configured(value)
 
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT.strip().lower() in {"production", "prod"}
+
+    @property
+    def has_explicit_database_url(self) -> bool:
+        return is_database_url_explicit(self.DATABASE_URL)
 
     @property
     def cors_origins(self) -> list[str]:
@@ -113,6 +145,24 @@ class Settings(BaseSettings):
         if not raw:
             return []
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    @property
+    def whatsapp_provider(self) -> str:
+        explicit = self.WHATSAPP_PROVIDER.strip().lower()
+        if explicit:
+            return explicit
+
+        meta_ready = (
+            self.is_secret_configured(self.META_VERIFY_TOKEN)
+            and self.is_secret_configured(self.META_ACCESS_TOKEN)
+            and bool(self.WHATSAPP_PHONE_NUMBER_ID.strip())
+        )
+        twilio_ready = bool(self.TWILIO_ACCOUNT_SID.strip() and self.TWILIO_AUTH_TOKEN.strip() and self.TWILIO_WHATSAPP_NUMBER.strip())
+        if meta_ready:
+            return "meta"
+        if twilio_ready:
+            return "twilio"
+        return "mock"
 
 _settings = None
 _warnings_emitted = False
@@ -130,6 +180,11 @@ def _emit_security_warnings(settings: Settings) -> None:
         warnings.append("CRM_WEBHOOK_SECRET is not configured with a secure value.")
 
     if settings.is_production:
+        if not settings.has_explicit_database_url:
+            raise ValueError(
+                "DATABASE_URL must be set explicitly in production. "
+                "Do not rely on the local SQLite fallback."
+            )
         if not settings.is_secret_configured(settings.SECRET_KEY):
             raise ValueError(
                 "SECRET_KEY must be set to a secure random value in production. "
@@ -137,6 +192,16 @@ def _emit_security_warnings(settings: Settings) -> None:
             )
         if "*" in settings.cors_origins:
             warnings.append("CORS_ORIGINS is '*' in production. Restrict allowed origins.")
+        if settings.whatsapp_provider == "mock":
+            warnings.append("WHATSAPP_PROVIDER resolved to mock in production.")
+        if any("ferreteria-bot-clean" in origin for origin in settings.cors_origins):
+            warnings.append("CORS_ORIGINS references ferreteria-bot-clean; ferreteria-bot should be canonical.")
+        if settings.RAILWAY_SERVICE_NAME and settings.RAILWAY_SERVICE_NAME != settings.CANONICAL_RAILWAY_SERVICE:
+            warnings.append(
+                f"RAILWAY_SERVICE_NAME={settings.RAILWAY_SERVICE_NAME} does not match canonical {settings.CANONICAL_RAILWAY_SERVICE}."
+            )
+        if is_truthy(os.getenv("ALLOW_LEGACY_FALLBACK")):
+            raise ValueError("ALLOW_LEGACY_FALLBACK must be disabled in production.")
 
     if warnings:
         logger = logging.getLogger(__name__)

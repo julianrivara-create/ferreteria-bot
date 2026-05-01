@@ -1,7 +1,7 @@
 families:
   taladro:
     allowed_categories:
-      - Herramientas Electricas
+      - Herramientas Eléctricas
     required_dimensions: []
     optional_dimensions:
       - brand
@@ -11,7 +11,7 @@ families:
     compatibility_sensitive: false
   amoladora:
     allowed_categories:
-      - Herramientas Electricas
+      - Herramientas Eléctricas
     required_dimensions: []
     optional_dimensions:
       - brand
@@ -21,7 +21,7 @@ families:
     compatibility_sensitive: false
   atornillador:
     allowed_categories:
-      - Herramientas Electricas
+      - Herramientas Eléctricas
     required_dimensions: []
     optional_dimensions:
       - brand
@@ -31,7 +31,8 @@ families:
     compatibility_sensitive: false
   mecha:
     allowed_categories:
-      - Herramientas Electricas
+      - Mechas y Brocas
+      - Herramientas Eléctricas
       - Herramientas Manuales
       - Accesorios
     required_dimensions:
@@ -43,7 +44,8 @@ families:
     compatibility_sensitive: true
   broca:
     allowed_categories:
-      - Herramientas Electricas
+      - Mechas y Brocas
+      - Herramientas Eléctricas
       - Herramientas Manuales
       - Accesorios
     required_dimensions:
@@ -55,7 +57,8 @@ families:
     compatibility_sensitive: true
   tornillo:
     allowed_categories:
-      - Tornilleria
+      - Tornillería y Fijaciones
+      - Mechas y Brocas
     required_dimensions: []
     optional_dimensions:
       - size
@@ -65,7 +68,7 @@ families:
     compatibility_sensitive: true
   tarugo:
     allowed_categories:
-      - Fijaciones
+      - Tornillería y Fijaciones
     required_dimensions: []
     optional_dimensions:
       - size
@@ -73,7 +76,7 @@ families:
     compatibility_sensitive: true
   taco:
     allowed_categories:
-      - Fijaciones
+      - Tornillería y Fijaciones
     required_dimensions: []
     optional_dimensions:
       - size
@@ -81,7 +84,7 @@ families:
     compatibility_sensitive: true
   pintura:
     allowed_categories:
-      - Pintureria
+      - Pinturas y Acabados
     required_dimensions:
       - type
       - presentation
@@ -92,7 +95,7 @@ families:
     compatibility_sensitive: true
   latex:
     allowed_categories:
-      - Pintureria
+      - Pinturas y Acabados
     required_dimensions:
       - presentation
     optional_dimensions:
@@ -102,7 +105,7 @@ families:
     compatibility_sensitive: true
   rodillo:
     allowed_categories:
-      - Pintureria
+      - Pinturas y Acabados
     required_dimensions: []
     optional_dimensions:
       - size
@@ -111,7 +114,8 @@ families:
     compatibility_sensitive: false
   silicona:
     allowed_categories:
-      - Plomeria
+      - Plomería
+      - Cintas y Adhesivos
     required_dimensions: []
     optional_dimensions:
       - use
@@ -121,7 +125,7 @@ families:
     compatibility_sensitive: true
   sellador:
     allowed_categories:
-      - Plomeria
+      - Plomería
     required_dimensions: []
     optional_dimensions:
       - use
@@ -131,7 +135,8 @@ families:
     compatibility_sensitive: true
   teflon:
     allowed_categories:
-      - Plomeria
+      - Cintas y Adhesivos
+      - Plomería
     required_dimensions: []
     optional_dimensions:
       - presentation
@@ -139,7 +144,7 @@ families:
     compatibility_sensitive: false
   cano:
     allowed_categories:
-      - Plomeria
+      - Plomería
     required_dimensions:
       - material
       - diameter
@@ -165,4 +170,13 @@ families:
       - size
     pack_sensitive: false
     compatibility_sensitive: false
-
+  electrovalvula:
+    allowed_categories:
+      - Plomería
+    required_dimensions:
+      - diameter
+      - voltage
+    optional_dimensions:
+      - use
+    pack_sensitive: false
+    compatibility_sensitive: true

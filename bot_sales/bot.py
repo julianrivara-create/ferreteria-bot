@@ -27,6 +27,12 @@ from .analytics import Analytics
 from . import ferreteria_quote as fq
 from .ferreteria_continuity import apply_followup_to_open_quote, classify_followup_message
 from .ferreteria_escalation import assess_quote_recoverability
+from .state.conversation_state import ConversationStateV2, StateStore
+from .routing.turn_interpreter import TurnInterpreter, TurnInterpretation
+from .services.catalog_search_service import CatalogSearchService, ProductNeed
+from .services.policy_service import PolicyService
+from .observability.turn_event import TurnEvent
+from .observability.metrics import record_turn, record_search, record_escalation, record_latency_bucket
 from .config import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -142,6 +148,25 @@ class SalesBot:
             logging.error("tenant_config_load_failed tenant=%s error=%s", self.tenant_id, e, exc_info=True)
             self.system_prompt = ChatGPTClient.build_system_prompt(self.policies)
         
+        # Phase 6: TurnInterpreter (replaces IntentRouter + AcceptanceDetector per-call)
+        self.turn_interpreter = TurnInterpreter(self.chatgpt)
+
+        # Phase 7: CatalogSearchService
+        self.catalog_search = CatalogSearchService(self.db)
+
+        # Phase 8: PolicyService — dynamic per-turn policy retrieval
+        self.policy_service = PolicyService(self.policies if self.policies else "")
+
+        # Phase 9: Handler instances
+        from .handlers.policy_handler import PolicyHandler
+        from .handlers.escalation_handler import EscalationHandler
+        from .handlers.offtopic_handler import OfftopicHandler
+        self.policy_handler = PolicyHandler(self.policy_service, self.chatgpt)
+        self.escalation_handler = EscalationHandler(
+            handoff_service=getattr(self, 'handoff_service', None)
+        )
+        self.offtopic_handler = OfftopicHandler(llm_client=self.chatgpt)
+
         # Get available functions
         self.functions = get_available_functions()
         
@@ -301,6 +326,10 @@ class SalesBot:
             if ctx and ctx[0].get("role") == "system" and ctx[0].get("content") != self.system_prompt:
                 ctx[0]["content"] = self.system_prompt
                 logging.info("system_prompt_refreshed_in_memory session=%s tenant=%s", session_id, self.tenant_id)
+            # Ensure V2 state is bootstrapped even for already-loaded sessions
+            sess = self.sessions.setdefault(session_id, {})
+            if "_state_v2" not in sess:
+                StateStore.save(sess, StateStore.load(sess))
             return
         # Load from DB first (survives restarts); skip in sandbox to keep tests isolated
         if not self.sandbox_mode:
@@ -312,9 +341,14 @@ class SalesBot:
                     persisted_ctx[0]["content"] = self.system_prompt
                 self.contexts[session_id] = persisted_ctx
                 self.sessions[session_id] = persisted_state
+                # Bootstrap V2 state from any existing legacy keys
+                if "_state_v2" not in persisted_state:
+                    StateStore.save(persisted_state, StateStore.load(persisted_state))
                 return
         self.contexts[session_id] = [{"role": "system", "content": self.system_prompt}]
         self.sessions[session_id] = {}
+        # Bootstrap fresh V2 state
+        StateStore.save(self.sessions[session_id], ConversationStateV2())
         if not self.sandbox_mode:
             self.analytics.start_session(session_id)
 
@@ -356,8 +390,10 @@ class SalesBot:
 
     def _handle_lite_mode(self, session_id: str, user_message: str) -> str:
         faq_result = self.logic.consultar_faq(user_message)
-        if faq_result["status"] == "found":
-            response = faq_result["respuesta"]
+        if faq_result["status"] == "found" and faq_result.get("pregunta_matched"):
+            # Use the top-ranked (keyword-matched) FAQ entry's answer directly
+            entries = faq_result.get("faq_entries") or []
+            response = entries[0]["respuesta"] if entries else ""
             self._set_last_turn_meta(session_id, route_source="faq")
         elif "stock" in user_message.lower() or "precio" in user_message.lower():
             models = self.logic.listar_modelos()
@@ -421,6 +457,29 @@ class SalesBot:
         Returns:
             Bot's response text
         """
+        # ── Input validation ──────────────────────────────────────────────────
+        user_message = (user_message or "").strip()
+        if not user_message:
+            return "¿En qué te puedo ayudar?"
+
+        if len(user_message) > 2000:
+            logging.warning(
+                "input_too_long session=%s tenant=%s original_len=%d — truncated to 2000",
+                session_id,
+                self.tenant_id,
+                len(user_message),
+            )
+            user_message = user_message[:2000]
+
+        if not re.search(r"[a-záéíóúüñA-ZÁÉÍÓÚÜÑ]", user_message):
+            logging.info(
+                "input_no_letters session=%s tenant=%s msg_preview=%.40r — continuing",
+                session_id,
+                self.tenant_id,
+                user_message,
+            )
+        # ─────────────────────────────────────────────────────────────────────
+
         self._ensure_session_initialized(session_id)
 
         # Store channel / customer_ref in session so the quote can be tagged
@@ -428,6 +487,15 @@ class SalesBot:
             self.sessions[session_id]["channel"] = channel
         if customer_ref:
             self.sessions[session_id]["customer_ref"] = customer_ref
+
+        # Phase 10: TurnEvent — create at start of turn
+        _sess_init = self.sessions.get(session_id, {})
+        _state_v2_init = StateStore.load(_sess_init)
+        turn_event = TurnEvent.start(
+            session_id=session_id,
+            tenant_id=getattr(self, 'tenant_id', 'ferreteria'),
+            state_before=_state_v2_init.state,
+        )
 
         from .core.intent_classifier import IntentClassifier
         classifier = IntentClassifier(self.chatgpt)
@@ -439,31 +507,86 @@ class SalesBot:
         # If the user is just chatting, introducing themselves or saying hello,
         # bypass the deterministic search to let the LLM handle personality.
         bypass_intents = {"GREETING_CHAT", "CUSTOMER_INFO", "HANDOFF_REQUEST"}
-        
+
         if intent_result.get("intent") in bypass_intents:
              # Track as conversational
              self._record_user_turn(session_id, user_message)
              self._reset_turn_meta(session_id)
              response_text = self._chat_with_functions(session_id)
-             return self._append_assistant_turn(session_id, response_text)
+             result = self._append_assistant_turn(session_id, response_text)
+             turn_event.handler = "bypass_conversational"
+             turn_event.state_after = StateStore.load(self.sessions.get(session_id, {})).state
+             turn_event.log()
+             record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
+             record_latency_bucket(turn_event.latency_ms)
+             return result
 
         if self._is_ferreteria_runtime():
             self._load_active_quote_from_store(session_id)
 
         self._record_user_turn(session_id, user_message)
         self._reset_turn_meta(session_id)
-        
+
+        # ── Ferreteria Intent Router (Phase 3) ──────────────────────────────
+        # Runs only for ferreteria; classifies into fine-grained intent before
+        # passing to the quote builder.  Non-ferreteria flows are unaffected.
+        if self._is_ferreteria_runtime():
+            ferreteria_route = self._try_ferreteria_intent_route(session_id, user_message)
+            # Phase 10: Populate TurnEvent from interpretation stored by _try_ferreteria_intent_route
+            _interp = self.sessions.get(session_id, {}).get("last_turn_interpretation") or {}
+            turn_event.interpreted_intent = _interp.get("intent", "unknown")
+            turn_event.confidence = float(_interp.get("confidence", 0.0))
+            turn_event.tone = _interp.get("tone", "neutral")
+            turn_event.policy_topic = _interp.get("policy_topic")
+            turn_event.search_mode = _interp.get("search_mode")
+            _catalog = self.sessions.get(session_id, {}).get("last_catalog_result") or {}
+            turn_event.candidate_count = len(_catalog.get("candidates", []))
+            if ferreteria_route is not None:
+                _state_after = StateStore.load(self.sessions.get(session_id, {})).state
+                turn_event.state_after = _state_after
+                # Determine handler name from intent
+                _intent = turn_event.interpreted_intent
+                if _intent == "policy_faq":
+                    turn_event.handler = "policy"
+                elif _intent in ("off_topic", "small_talk"):
+                    turn_event.handler = "offtopic"
+                elif _intent == "escalate":
+                    turn_event.handler = "escalation"
+                    record_escalation(
+                        StateStore.load(self.sessions.get(session_id, {})).escalation_status or "unknown"
+                    )
+                else:
+                    turn_event.handler = "intent_route"
+                if _catalog:
+                    record_search(_catalog.get("status", "unknown"))
+                turn_event.log()
+                record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
+                record_latency_bucket(turn_event.latency_ms)
+                return ferreteria_route
+
         # Trim context if too long (keep system message + last N messages)
         self._trim_context(session_id)
-        
+
         # Check for LITE MODE (Basic Bot)
         from .config import LITE_MODE
         if LITE_MODE:
-            return self._handle_lite_mode(session_id, user_message)
+            result = self._handle_lite_mode(session_id, user_message)
+            turn_event.handler = "lite_mode"
+            turn_event.state_after = StateStore.load(self.sessions.get(session_id, {})).state
+            turn_event.log()
+            record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
+            record_latency_bucket(turn_event.latency_ms)
+            return result
 
         ferreteria_pre_route = self._try_ferreteria_pre_route(session_id, user_message)
         if ferreteria_pre_route:
-            return self._append_assistant_turn(session_id, ferreteria_pre_route)
+            result = self._append_assistant_turn(session_id, ferreteria_pre_route)
+            turn_event.handler = "pre_route"
+            turn_event.state_after = StateStore.load(self.sessions.get(session_id, {})).state
+            turn_event.log()
+            record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
+            record_latency_bucket(turn_event.latency_ms)
+            return result
 
         # Conversational messages (greetings, personal info, vague short phrases) must
         # bypass the sales intelligence entirely and go straight to the LLM.
@@ -471,18 +594,245 @@ class SalesBot:
         # _run_sales_intelligence runs anyway and returns "missing fields" questionnaires.
         if self._is_ferreteria_runtime() and self._should_bypass_sales_intelligence(user_message):
             response_text = self._chat_with_functions(session_id)
-            return self._append_assistant_turn(session_id, response_text)
+            result = self._append_assistant_turn(session_id, response_text)
+            turn_event.handler = "bypass_sales_intel"
+            turn_event.state_after = StateStore.load(self.sessions.get(session_id, {})).state
+            turn_event.log()
+            record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
+            record_latency_bucket(turn_event.latency_ms)
+            return result
 
         sales_contract = self._run_sales_intelligence(session_id, user_message)
         self.sessions[session_id]["sales_intelligence_v1"] = self._build_sales_intelligence_meta(sales_contract)
         sales_response = self._handle_sales_contract_reply(session_id, sales_contract)
         if sales_response is not None:
+            turn_event.handler = "sales_intelligence"
+            turn_event.state_after = StateStore.load(self.sessions.get(session_id, {})).state
+            turn_event.log()
+            record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
+            record_latency_bucket(turn_event.latency_ms)
             return sales_response
 
         # Process with ChatGPT (with potential function calls)
         response_text = self._chat_with_functions(session_id)
-        
-        return self._append_assistant_turn(session_id, response_text)
+        result = self._append_assistant_turn(session_id, response_text)
+        turn_event.handler = "llm_fallback"
+        turn_event.state_after = StateStore.load(self.sessions.get(session_id, {})).state
+        turn_event.log()
+        record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
+        record_latency_bucket(turn_event.latency_ms)
+        return result
+
+    def _try_ferreteria_intent_route(
+        self,
+        session_id: str,
+        user_message: str,
+    ) -> Optional[str]:
+        """
+        Run the ferreteria TurnInterpreter (Phase 6) then fall back to IntentRouter.
+
+        TurnInterpreter runs first: it classifies intent, extracts entities, detects tone,
+        and fills quote context in a single LLM call. Its result is stored and used to
+        short-circuit common intents before the quote builder runs.
+
+        Returns a final response string if the intent warrants special handling,
+        or None to continue with the normal flow (quote builder etc.).
+        """
+        sess = self.sessions.setdefault(session_id, {})
+        ctx = self.contexts.get(session_id, [])
+        history = [m for m in ctx if m.get("role") in ("user", "assistant")][-6:]
+
+        # ── Phase 6: TurnInterpreter ─────────────────────────────────────────
+        state_v2 = StateStore.load(sess)
+        current_state = state_v2.state if state_v2 else "idle"
+
+        try:
+            interpretation = self.turn_interpreter.interpret(
+                user_message, history=history, current_state=current_state
+            )
+            sess["last_turn_interpretation"] = interpretation.to_dict()
+            logging.info(
+                "turn_interpreter session=%s intent=%s confidence=%.2f tone=%s",
+                session_id,
+                interpretation.intent,
+                interpretation.confidence,
+                interpretation.tone,
+            )
+        except Exception as exc:
+            logging.warning("turn_interpreter_failed session=%s error=%s", session_id, exc)
+            interpretation = TurnInterpretation.unknown()
+
+        # Handle reset signal — clear quote state
+        if interpretation.reset_signal:
+            sess.pop("active_quote", None)
+            sess.pop("quote_state", None)
+            state_v2 = StateStore.load(sess)
+            state_v2.transition("idle")
+            state_v2.active_quote_id = None
+            state_v2.acceptance_pending = False
+            StateStore.save(sess, state_v2)
+            logging.info("turn_interpreter reset_signal session=%s", session_id)
+
+        # Phase 7: CatalogSearchService — run when intent is product_search
+        if interpretation.intent == "product_search" and not interpretation.is_low_confidence():
+            try:
+                need = ProductNeed.from_turn_interpretation(interpretation)
+                catalog_result = self.catalog_search.search(need)
+                sess["last_catalog_result"] = catalog_result.to_dict()
+                logging.info(
+                    "catalog_search session=%s status=%s candidates=%d",
+                    session_id,
+                    catalog_result.status,
+                    len(catalog_result.candidates),
+                )
+            except Exception as exc:
+                logging.warning("catalog_search_failed session=%s error=%s", session_id, exc)
+
+        # Phase 9: quote_modify — delegate to LLM with active quote context (C5)
+        if interpretation.intent == "quote_modify" and not interpretation.is_low_confidence():
+            self._trim_context(session_id)
+            response_text = self._chat_with_functions(session_id)
+            return self._append_assistant_turn(session_id, response_text)
+
+        # Phase 9: PolicyHandler — handles policy_faq intent
+        if interpretation.intent == "policy_faq" and not interpretation.is_low_confidence():
+            messages = list(self.contexts.get(session_id, []))
+            response_text = self.policy_handler.handle(
+                user_message=user_message,
+                interpretation=interpretation,
+                messages=messages,
+                system_prompt=self.system_prompt,
+            )
+            return self._append_assistant_turn(session_id, response_text)
+
+        # Phase 9: OfftopicHandler — handles off_topic and small_talk intents
+        if interpretation.intent in ("off_topic", "small_talk") and not interpretation.is_low_confidence():
+            messages = list(self.contexts.get(session_id, []))
+            response_text = self.offtopic_handler.handle(
+                user_message=user_message,
+                interpretation=interpretation,
+                messages=messages,
+                system_prompt=self.system_prompt,
+            )
+            return self._append_assistant_turn(session_id, response_text)
+
+        # Phase 9: EscalationHandler — handles escalate intent or frustration-triggered handoffs
+        if (
+            interpretation.intent == "escalate"
+            or self.escalation_handler.should_escalate_on_frustration(interpretation)
+        ) and not interpretation.is_low_confidence():
+            state_v2 = StateStore.load(sess)
+            customer_contact = sess.get("customer_ref") or session_id
+            response_text = self.escalation_handler.handle(
+                session_id=session_id,
+                user_message=user_message,
+                interpretation=interpretation,
+                state_v2=state_v2,
+                customer_contact=customer_contact,
+            )
+            StateStore.save(sess, state_v2)
+            return self._append_assistant_turn(session_id, response_text)
+
+        # ── Fallback: original IntentRouter (kept for compatibility) ─────────
+        try:
+            from .routing.intent_router import IntentRouter
+        except ImportError as exc:
+            logging.warning("intent_router_import_failed error=%s", exc)
+            return None
+
+        try:
+            router = IntentRouter(self.chatgpt, preferred_model="gpt-4o-mini")
+            route = router.classify(user_message, history=history)
+            logging.info(
+                "ferreteria_intent_router session=%s intent=%s confidence=%.2f",
+                session_id,
+                route.get("intent"),
+                route.get("confidence", 0.0),
+            )
+            sess["ferreteria_intent"] = route
+        except Exception as exc:
+            logging.warning(
+                "ferreteria_intent_router_failed session=%s error=%s",
+                session_id,
+                exc,
+                exc_info=True,
+            )
+            return None
+
+        intent = route.get("intent", "ambiguous")
+        confidence = float(route.get("confidence", 0.0))
+
+        # Low-confidence or ambiguous → fall through to normal flow
+        if intent == "ambiguous" or confidence < 0.5:
+            return None
+
+        # FAQ: route through PolicyHandler, same as policy_faq from TurnInterpreter (C4)
+        if intent == "faq_informational":
+            messages = list(self.contexts.get(session_id, []))
+            response_text = self.policy_handler.handle(
+                user_message=user_message,
+                interpretation=interpretation,
+                messages=messages,
+                system_prompt=self.system_prompt,
+            )
+            return self._append_assistant_turn(session_id, response_text)
+
+        # Acceptance: route directly to the acceptance handler in pre-route
+        if intent == "acceptance":
+            # Let _try_ferreteria_pre_route handle it (it checks open_quote + looks_like_acceptance)
+            return None
+
+        # Escalation: send a warm acknowledgment first, then trigger handoff
+        if intent == "escalation_signal":
+            self._trim_context(session_id)
+            # Build a warm, natural handoff acknowledgment via LLM
+            # Inject a one-shot instruction into the context so the LLM
+            # responds empathetically before the human takes over.
+            ctx = self.contexts.get(session_id, [])
+            escalation_instruction = {
+                "role": "system",
+                "content": (
+                    "El cliente quiere hablar con una persona o la situación requiere atención humana. "
+                    "Respondé de forma cálida y empática: reconocé su pedido, disculpate si hubo algún inconveniente, "
+                    "y confirmá que un asesor se va a comunicar con él a la brevedad. "
+                    "Sé breve (2-3 oraciones), en tono argentino cercano. No inventes tiempos de espera exactos."
+                ),
+            }
+            self.contexts[session_id] = list(ctx) + [escalation_instruction]
+            try:
+                response_text = self._chat_with_functions(session_id)
+            finally:
+                # Restore context without the injected instruction
+                self.contexts[session_id] = list(self.contexts.get(session_id, []))
+                # Remove the escalation_instruction if it's still there
+                self.contexts[session_id] = [
+                    m for m in self.contexts[session_id]
+                    if not (
+                        m.get("role") == "system"
+                        and "El cliente quiere hablar con una persona" in (m.get("content") or "")
+                    )
+                ]
+
+            if not self.sandbox_mode:
+                try:
+                    summary = self._generate_handoff_summary(session_id)
+                    self.logic.derivar_humano(
+                        razon="Señal de escalación detectada por el clasificador de intenciones",
+                        contacto=session_id,
+                        resumen=summary,
+                    )
+                except Exception as exc:
+                    logging.warning(
+                        "ferreteria_escalation_handoff_failed session=%s error=%s",
+                        session_id,
+                        exc,
+                        exc_info=True,
+                    )
+            return self._append_assistant_turn(session_id, response_text)
+
+        # All other intents (product_search, quote_build, rejection, off_topic):
+        # continue with existing flow
+        return None
 
     def _try_ferreteria_pre_route(self, session_id: str, user_message: str) -> Optional[str]:
         """Tenant-specific product-first routing for ferreteria with full multi-turn state."""
@@ -495,6 +845,8 @@ class SalesBot:
 
         normalized = self._normalize_lookup_text(text)
         sess = self.sessions.setdefault(session_id, {})
+        # Load V2 state at the start of each turn for this route
+        state_v2 = StateStore.load(sess)
         sales_preferences = self._update_sales_preferences(session_id, normalized)
         quote_state: Optional[str] = sess.get("quote_state")
         open_quote: Optional[List] = sess.get("active_quote")
@@ -504,23 +856,21 @@ class SalesBot:
             payload = {"route_source": route_source}
             payload.update(meta)
             self._set_last_turn_meta(session_id, **payload)
+            # Sync V2 state back after each deterministic route completes
+            StateStore.save(sess, state_v2)
             return response
-
-        # ── 0. FAQ — always works regardless of quote state ─────────────────
-        faq_result = self.logic.consultar_faq(text)
-        if faq_result.get("status") == "found":
-            return _done(str(faq_result.get("respuesta") or ""), "faq")
 
         # ── 0. Intent-based pre-routing ──────────────────────────────────────
         # Use LLM classification to distinguish between quoting and non-quoting
         intent_result = sess.get("last_intent", {})
         intent = intent_result.get("intent", "QUOTATION")
-        
+
         # ── 0.1. FAQ Handling ────────────────────────────────────────────────
+        # FAQ questions are now answered by the LLM using the full FAQ context
+        # returned by consultar_faq() via function calling — no pre-route shortcircuit.
+        # Returning None here lets the message fall through to _chat_with_functions.
         if intent == "FAQ":
-            faq_result = self.logic.consultar_faq(text)
-            if faq_result.get("status") == "found":
-                return _done(str(faq_result.get("respuesta") or ""), "faq_llm_guided")
+            return None
 
         # ── 0.2. Conversational bypass ───────────────────────────────────────
         # GREETING_CHAT, CUSTOMER_INFO are handled in process_message bypass,
@@ -558,13 +908,15 @@ class SalesBot:
                 )
 
         # ── 0.5. Acceptance ──────────────────────────────────────────────────
-        if open_quote and fq.looks_like_acceptance(text, knowledge=knowledge):
+        if open_quote and fq.looks_like_acceptance(text, knowledge=knowledge, chatgpt_client=self.chatgpt):
             response = fq.generate_acceptance_response(open_quote, knowledge=knowledge)
             if "✓" in response:
                 self._accept_quote_for_review(session_id, user_message, response)
                 sess["quote_state"] = "accepted"
                 sess.pop("pending_decision", None)
                 sess.pop("pending_clarification_target", None)
+                state_v2.transition("awaiting_customer_confirmation")
+                state_v2.acceptance_pending = True
             else:
                 self._persist_quote_state(
                     session_id,
@@ -573,6 +925,7 @@ class SalesBot:
                     event_type="quote_acceptance_blocked",
                     event_payload={"reason": "pending_lines"},
                 )
+                state_v2.transition("awaiting_clarification")
             return _done(response, "deterministic")
 
         # ── 1. Explicit reset ────────────────────────────────────────────────
@@ -583,6 +936,9 @@ class SalesBot:
             sess.pop("quote_state", None)
             sess.pop("pending_decision", None)
             sess.pop("pending_clarification_target", None)
+            state_v2.transition("idle")
+            state_v2.active_quote_id = None
+            state_v2.acceptance_pending = False
             return _done("Presupuesto borrado. Cuando quieras empezamos uno nuevo.", "deterministic")
 
         # ── 1.5. Post-acceptance guard: clear for fresh request ──────────────
@@ -593,6 +949,8 @@ class SalesBot:
             sess.pop("quote_state", None)
             sess.pop("pending_decision", None)
             open_quote = None
+            state_v2.transition("idle")
+            state_v2.acceptance_pending = False
 
         # ── 1.7. Consultative sales guidance on open quote ───────────────────
         if open_quote and quote_state == "open":
@@ -631,6 +989,7 @@ class SalesBot:
                 sess["active_quote"] = merged
                 sess["quote_state"] = "open"
                 sess.pop("pending_decision", None)
+                state_v2.transition("quote_drafting")
                 comps = self._get_suggestions(merged, knowledge=knowledge)
                 reply = fq.generate_updated_quote_response(merged, complementary=comps or None)
                 self._persist_quote_state(
@@ -646,6 +1005,7 @@ class SalesBot:
                 sess["active_quote"] = pending_items
                 sess["quote_state"] = "open"
                 sess.pop("pending_decision", None)
+                state_v2.transition("quote_drafting")
                 comps = self._get_suggestions(pending_items, knowledge=knowledge)
                 reply = self._generate_quote_response(pending_items, complementary=comps or None)
                 self._persist_quote_state(
@@ -722,6 +1082,7 @@ class SalesBot:
             sess["active_quote"] = updated
             sess["quote_state"] = "open"
             sess.pop("pending_decision", None)
+            state_v2.transition("quote_drafting")
             comps = self._get_suggestions(updated, knowledge=knowledge)
             reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
             self._persist_quote_state(
@@ -751,6 +1112,7 @@ class SalesBot:
                         if it.get("status") in ("ambiguous", "unresolved", "blocked_by_missing_info")
                     ]
                     sess["pending_clarification_target"] = [line_id for line_id in target_ids if line_id]
+                    state_v2.transition("awaiting_clarification")
                     return _done(str(followup.get("prompt") or fq.needs_disambiguation(text, open_quote) or ""), "deterministic")
 
                 if followup.get("status") == "no_target":
@@ -784,6 +1146,7 @@ class SalesBot:
                     updated = list(followup.get("items") or open_quote)
                     sess["active_quote"] = updated
                     sess["quote_state"] = "open"
+                    state_v2.transition("quote_drafting")
                     if followup.get("status") == "updated":
                         sess.pop("pending_clarification_target", None)
                         comps = self._get_suggestions(updated, knowledge=knowledge)
@@ -810,6 +1173,7 @@ class SalesBot:
                         ]
                         if recoverable_ids:
                             sess["pending_clarification_target"] = recoverable_ids
+                            state_v2.transition("awaiting_clarification")
                         comps = self._get_suggestions(updated, knowledge=knowledge)
                         reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
                         prompt = str(assessment.get("prompt") or "").strip()
@@ -848,6 +1212,7 @@ class SalesBot:
                 sess["pending_clarification_target"] = [
                     it.get("line_id") for it in pending_cands if it.get("line_id")
                 ]
+                state_v2.transition("awaiting_clarification")
                 return _done(disambig, "deterministic")
 
             # Pass the stored target if disambiguation already ran
@@ -873,6 +1238,12 @@ class SalesBot:
                 knowledge=knowledge,
             )
             sess["active_quote"] = updated
+            # Transition V2 state based on whether any lines are still pending
+            _still_pending = any(
+                it.get("status") in ("ambiguous", "unresolved", "blocked_by_missing_info")
+                for it in updated
+            )
+            state_v2.transition("awaiting_clarification" if _still_pending else "quote_drafting")
             comps = self._get_suggestions(updated, knowledge=knowledge)
             reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
             self._persist_quote_state(
@@ -902,6 +1273,7 @@ class SalesBot:
             sess["active_quote"] = resolved_items
             sess["quote_state"] = "open"
             sess.pop("pending_decision", None)
+            state_v2.transition("quote_drafting")
             comps = self._get_suggestions(resolved_items, knowledge=knowledge)
             reply = self._generate_quote_response(resolved_items, complementary=comps or None)
             self._persist_quote_state(
@@ -980,6 +1352,10 @@ class SalesBot:
                 if resolved_single.get("status") in ("resolved", "ambiguous", "unresolved", "blocked_by_missing_info"):
                     sess["active_quote"] = [resolved_single]
                     sess["quote_state"] = "open"
+                    if resolved_single.get("status") in ("ambiguous", "unresolved", "blocked_by_missing_info"):
+                        state_v2.transition("awaiting_clarification")
+                    else:
+                        state_v2.transition("quote_drafting")
                     comps = []
                     if resolved_single.get("status") == "resolved":
                         comps = self._get_suggestions([resolved_single], knowledge=knowledge)
@@ -1414,7 +1790,10 @@ class SalesBot:
                 # Execute function
                 func_result = self._execute_function(session_id, func_name, func_args)
                 
-                # Add function result to context
+                # Add function result to context — slim the payload first to
+                # prevent massive product lists from blowing the context window.
+                slimmed_result = self._slim_function_result(func_name, func_result)
+
                 self.contexts[session_id].append({
                     "role": "assistant",
                     "content": None,
@@ -1423,11 +1802,11 @@ class SalesBot:
                         "arguments": str(func_args)
                     }
                 })
-                
+
                 self.contexts[session_id].append({
                     "role": "function",
                     "name": func_name,
-                    "content": str(func_result)
+                    "content": str(slimmed_result)
                 })
                 
                 # Continue loop to get final response
@@ -1490,6 +1869,80 @@ class SalesBot:
         except Exception as exc:
             logging.warning("sales_intelligence_failed_using_legacy_flow tenant=%s session=%s error=%s", self.tenant_id, session_id, exc, exc_info=True)
             return None
+
+    # ── Context-size safety ───────────────────────────────────────────────────
+    #
+    # Functions like buscar_stock / buscar_por_categoria / buscar_alternativas
+    # can return hundreds (or tens-of-thousands) of full product dicts when the
+    # catalog is large.  Storing the raw result verbatim as a "function" message
+    # causes context sizes of 700k+ tokens, which exceeds gpt-4o's 128k limit.
+    #
+    # _slim_function_result trims every product list down to at most MAX_PRODUCTS
+    # items and keeps only the fields the LLM actually needs to compose a reply.
+    # Non-product results are passed through unchanged (with a hard character cap
+    # as a last-resort safety net).
+
+    _PRODUCT_FIELDS = ("sku", "model", "category", "price_ars", "price_formatted", "available", "stock_qty")
+    _MAX_PRODUCTS = 5          # top results per function call kept in context
+    _MAX_RESULT_CHARS = 4_000  # hard cap on the serialised result string
+
+    @staticmethod
+    def _slim_product_list(products: list) -> list:
+        """Return at most _MAX_PRODUCTS products with essential fields only."""
+        slim = []
+        for p in products[: SalesBot._MAX_PRODUCTS]:
+            slim.append({k: p[k] for k in SalesBot._PRODUCT_FIELDS if k in p})
+        return slim
+
+    @staticmethod
+    def _slim_function_result(func_name: str, result: Any) -> Any:
+        """
+        Trim function results that carry large product lists before they are
+        serialised into the conversation context.
+
+        Functions that return a 'products', 'alternatives', or 'recommendations'
+        list have those lists truncated.  Everything else passes through, but is
+        hard-capped at _MAX_RESULT_CHARS characters when serialised.
+        """
+        if not isinstance(result, dict):
+            return result
+
+        slimmed = dict(result)  # shallow copy — we'll replace the big lists
+
+        for list_key in ("products", "alternatives", "recommendations"):
+            if isinstance(slimmed.get(list_key), list):
+                original_count = len(slimmed[list_key])
+                slimmed[list_key] = SalesBot._slim_product_list(slimmed[list_key])
+                if original_count > SalesBot._MAX_PRODUCTS:
+                    slimmed["_truncated"] = (
+                        f"{original_count - SalesBot._MAX_PRODUCTS} productos adicionales omitidos del contexto"
+                    )
+
+        # For obtener_cross_sell_offer the offer embeds a full product dict
+        if isinstance(slimmed.get("offer"), dict) and isinstance(slimmed["offer"].get("product"), dict):
+            full_product = slimmed["offer"]["product"]
+            slimmed["offer"] = dict(slimmed["offer"])
+            slimmed["offer"]["product"] = {k: full_product[k] for k in SalesBot._PRODUCT_FIELDS if k in full_product}
+
+        # For obtener_upselling the upsell_product is a full product dict
+        if isinstance(slimmed.get("upsell_product"), dict):
+            full_product = slimmed["upsell_product"]
+            slimmed["upsell_product"] = {k: full_product[k] for k in SalesBot._PRODUCT_FIELDS if k in full_product}
+
+        # Hard-cap: if the result is still huge, truncate its string representation
+        serialised = str(slimmed)
+        if len(serialised) > SalesBot._MAX_RESULT_CHARS:
+            logging.warning(
+                "slim_function_result_still_large func=%s chars=%d — hard-truncating to %d",
+                func_name,
+                len(serialised),
+                SalesBot._MAX_RESULT_CHARS,
+            )
+            slimmed = {"_raw_truncated": serialised[: SalesBot._MAX_RESULT_CHARS] + "…[truncado]"}
+
+        return slimmed
+
+    # ─────────────────────────────────────────────────────────────────────────
 
     def _execute_function(self, session_id: str, func_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a business logic function"""
@@ -1666,17 +2119,90 @@ class SalesBot:
                 "message": f"Error: {str(e)}"
             }
 
+    def _summarize_context(self, messages_to_summarize: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Summarize old conversation messages into a compact system message.
+
+        Makes a single LLM call to produce a 2-3 sentence Spanish summary of
+        the oldest messages in a session.  Returns a system-role dict on success
+        or None if the LLM call fails (caller falls back to simple truncation).
+        """
+        try:
+            conversation_text = ""
+            for msg in messages_to_summarize:
+                role = msg.get("role", "unknown")
+                content = str(msg.get("content") or "").strip()
+                if content and role in ("user", "assistant"):
+                    prefix = "Cliente" if role == "user" else "Asesor"
+                    conversation_text += f"{prefix}: {content}\n"
+
+            if not conversation_text.strip():
+                return None
+
+            summary_prompt = [
+                {
+                    "role": "system",
+                    "content": (
+                        "Resumí esta conversación en 2-3 oraciones en español. "
+                        "Incluí: qué buscó el cliente, qué productos se mencionaron y en qué estado quedó la charla. "
+                        "Sé breve y preciso. No agregues saludos ni conclusiones."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Conversación a resumir:\n{conversation_text}",
+                },
+            ]
+
+            response = self.chatgpt.send_message(summary_prompt)
+            summary_text = (response.get("content") or "").strip()
+
+            if not summary_text:
+                return None
+
+            return {
+                "role": "system",
+                "content": f"Resumen de conversación anterior: {summary_text}",
+            }
+
+        except Exception as exc:
+            logging.warning(
+                "context_summarization_failed session_skipped error=%s", exc, exc_info=True
+            )
+            return None
+
     def _trim_context(self, session_id: str):
-        """Trim conversation context to avoid token limits"""
+        """Trim conversation context to avoid token limits.
+
+        When the context exceeds MAX_CONTEXT_MESSAGES, the oldest turns are
+        summarized via a single LLM call and prepended as a system message so
+        that long-running sessions retain meaningful context instead of losing
+        it silently.
+        """
         context = self.contexts[session_id]
-        
+
         if len(context) <= MAX_CONTEXT_MESSAGES + 1:  # +1 for system message
             return
-        
+
         # Keep system message + last N messages
         system_msg = context[0]
         recent_messages = context[-(MAX_CONTEXT_MESSAGES):]
-        self.contexts[session_id] = [system_msg] + recent_messages
+        old_messages = context[1 : len(context) - MAX_CONTEXT_MESSAGES]
+
+        # Attempt LLM summarization of the dropped messages
+        summary_msg = self._summarize_context(old_messages)
+
+        if summary_msg:
+            self.contexts[session_id] = [system_msg, summary_msg] + recent_messages
+            logging.info(
+                "context_summarized session=%s tenant=%s old_msgs=%d",
+                session_id,
+                self.tenant_id,
+                len(old_messages),
+            )
+        else:
+            # Fallback: simple truncation
+            self.contexts[session_id] = [system_msg] + recent_messages
 
     def _generate_handoff_summary(self, session_id: str) -> str:
         """Generate a brief summary of the conversation for the human agent"""
@@ -1710,6 +2236,16 @@ class SalesBot:
         except Exception as e:
             logging.error(f"Error generating summary: {e}")
             return "Resumen no disponible (Error al procesar)"
+
+    def _get_state(self, session_id: str) -> ConversationStateV2:
+        """Load ConversationStateV2 for a session, upgrading from legacy format if needed."""
+        sess = self.sessions.setdefault(session_id, {})
+        return StateStore.load(sess)
+
+    def _save_state(self, session_id: str, state: ConversationStateV2) -> None:
+        """Persist ConversationStateV2 back into the session dict, keeping legacy keys in sync."""
+        sess = self.sessions.setdefault(session_id, {})
+        StateStore.save(sess, state)
 
     def _set_last_turn_meta(self, session_id: str, **meta: Any) -> None:
         sess = self.sessions.setdefault(session_id, {})

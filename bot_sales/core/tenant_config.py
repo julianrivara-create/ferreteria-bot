@@ -63,6 +63,7 @@ class TenantConfig:
 
         merged = {
             "store_name": data.get("store_name") or business.get("name") or "Ferretería",
+            "bot_name": data.get("bot_name") or "Asesor",
             "store_description": data.get("store_description") or business.get("description") or "Tienda",
             "store_type": data.get("store_type") or business.get("industry") or "general",
             "country": data.get("country") or business.get("country") or "Argentina",
@@ -87,6 +88,7 @@ class TenantConfig:
     def _get_default_config(self) -> Dict[str, Any]:
         return {
             "store_name": "Ferretería",
+            "bot_name": "Asesor",
             "store_description": "Tienda de Tecnología",
             "store_type": "tecnología",
             "country": "Argentina",
@@ -119,6 +121,7 @@ class TenantConfig:
             template = self.jinja_env.get_template(template_name)
             return template.render(
                 store_name=self.config.get("store_name", "Store"),
+                bot_name=self.config.get("bot_name", "Asesor"),
                 store_description=self.config.get("store_description", ""),
                 personality_style=self.config.get("personality_style", "Informal"),
                 emojis=self.config.get("emojis", ""),

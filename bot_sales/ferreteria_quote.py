@@ -30,6 +30,7 @@ Design constraints
 
 from __future__ import annotations
 
+import difflib
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
@@ -151,6 +152,7 @@ def _detect_category(normalized: str, knowledge: Optional[Dict[str, Any]] = None
 
 def _get_expected_families(normalized: str, knowledge: Optional[Dict[str, Any]] = None) -> set:
     """Return the union of acceptable categories for all item keywords found."""
+    families: set = set()  # C1: must be initialized before the |= loop below
     family_map = _knowledge_map_item_family(knowledge)
     for family, rule in _family_rules(knowledge).items():
         allowed = set(rule.get("allowed_categories") or [])
@@ -291,7 +293,7 @@ def _score_product(
     if req_words:
         overlap = req_words & name_words
         ratio = len(overlap) / len(req_words)
-        if ratio >= 0.5:
+        if ratio > 0.5:
             score += 5.0
         elif overlap:
             score += 3.0
@@ -329,19 +331,40 @@ _SCORE_LOW = 2.0
 # Synonym / alias expansion
 # ---------------------------------------------------------------------------
 
+_FUZZY_CUTOFF = 0.82
+
+
 def _build_search_terms(normalized: str, knowledge: Optional[Dict[str, Any]] = None) -> List[str]:
     normalized = normalize_live_language(normalized, knowledge=knowledge)
     terms: List[str] = []
+
+    # Collect all alias strings for fuzzy fallback
+    all_aliases: List[str] = []
+
     for entry in _synonym_entries(knowledge):
         alias_bucket = [entry.get("canonical", "")] + list(entry.get("aliases") or []) + list(entry.get("misspellings") or [])
-        if any(alias and _normalize(alias) in normalized for alias in alias_bucket):
+        normalized_aliases = [_normalize(str(a).strip()) for a in alias_bucket if a]
+        all_aliases.extend(normalized_aliases)
+
+        if any(alias and alias in normalized for alias in normalized_aliases):
             canonical = str(entry.get("canonical", "")).strip()
             if canonical and canonical not in terms:
                 terms.append(canonical)
-            for alias in alias_bucket:
-                clean = _normalize(str(alias).strip())
-                if clean and clean not in terms:
-                    terms.append(clean)
+            for alias in normalized_aliases:
+                if alias and alias not in terms:
+                    terms.append(alias)
+
+    # Fuzzy fallback: if no exact match found, check each input token against
+    # the full alias pool using difflib with cutoff=0.82.
+    # Only applied to the input normalization step — not to catalog search terms.
+    if not terms and all_aliases:
+        input_tokens = [tok for tok in normalized.split() if len(tok) >= 3]
+        for token in input_tokens:
+            fuzzy_hits = difflib.get_close_matches(token, all_aliases, n=3, cutoff=_FUZZY_CUTOFF)
+            for hit in fuzzy_hits:
+                if hit not in terms:
+                    terms.append(hit)
+
     for family in infer_families(normalized, knowledge=knowledge):
         if family not in terms:
             terms.append(family)
@@ -955,9 +978,33 @@ def _match_known_phrase(message: str, phrases: List[str]) -> bool:
     return any(_normalize(phrase) in norm for phrase in phrases if phrase)
 
 
-def looks_like_acceptance(message: str, knowledge: Optional[Dict[str, Any]] = None) -> bool:
-    """Return True if the message is accepting/confirming the current quote."""
+def looks_like_acceptance(
+    message: str,
+    knowledge: Optional[Dict[str, Any]] = None,
+    chatgpt_client: Optional[Any] = None,
+) -> bool:
+    """Return True if the message is accepting/confirming the current quote.
+
+    When chatgpt_client is provided the LLM-based AcceptanceDetector is used
+    as the primary signal; keyword matching from acceptance_patterns.yaml is
+    retained as the fallback.  When no client is given (or when the LLM call
+    fails) the function falls back to keyword matching alone.
+    """
     patterns = _acceptance_patterns(knowledge)
+
+    if chatgpt_client is not None:
+        try:
+            from bot_sales.routing.acceptance_detector import AcceptanceDetector
+            detector = AcceptanceDetector(chatgpt_client, acceptance_patterns=patterns)
+            result = detector.detect(message)
+            if result.get("action") == "accept" and result.get("confidence", 0.0) >= 0.5:
+                return True
+            if result.get("action") in ("reject", "none") and result.get("confidence", 0.0) >= 0.5:
+                return False
+            # Low-confidence → fall through to keyword check
+        except Exception:
+            pass  # keyword fallback below
+
     return _match_known_phrase(message, patterns.get("accept_phrases", []))
 
 
@@ -1051,7 +1098,7 @@ def _quote_next_step_line(items: List[QuoteItem]) -> str:
 def generate_quote_response(
     resolved_items: List[QuoteItem],
     complementary: Optional[List[str]] = None,
-    header: str = "*Presupuesto:*",
+    header: str = "*Presupuesto preliminar:*",
 ) -> str:
     """Compact quote format: one line per item, clear total at the bottom."""
     lines: List[str] = [header, ""]

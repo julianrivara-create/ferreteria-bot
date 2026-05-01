@@ -49,7 +49,7 @@ class Config:
     
     # OpenAI
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
-    OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4')
+    OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o')  # H4: aligned with training/app config
     
     # Gemini
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
@@ -144,7 +144,8 @@ class Config:
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/ferreteria.db')
     
     # Business Logic
-    HOLD_MINUTES = int(os.getenv('HOLD_MINUTES', 30))
+    HOLD_MINUTES = int(os.getenv('HOLD_MINUTES', 1440))  # H5: aligned with tenant_config.yaml (24h)
+    CROSS_SELL_DISCOUNT_PERCENT = int(os.getenv('CROSS_SELL_DISCOUNT_PERCENT', 5))  # H6: configurable, matches tenant_config.yaml
     LITE_MODE = os.getenv('LITE_MODE', 'false').lower() == 'true'
     
     # Features
@@ -228,7 +229,7 @@ OPENAI_API_KEY = config.OPENAI_API_KEY
 OPENAI_MODEL = config.OPENAI_MODEL
 OPENAI_TEMPERATURE = 0.7
 OPENAI_MAX_TOKENS = 1000
-MAX_CONTEXT_MESSAGES = 10
+MAX_CONTEXT_MESSAGES = 20
 
 HOLD_MINUTES = config.HOLD_MINUTES
 LITE_MODE = config.LITE_MODE

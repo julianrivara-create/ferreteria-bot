@@ -79,7 +79,7 @@ def extract_dimensions(text: str, family_rule: Dict[str, Any] | None = None) -> 
         dims["size"] = f"N{size_match.group(1)}"
         dims.setdefault("diameter", f"{size_match.group(1)}mm")
 
-    mm_match = re.search(r"\b(\d+(?:[.,]\d+)?)mm\b", normalized)
+    mm_match = re.search(r"\b(\d+(?:[.,]\d+)?)\s*mm\b", normalized)
     if mm_match:
         value = mm_match.group(1).replace(",", ".")
         dims["diameter"] = f"{value}mm"

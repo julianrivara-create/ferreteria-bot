@@ -317,7 +317,7 @@ class BusinessLogic:
         # We need to ensure stock_qty > 0.
         product_data = self.db.get_product_by_sku(sku)
         if not product_data or product_data['stock_qty'] <= 0:
-            logging.critical(f"GUARDRAIL STOP: Attempted to sell {sku} with 0 physical stock. Hold: {hold_id}")
+            logger.critical("GUARDRAIL STOP: Attempted to sell %s with 0 physical stock. Hold: %s", sku, hold_id)
             return {"status": "error", "message": "Error crítico: Sin stock físico disponible al momento de cerrar."}
         
         success, result_msg = self.db.confirm_sale(hold_id, zona, metodo_pago)
@@ -481,11 +481,13 @@ class BusinessLogic:
             for item in sorted(products, key=lambda x: x.get('price_ars', 0), reverse=True):
                 avail = self.db.available_for_sku(item['sku'])
                 if avail > 0:
-                    # Calculate discounted price (10% off for cross-sell)
+                    # H6: read discount from config, not hardcoded
+                    from ..config import Config as _Cfg
+                    _discount_pct = getattr(_Cfg, "CROSS_SELL_DISCOUNT_PERCENT", 5)
                     original_price = item['price_ars']
-                    discounted_price = int(original_price * 0.9)  # 10% off
+                    discounted_price = int(original_price * (1 - _discount_pct / 100))
                     discount_amount = original_price - discounted_price
-                    
+
                     return {
                         "status": "available",
                         "offer": {
@@ -495,12 +497,12 @@ class BusinessLogic:
                             "original_price_formatted": format_money_ars(original_price),
                             "discounted_price": discounted_price,
                             "discounted_price_formatted": format_money_ars(discounted_price),
-                            "discount_percent": 10,
+                            "discount_percent": _discount_pct,
                             "discount_amount": discount_amount,
                             "available": avail,
                             "reason": f"complemento ideal para tu {category}"
                         },
-                        "message": f"Oferta: {item['model']} con 10% de descuento"
+                        "message": f"Oferta: {item['model']} con {_discount_pct}% de descuento"
                     }
         
         # No cross-sell available
@@ -673,30 +675,67 @@ Para coordinar esto, te paso con un asesor.
 
     def consultar_faq(self, pregunta: str) -> Dict[str, Any]:
         """
-        Check if question matches an FAQ
-        Saves tokens by answering without AI
-        
-        Args:
-            pregunta: User's question
-        
-        Returns:
-            {
-                "status": "found" | "not_found",
-                "respuesta": "..." or None
-            }
+        Return all FAQ entries as structured context for the LLM.
+
+        Instead of keyword-matching a single answer, every active FAQ is
+        returned so the LLM can synthesise the best response from the
+        policies already in its system prompt and from these entries.
+
+        The function signature and return-value shape are preserved:
+          - status "found" means context is available.
+          - respuesta contains the formatted FAQ block.
+          - faq_entries contains the raw list for programmatic use.
+
+        Keyword matching is kept as a fast-path: if a keyword match is
+        found, that entry is listed first so the LLM can prioritise it.
         """
-        faq = self.faq_handler.detect_faq(pregunta)
-        
-        if faq:
+        self.faq_handler._maybe_reload()
+        all_entries = list(self.faq_handler.faqs.values())
+
+        if not all_entries:
             return {
-                "status": "found",
-                "respuesta": faq["respuesta"],
-                "pregunta_matched": faq["pregunta"]
+                "status": "not_found",
+                "message": "No hay FAQs cargadas",
             }
-        
+
+        # Promote any keyword-matched entry to the top
+        keyword_match = self.faq_handler.detect_faq(pregunta)
+        matched_id: Optional[str] = None
+        if keyword_match:
+            matched_id = keyword_match.get("pregunta", "")
+
+        ordered = []
+        rest = []
+        for entry in all_entries:
+            if keyword_match and entry.get("pregunta") == matched_id:
+                ordered.append(entry)
+            else:
+                rest.append(entry)
+        ordered.extend(rest)
+
+        # Build a structured context block the LLM can use
+        lines = ["=== Preguntas Frecuentes (contexto para el asistente) ===", ""]
+        for entry in ordered:
+            q = str(entry.get("pregunta") or entry.get("question") or "").strip()
+            a = str(entry.get("respuesta") or entry.get("answer") or "").strip()
+            if q and a:
+                lines.append(f"P: {q}")
+                lines.append(f"R: {a}")
+                lines.append("")
+
+        context_block = "\n".join(lines).strip()
+
         return {
-            "status": "not_found",
-            "message": "No es una pregunta frecuente"
+            "status": "found",
+            "respuesta": context_block,
+            "pregunta_matched": matched_id or "",
+            "faq_entries": [
+                {
+                    "pregunta": str(e.get("pregunta") or e.get("question") or ""),
+                    "respuesta": str(e.get("respuesta") or e.get("answer") or ""),
+                }
+                for e in ordered
+            ],
         }
     
     def listar_bundles(self, categoria: Optional[str] = None) -> Dict[str, Any]:

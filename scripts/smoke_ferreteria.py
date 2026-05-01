@@ -33,7 +33,7 @@ def main() -> int:
             checks.append(("routing taladro", "Taladro" in taladro and "Lo necesit" not in taladro, taladro[:180]))
 
             tornillos = bot.process_message(sid("smoke_tornillos"), "Necesito tornillos para chapa")
-            checks.append(("routing tornillos", ("Tornilleria" in tornillos or "Tornillos" in tornillos) and "Pag" not in tornillos, tornillos[:180]))
+            checks.append(("routing tornillos", "tornillo" in tornillos.lower() and "chapa" in tornillos.lower() and "Pag" not in tornillos, tornillos[:180]))
 
             faq = bot.process_message(sid("smoke_faq"), "Hacen factura A?")
             checks.append(("faq factura", "factura A" in faq and "Lo necesit" not in faq, faq[:180]))

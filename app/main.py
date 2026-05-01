@@ -16,10 +16,12 @@ from app.ui.ferreteria_admin_routes import ferreteria_admin_ui
 from app.ui.ferreteria_training_routes import ferreteria_training_ui
 from app.services.mep_rate_scheduler import start_mep_rate_scheduler
 from app.services.holds_scheduler import start_holds_scheduler
+from app.services.runtime_integrity import evaluate_runtime_integrity
 import structlog
 import uuid
 import os
 import hmac
+from pathlib import Path
 from flask_cors import CORS
 
 def create_app() -> Flask:
@@ -89,6 +91,7 @@ def create_app() -> Flask:
         v = os.getenv("DATABASE_URL", "")
         u = urlparse(v) if v else None
         return jsonify({
+            "detail_level": "redacted",
             "has_DATABASE_URL": bool(v),
             "db_host": (u.hostname if u else None),
             "db_port": (u.port if u else None),
@@ -96,6 +99,14 @@ def create_app() -> Flask:
             "railway_environment": os.getenv("RAILWAY_ENVIRONMENT"),
             "railway_service_name": os.getenv("RAILWAY_SERVICE_NAME"),
         })
+
+    @app.route("/diag/runtime-integrity", methods=["GET"])
+    def diag_runtime_integrity():
+        if not _diag_authorized():
+            return jsonify({"error": "Unauthorized"}), 401
+        repo_root = Path(__file__).resolve().parent.parent
+        report = evaluate_runtime_integrity(repo_root=repo_root)
+        return jsonify(report)
 
     @app.route("/diag/request-ip", methods=["GET"])
     def diag_request_ip():
