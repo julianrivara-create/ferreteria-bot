@@ -87,7 +87,8 @@ def main() -> int:
                 "multiturn clarification",
                 ("Actualice" in mt_clar or "Presupuesto" in mt_clar)
                 and "urgencia" not in mt_clar.lower()
-                and "mecha madera 8mm" in mt_clar.lower()
+                and "mecha" in mt_clar.lower()
+                and "madera" in mt_clar.lower()
                 and "taladro" not in mt_clar.lower(),
                 mt_clar[:260],
             ))
