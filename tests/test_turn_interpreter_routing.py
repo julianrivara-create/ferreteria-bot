@@ -157,6 +157,16 @@ class TestTurnInterpreterParsing:
         assert "taladro" in result.entities.product_terms
         assert result.entities.qty == 3
 
+    def test_customer_info_in_valid_intents(self):
+        """customer_info must be a recognized intent after Commit 2."""
+        assert "customer_info" in VALID_INTENTS
+
+    def test_customer_info_parses_correctly(self):
+        ti = self._make_interpreter(json.dumps(_full_interp("customer_info", 0.85)))
+        result = ti.interpret("me llamo Juan, soy de Constructora ABC")
+        assert result.intent == "customer_info"
+        assert not result.is_low_confidence()
+
 
 # ---------------------------------------------------------------------------
 # Unit tests: _should_bypass_sales_intelligence regex
@@ -275,6 +285,30 @@ class TestCriticalBypassRouting:
             assert "fuera de lo que manejo" not in response
             assert not _is_questionnaire(response)
             assert bot.sessions.get("s_custinfo", {}).get("active_quote", []) == []
+        finally:
+            bot.close()
+
+    def test_customer_info_falls_through_to_main_llm(self, tmp_path, monkeypatch):
+        """
+        'Me llamo Juan' with customer_info intent (Commit 2+) must NOT hit OfftopicHandler.
+        It falls through _try_ferreteria_intent_route() -> None ->
+        _should_bypass_sales_intelligence() matches 'me llamo' -> _chat_with_functions().
+        """
+        bot = build_bot(tmp_path, "t_custinfo2.db")
+        try:
+            self._mock_no_bypass(monkeypatch)
+            monkeypatch.setattr(
+                bot.turn_interpreter, "interpret",
+                lambda *a, **kw: TurnInterpretation(intent="customer_info", confidence=0.88),
+            )
+            monkeypatch.setattr(bot, "_chat_with_functions", lambda sid: "Anotado, Juan. ¿Qué necesitás cotizar?")
+            monkeypatch.setattr(bot, "_run_sales_intelligence", lambda sid, msg: None)
+
+            response = bot.process_message("s_custinfo2", "Me llamo Juan")
+
+            assert response is not None
+            assert "fuera de lo que manejo" not in response
+            assert not _is_questionnaire(response)
         finally:
             bot.close()
 

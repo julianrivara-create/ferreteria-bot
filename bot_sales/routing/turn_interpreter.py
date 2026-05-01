@@ -20,6 +20,7 @@ VALID_INTENTS = {
     "escalate",
     "off_topic",
     "small_talk",
+    "customer_info",
     "unknown",
 }
 
@@ -151,7 +152,7 @@ _SYSTEM_PROMPT = """Sos un clasificador de mensajes para un chatbot de ferreter�
 Dado un mensaje del cliente, devolvé SOLO JSON válido con esta estructura exacta. Sin texto adicional.
 
 {
-  "intent": "product_search|policy_faq|quote_modify|quote_accept|quote_reject|escalate|off_topic|small_talk|unknown",
+  "intent": "product_search|policy_faq|quote_modify|quote_accept|quote_reject|escalate|off_topic|small_talk|customer_info|unknown",
   "confidence": 0.0,
   "tone": "neutral|frustrated|urgent",
   "policy_topic": "horario|envio|garantia|factura|devolucion|reserva|pago|null",
@@ -182,6 +183,7 @@ Reglas:
 - quote_accept o quote_reject para CUALQUIER aceptación o rechazo, no solo "ok" o "dale"
 - reset_signal=true si el cliente quiere cancelar todo y empezar de cero
 - intent="escalate" si el cliente pide hablar con una persona explícitamente
+- intent="customer_info" si el cliente comparte su nombre, empresa, teléfono u otros datos personales ("me llamo", "soy de", "mi número es", "trabajo en")
 """
 
 
