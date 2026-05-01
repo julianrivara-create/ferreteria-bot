@@ -1,0 +1,82 @@
+# PENDIENTES — Identidad del negocio
+
+Completar estos datos ANTES de mostrar el bot a clientes reales.
+Todos los campos marcados `[PENDIENTE...]` en `profile.yaml` quedan bloqueados por
+la guardia en `bot_sales/services/pending_guard.py` — el bot responde
+"Dejame consultar ese dato y te confirmo" en vez de exponer el placeholder.
+
+---
+
+## Checklist para la entrevista con el cliente
+
+### Contacto
+- [ ] **Teléfono / WhatsApp real**
+  - Ej: `+54 9 11 1234-5678`
+  - Usado en: respuestas del bot cuando el cliente pide contactar directo, FAQs
+
+- [ ] **Dirección física del local**
+  - Ej: `Av. Corrientes 1234, CABA`
+  - Usado en: respuestas de "dónde están", link Google Maps
+
+- [ ] **Ciudad / Barrio / Zona**
+  - Ej: `Palermo, CABA` — para contextualizar envíos y recomendaciones
+
+- [ ] **Link Google Maps**
+  - Usado en: respuestas de "cómo llego"
+
+### Horarios
+- [ ] **Horario lunes a viernes**
+  - Ej: `8:00 a 18:00`
+
+- [ ] **Horario sábado**
+  - Ej: `8:30 a 13:00`
+
+- [ ] **¿Abren domingos o feriados?**
+  - Si hay excepciones, detallarlas
+
+### Medios de pago
+- [ ] **Métodos aceptados**
+  - Opciones comunes: efectivo, transferencia bancaria, MercadoPago, Naranja X, tarjetas débito, tarjetas crédito
+  - ¿Aceptan cheque? ¿Cripto?
+
+- [ ] **Cuotas**
+  - ¿Tienen cuotas sin interés? ¿Qué tarjetas? ¿Cuántas cuotas?
+
+### Condiciones mayoristas
+- [ ] **Monto mínimo de compra mayorista**
+  - Ej: `$50.000 ARS` para acceder a precio mayorista
+  - Usado en: respuestas de precio y cotización
+
+- [ ] **Cuenta corriente**
+  - ¿Otorgan cuenta corriente? ¿Qué condiciones (plazo, monto, garantías)?
+
+### Envíos y logística
+- [ ] **Zonas de envío cubiertas**
+  - Ej: CABA y GBA zona norte, o todo el país vía OCA/Andreani
+
+- [ ] **Plazo de entrega habitual**
+  - Ej: 24–48 hs hábiles CABA, 3–5 días interior
+
+- [ ] **¿Envío gratis a partir de cierto monto?**
+  - Si aplica: monto mínimo para envío sin cargo
+
+### Identidad del negocio (nice-to-have)
+- [ ] **Nombre completo del local / razón social**
+  - Hoy figura como "Ferreteria Central" — ¿es correcto?
+
+- [ ] **Años en el mercado / historia breve**
+  - Para dar personalidad al bot ("somos una ferretería mayorista con 20 años en el rubro")
+
+- [ ] **Especialidades o rubros fuertes**
+  - Ej: "somos fuertes en electricidad y construcción, no tanto en pinturería fina"
+
+---
+
+## Archivo a actualizar
+
+Una vez obtenidos los datos, actualizar:
+1. `data/tenants/ferreteria/profile.yaml` — reemplazar todos los `[PENDIENTE...]`
+2. `data/tenants/ferreteria/knowledge/faqs.yaml` — actualizar respuestas de horario, envíos, pagos
+3. `data/tenants/ferreteria/policies.md` — si hay políticas específicas del local
+
+Luego eliminar este archivo o marcar cada ítem como ✅.

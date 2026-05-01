@@ -27,6 +27,26 @@ business:
 personality:
   tone: cercano, vendedor consultivo y tecnico
   emojis: "🛠️ ✅"
+contact:
+  phone: "[PENDIENTE-TEL]"
+  whatsapp: "[PENDIENTE-TEL]"
+  address: "[PENDIENTE-DIRECCION]"
+  city: "[PENDIENTE - ciudad/barrio]"
+  maps_url: "[PENDIENTE - link Google Maps]"
+hours:
+  weekdays: "[PENDIENTE-HORARIO]"
+  saturday: "[PENDIENTE-HORARIO]"
+  sunday: "[PENDIENTE-HORARIO]"
+  holiday_note: "[PENDIENTE - feriados/excepciones]"
+payment:
+  methods: ["[PENDIENTE-MEDIOS-DE-PAGO]"]
+  installments: "[PENDIENTE - cuotas disponibles o sin interés]"
+  wholesale_min_order: "[PENDIENTE - monto mínimo compra mayorista]"
+  account_credit: "[PENDIENTE - condiciones de cuenta corriente]"
+shipping:
+  zones: "[PENDIENTE - zonas de envío cubiertas]"
+  lead_time: "[PENDIENTE - plazo de entrega habitual]"
+  free_shipping_threshold: "[PENDIENTE - monto mínimo para envío gratis si aplica]"
 communication:
   whatsapp_numbers:
   - whatsapp:+5493333333333
