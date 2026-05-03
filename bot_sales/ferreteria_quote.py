@@ -503,6 +503,12 @@ def get_cross_sell_suggestions(
 # Filler / stop words
 # ---------------------------------------------------------------------------
 
+_GREETING_RE = re.compile(
+    r"^(?:hola|buenas|buen\s+(?:d[ií]a|tarde|noche)|che|holis|qu[eé]\s+tal)"
+    r"[,!.\s]*\s*",
+    re.IGNORECASE,
+)
+
 _FILLER_RE = re.compile(
     r"^(?:quiero|necesito|busco|dame|pasame|paseme|"
     r"ten[eé]s|tienen|tene[sn]|hay|tenes\s+stock|tenes\s+precio|"
@@ -560,9 +566,19 @@ def _extract_qty_and_item(raw: str) -> Tuple[int, bool, Optional[str], str]:
 
 def parse_quote_items(message: str) -> List[Dict[str, Any]]:
     """Split a multi-item message into parsed item dicts."""
-    cleaned = _FILLER_RE.sub("", message.strip())
+    cleaned = _GREETING_RE.sub("", message.strip())   # Fix A1: strip greeting first
+    cleaned = _FILLER_RE.sub("", cleaned)
+    cleaned = cleaned.lstrip(":; ")                    # Fix A3: drop trailing colon from preamble
     normalized_full = _normalize(cleaned)
-    parts = re.split(r"\s*(?:,|\by\b|\be\b|\+|/)\s*", normalized_full, flags=re.IGNORECASE)
+    # Fix B+: if the segment before the first ":" has no explicit quantity it is a
+    # list preamble (e.g. "presupuesto para una obra: item1, item2"). Drop it.
+    colon_pos = normalized_full.find(":")
+    if colon_pos != -1:
+        pre_colon = normalized_full[:colon_pos].strip()
+        _, pre_qty_explicit, _, _ = _extract_qty_and_item(pre_colon)
+        if not pre_qty_explicit:
+            normalized_full = normalized_full[colon_pos + 1:].strip()
+    parts = re.split(r"\s*(?:,|;|:|\by\b|\be\b|\+|/)\s*", normalized_full, flags=re.IGNORECASE)  # Fix B
 
     items: List[Dict[str, Any]] = []
     seen: set = set()
