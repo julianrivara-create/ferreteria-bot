@@ -31,6 +31,7 @@ from .state.conversation_state import ConversationStateV2, StateStore
 from .routing.turn_interpreter import TurnInterpreter, TurnInterpretation
 from .services.catalog_search_service import CatalogSearchService, ProductNeed
 from .services.policy_service import PolicyService
+from .services.pending_guard import sanitize_response
 from .observability.turn_event import TurnEvent
 from .observability.metrics import record_turn, record_search, record_escalation, record_latency_bucket
 from .config import (
@@ -373,7 +374,7 @@ class SalesBot:
                 self.contexts[session_id],
                 self.sessions.get(session_id, {}),
             )
-        return response_text
+        return sanitize_response(response_text)
 
     def _reset_turn_meta(self, session_id: str) -> None:
         self._set_last_turn_meta(
