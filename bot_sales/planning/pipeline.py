@@ -95,7 +95,23 @@ def default_pipeline_config() -> list[dict[str, Any]]:
     ]
 
 
-def compute_missing_fields(context: dict[str, Any]) -> list[str]:
+# Intents that are conversational/social in nature — no purchase fields needed.
+_CONVERSATIONAL_INTENTS: frozenset[str] = frozenset({
+    "CHIT_CHAT",
+    "GREETING_CHAT",
+    "GREETING",
+    "SUPPORT",
+    "UNKNOWN",
+})
+
+
+def compute_missing_fields(context: dict[str, Any], intent_name: str | None = None) -> list[str]:
+    # Conversational intents (greetings, small talk) never require product or
+    # close-blocking fields — returning them would push the bot to ask
+    # "¿Qué categoría buscás?" in response to "hola".
+    if intent_name and intent_name.upper() in _CONVERSATIONAL_INTENTS:
+        return []
+
     missing: list[str] = []
     # Multi-industry: require at least category or model, plus intent-to-close basics.
     if not context.get("product_family") and not context.get("model"):

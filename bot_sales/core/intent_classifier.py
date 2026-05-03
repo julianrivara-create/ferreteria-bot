@@ -74,4 +74,4 @@ Rules:
             return {"intent": "GREETING_CHAT", "confidence": 0.5, "reason": "fallback"}
         except Exception as e:
             logger.error(f"intent_classification_failed: {e}")
-            return {"intent": "QUOTATION", "confidence": 0.1, "reason": "error_fallback"}
+            return {"intent": "GREETING_CHAT", "confidence": 0.0, "reason": "error_fallback"}

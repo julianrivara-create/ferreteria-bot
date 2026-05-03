@@ -689,10 +689,20 @@ class SalesBot:
                 logging.warning("catalog_search_failed session=%s error=%s", session_id, exc)
 
         # Phase 9: quote_modify — delegate to LLM with active quote context (C5)
+        # Exception: additive ("agregale"), reset, and clarification messages must go through
+        # _try_ferreteria_pre_route first so deterministic handlers apply correctly.
         if interpretation.intent == "quote_modify" and not interpretation.is_low_confidence():
-            self._trim_context(session_id)
-            response_text = self._chat_with_functions(session_id)
-            return self._append_assistant_turn(session_id, response_text)
+            _open_q = sess.get("active_quote")
+            _is_deterministic = (
+                fq.looks_like_additive(user_message)
+                or fq.looks_like_reset(user_message)
+                or (_open_q and fq.looks_like_clarification(user_message, _open_q))
+            )
+            if not _is_deterministic:
+                self._trim_context(session_id)
+                response_text = self._chat_with_functions(session_id)
+                return self._append_assistant_turn(session_id, response_text)
+            # else: fall through to _try_ferreteria_pre_route
 
         # Phase 9: PolicyHandler — handles policy_faq intent
         if interpretation.intent == "policy_faq" and not interpretation.is_low_confidence():
