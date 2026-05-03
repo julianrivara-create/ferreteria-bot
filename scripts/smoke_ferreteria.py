@@ -65,8 +65,8 @@ def main() -> int:
                 "synonym expansion",
                 "Presupuesto preliminar" in synonym
                 and "urgencia" not in synonym.lower()
-                and ("tarugo" in synonym.lower() or "fischer" in synonym.lower())
-                and ("requiere aclaracion" in synonym.lower() or "aclaraciones pendientes" in synonym.lower()),
+                and ("tarugo" in synonym.lower() or "fisher" in synonym.lower() or "taco" in synonym.lower())
+                and ("medida" in synonym.lower() or "madera" in synonym.lower() or "material" in synonym.lower()),
                 synonym[:280],
             ))
 
