@@ -80,3 +80,15 @@ Una vez obtenidos los datos, actualizar:
 3. `data/tenants/ferreteria/policies.md` — si hay políticas específicas del local
 
 Luego eliminar este archivo o marcar cada ítem como ✅.
+
+---
+
+## Decisiones técnicas pendientes
+
+### Duración de reservas (hold_minutes)
+
+- [ ] **¿Cuánto tiempo se mantiene un presupuesto reservado antes de expirar?**
+  - `policies.md` dice: **45 minutos**
+  - Configuración legacy (`tenant_config.yaml`): **1440 minutos (24 horas)**
+  - Hoy en `profile.yaml`: `[PENDIENTE - confirmar con cliente: 45 min vs 24h]`
+  - **Confirmar con el cliente** cuál es la política real para el local y actualizar `profile.yaml`
