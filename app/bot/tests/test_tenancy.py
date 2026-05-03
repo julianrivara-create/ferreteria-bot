@@ -1,4 +1,4 @@
-from app.bot.core.chatgpt import OpenAIServiceDegradedError
+from app.services.exceptions import OpenAIServiceDegradedError
 from app.services.bot_core import BotCore
 import time
 

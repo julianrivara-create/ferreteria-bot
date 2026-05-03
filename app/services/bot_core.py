@@ -1,7 +1,7 @@
 import structlog
 import time
 
-from app.bot.core.fallback import get_fallback_service
+from app.services.fallback_bot import get_fallback_service
 
 logger = structlog.get_logger()
 
@@ -92,7 +92,7 @@ class BotCore:
             logger.warning("bot_not_ready", init_failed=cls._init_failed, init_error=cls._init_error)
             return {"content": cls._unavailable_message(), "meta": None}
 
-        from app.bot.core.chatgpt import OpenAIServiceDegradedError
+        from app.services.exceptions import OpenAIServiceDegradedError
 
         try:
             if hasattr(bot, "process_message_with_meta"):
