@@ -653,8 +653,41 @@ class SalesBot:
         # Phase 7: CatalogSearchService — run when intent is product_search
         if interpretation.intent == "product_search" and not interpretation.is_low_confidence():
             try:
+                from bot_sales.services.search_validator import (
+                    validate_query_specs,
+                    validate_search_match,
+                )
+                from bot_sales.services.catalog_search_service import CatalogSearchResult
+
                 need = ProductNeed.from_turn_interpretation(interpretation)
-                catalog_result = self.catalog_search.search(need)
+
+                # Level 1: detect impossible specs BEFORE searching the catalog.
+                l1_valid, l1_reason = validate_query_specs(user_message)
+                if not l1_valid:
+                    logging.info(
+                        "search_validator.blocked_pre_catalog session=%s reason=%s",
+                        session_id, l1_reason,
+                    )
+                    catalog_result = CatalogSearchResult(
+                        status="no_match", reason_codes=["impossible_spec"]
+                    )
+                else:
+                    catalog_result = self.catalog_search.search(need)
+
+                    # Level 2: verify spec claims against returned products.
+                    if catalog_result.status in ("resolved", "options") and catalog_result.candidates:
+                        l2_valid, l2_reason = validate_search_match(
+                            user_message, catalog_result.candidates
+                        )
+                        if not l2_valid:
+                            logging.info(
+                                "search_validator.blocked_post_catalog session=%s reason=%s",
+                                session_id, l2_reason,
+                            )
+                            catalog_result = CatalogSearchResult(
+                                status="no_match", reason_codes=["spec_mismatch"]
+                            )
+
                 sess["last_catalog_result"] = catalog_result.to_dict()
                 logging.info(
                     "catalog_search session=%s status=%s candidates=%d",
@@ -1309,6 +1342,21 @@ class SalesBot:
                 )
 
         if self._looks_like_product_request(normalized):
+            # Level 1: detect impossible specs before any catalog lookup.
+            from bot_sales.services.search_validator import validate_query_specs, validate_search_match
+            _l1_valid, _l1_reason = validate_query_specs(text)
+            if not _l1_valid:
+                logging.info(
+                    "search_validator.blocked_pre_route session=%s reason=%s",
+                    session_id, _l1_reason,
+                )
+                return _done(
+                    "No tenemos ese producto en el catálogo. "
+                    "Las especificaciones indicadas no coinciden con ningún artículo disponible. "
+                    "Si querés, podemos buscar algo similar con especificaciones estándar.",
+                    "deterministic",
+                )
+
             parsed_single = self._parse_quote_items(user_message)
             if len(parsed_single) == 1:
                 resolved_single = self._resolve_quote_item(parsed_single[0])
@@ -1337,6 +1385,22 @@ class SalesBot:
                     )
 
                 if resolved_single.get("status") in ("resolved", "ambiguous", "unresolved", "blocked_by_missing_info"):
+                    # Level 2: verify spec claims against resolved products.
+                    _resolved_prods = resolved_single.get("products", [])
+                    if _resolved_prods:
+                        _l2_valid, _l2_reason = validate_search_match(text, _resolved_prods)
+                        if not _l2_valid:
+                            logging.info(
+                                "search_validator.blocked_post_route session=%s reason=%s",
+                                session_id, _l2_reason,
+                            )
+                            return _done(
+                                "No tenemos ese producto en el catálogo. "
+                                "Las especificaciones indicadas no coinciden con ningún artículo disponible. "
+                                "Si querés, podemos buscar algo similar con especificaciones estándar.",
+                                "deterministic",
+                            )
+
                     sess["active_quote"] = [resolved_single]
                     sess["quote_state"] = "open"
                     if resolved_single.get("status") in ("ambiguous", "unresolved", "blocked_by_missing_info"):
@@ -1356,6 +1420,7 @@ class SalesBot:
                     )
                     return _done(reply, "deterministic")
 
+            # Fallback direct stock search — also guarded by L1 (already checked above).
             stock_result = self.logic.buscar_stock(text)
             if stock_result.get("status") == "found":
                 return _done(self._format_ferreteria_products_reply(stock_result.get("products", [])), "deterministic")
@@ -1935,11 +2000,62 @@ class SalesBot:
         """Execute a business logic function"""
         try:
             if func_name == "buscar_stock":
+                from bot_sales.services.search_validator import (
+                    validate_query_specs,
+                    validate_search_match,
+                )
+
+                # Recover original user message from session context.
+                # The LLM may silently drop impossible specs (e.g. "500kg",
+                # "dorado") when extracting the "modelo" arg, so validators
+                # must run on the raw user text, not on args.get("modelo").
+                ctx = getattr(self, "contexts", {}).get(session_id, [])
+                original_user_msg = next(
+                    (
+                        m["content"]
+                        for m in reversed(ctx)
+                        if m.get("role") == "user" and m.get("content")
+                    ),
+                    "",
+                )
+
+                # Level 1: detect impossible specs BEFORE searching the catalog.
+                l1_valid, l1_reason = validate_query_specs(original_user_msg)
+                if not l1_valid:
+                    logging.info(
+                        "search_validator.blocked_pre_search session=%s reason=%s",
+                        session_id, l1_reason,
+                    )
+                    return {
+                        "status": "no_match",
+                        "products": [],
+                        "message": "No encontré productos que coincidan con las especificaciones solicitadas.",
+                        "_search_query": args.get("modelo", ""),
+                        "_validator_reason": l1_reason,
+                    }
+
                 result = self.logic.buscar_stock(
                     modelo=args.get("modelo"),
                     storage_gb=args.get("storage_gb"),
                     color=args.get("color")
                 )
+
+                # Level 2: verify spec claims against returned products.
+                if result.get("status") == "found":
+                    l2_valid, l2_reason = validate_search_match(
+                        original_user_msg, result.get("products", [])
+                    )
+                    if not l2_valid:
+                        logging.info(
+                            "search_validator.blocked_post_search session=%s reason=%s",
+                            session_id, l2_reason,
+                        )
+                        result = {
+                            "status": "no_match",
+                            "products": [],
+                            "message": "No encontré productos que coincidan con las especificaciones solicitadas.",
+                        }
+
                 # Pass original LLM query (pre-normalization) back so the prompt
                 # can verify spec coincidence before presenting results.
                 result["_search_query"] = args.get("modelo", "")
@@ -1947,8 +2063,8 @@ class SalesBot:
                 if result.get("status") == "found" and result.get("products"):
                     for prod in result["products"]:
                         self.analytics.track_product_query(
-                            session_id, 
-                            prod["sku"], 
+                            session_id,
+                            prod["sku"],
                             prod.get("category", "Unknown")
                         )
                 return result
