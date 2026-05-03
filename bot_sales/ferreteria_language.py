@@ -32,6 +32,9 @@ _BASE_SPELLING_VARIANTS: Dict[str, str] = {
     "brocas": "broca",
     "mechas": "mecha",
     "caños": "cano",
+    # Fix C: plural normalization for llave/francesa
+    "llaves": "llave",
+    "francesas": "francesa",
 }
 
 

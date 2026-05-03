@@ -245,6 +245,14 @@ def _product_text(product: Dict[str, Any]) -> str:
     )
 
 
+def _is_mm_dim(v: str) -> bool:
+    return bool(re.match(r"^\d+(?:\.\d+)?mm$", v))
+
+
+def _is_fraction_dim(v: str) -> bool:
+    return bool(re.match(r"^\d+/\d+$", v))
+
+
 def _score_dimension_alignment(product: Dict[str, Any], requested_dimensions: Dict[str, str]) -> float:
     if not requested_dimensions:
         return 0.0
@@ -259,7 +267,18 @@ def _score_dimension_alignment(product: Dict[str, Any], requested_dimensions: Di
         elif str(product_value) in str(requested_value) or str(requested_value) in str(product_value):
             score += 1.0
         else:
-            score -= 1.25
+            # Fix A: cross-unit mismatch (mm vs fraction) is far more penalised than
+            # a same-unit mismatch (e.g. 6mm vs 8mm).  A -1.25 soft penalty is not
+            # enough to overcome the +8 word-overlap+family bonus that category-matched
+            # products like "Acople 1 1/4" accumulate when searching for "mecha 8mm".
+            req_mm = _is_mm_dim(str(requested_value))
+            req_frac = _is_fraction_dim(str(requested_value))
+            prod_mm = _is_mm_dim(str(product_value))
+            prod_frac = _is_fraction_dim(str(product_value))
+            if (req_mm and prod_frac) or (req_frac and prod_mm):
+                score -= 4.0  # cross-unit: incompatible measurement systems
+            else:
+                score -= 1.25  # same-unit mismatch (e.g. 6mm vs 8mm)
     return score
 
 
@@ -584,7 +603,7 @@ def parse_quote_items(message: str) -> List[Dict[str, Any]]:
     seen: set = set()
 
     for part in parts:
-        token = part.strip(" .:;-")
+        token = part.strip(" .:;-?¿!")
         words = token.split()
         meaningful = [w for w in words if w not in _FILLER_WORDS]
         if not meaningful or len(token) < 2:
