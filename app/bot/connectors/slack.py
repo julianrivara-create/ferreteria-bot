@@ -308,7 +308,7 @@ def run_slack_webhook(app, bot, connector: SlackConnector):
     
     # Initialize integrations
     try:
-        from app.bot.core.database import Database
+        from app.services.database import Database
         from app.bot.config import DB_FILE, CATALOG_CSV, LOG_PATH
         db = Database(DB_FILE, CATALOG_CSV, LOG_PATH)
         slack_commands = SlackCommands(bot, db)

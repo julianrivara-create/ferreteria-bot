@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.bot.core.database import Database
+from app.services.database import Database
 from app.db.models import Base, InventoryEvent, Lead, Order, OrderItem, OrderStatus, Product
 from app.services.inventory_service import InventoryService
 from app.services.order_service import OrderService
@@ -51,7 +51,7 @@ def _product(*, tenant_id: str, sku: str, model: str, qty: int, reserved: int = 
 
 
 def test_database_adapter_scopes_to_tenant_and_sets_tenant_on_writes(monkeypatch, db_session):
-    monkeypatch.setattr("app.bot.core.database.ScopedSession", lambda: db_session)
+    monkeypatch.setattr("app.services.database.ScopedSession", lambda: db_session)
 
     db_session.add_all(
         [

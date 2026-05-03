@@ -471,15 +471,6 @@ def create_webhook_server(bot_instance, connector: WhatsAppConnector, port: int 
 def run_whatsapp_server(bot_instance, provider='mock', port=5001, instagram_connector=None):
     """
     Shortcut para iniciar servidor multi-canal (WhatsApp + Instagram + Web)
-    
-    Usage:
-        from app.bot.connectors.whatsapp import run_whatsapp_server
-        from app.bot.connectors.instagram import get_instagram_connector
-        from app.bot.bot import SalesBot
-        
-        bot = SalesBot()
-        instagram = get_instagram_connector()
-        run_whatsapp_server(bot, provider='twilio', port=5001, instagram_connector=instagram)
     """
     from app.bot.config import config
     

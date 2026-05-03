@@ -34,7 +34,7 @@ class Database:
     Postgres Database Adapter
     Mimics the old SQLite interface for bot compatibility
     """
-    
+
     def __init__(self, *_args, tenant_id: Optional[str] = None, **_kwargs):
         """Initialize DB adapter (legacy args are accepted and ignored)."""
         self.session = ScopedSession()
@@ -63,11 +63,11 @@ class Database:
     def _order_query(self):
         tenant_id = self._require_tenant_id()
         return self.session.query(Order).filter(Order.tenant_id == tenant_id)
-    
+
     def log_event(self, event: str, data: Dict[str, Any] = None) -> None:
         """Log business events"""
         logger.info(event, **data or {})
-    
+
     def find_matches(
         self,
         model: Optional[str],
@@ -77,7 +77,7 @@ class Database:
     ) -> List[Dict[str, Any]]:
         """Find products matching criteria"""
         query = self._product_query().filter(Product.active == True)
-        
+
         if model:
             query = query.filter(Product.model.ilike(f"%{model}%"))
         if marca:
@@ -86,9 +86,9 @@ class Database:
             query = query.filter(Product.size.ilike(f"%{medida}%"))
         if color:
             query = query.filter(Product.color.ilike(f"%{color}%"))
-        
+
         products = query.all()
-        
+
         return [
             {
                 "sku": p.sku,
@@ -104,14 +104,14 @@ class Database:
             }
             for p in products
         ]
-    
+
     def get_product_by_sku(self, sku: str) -> Optional[Dict[str, Any]]:
         """Get product details by SKU"""
         product = self._product_query().filter(Product.sku == sku).first()
-        
+
         if not product:
             return None
-        
+
         return {
             "sku": product.sku,
             "category": product.category,
@@ -224,16 +224,16 @@ class Database:
             "zone": meta.get("zone"),
             "payment_method": meta.get("payment_method"),
         }
-    
+
     def available_for_sku(self, sku: str) -> int:
         """Calculate available stock for a SKU"""
         product = self._product_query().filter(Product.sku == sku).first()
-        
+
         if not product:
             return 0
-        
+
         return product.available_qty  # Uses the @property from models.py
-    
+
     def create_hold(
         self,
         sku: str,
@@ -246,12 +246,12 @@ class Database:
         tenant_id = self._require_tenant_id()
         if self.available_for_sku(sku) <= 0:
             return None
-        
+
         product = self._product_query().filter(Product.sku == sku).with_for_update().first()
-        
+
         if not product or product.available_qty <= 0:
             return None
-        
+
         # Create Order with HOLD status
         order = Order(
             tenant_id=tenant_id,
@@ -263,7 +263,7 @@ class Database:
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=hold_minutes),
             meta={"source": "bot"}
         )
-        
+
         # Create OrderItem
         item = OrderItem(
             tenant_id=tenant_id,
@@ -273,46 +273,46 @@ class Database:
         )
         order.items.append(item)
         order.total_amount = product.price_ars
-        
+
         # Reserve stock
         product.reserved_qty += 1
-        
+
         self.session.add(order)
         self.session.commit()
-        
+
         hold_id = str(order.id)
-        
+
         self.log_event("HOLD_CREATED", {
             "hold_id": hold_id,
             "sku": sku,
             "name": name,
             "contact": contact
         })
-        
+
         return {
             "hold_id": hold_id,
             "expires_in_minutes": hold_minutes,
             "expires_at": order.expires_at.timestamp()
         }
-    
+
     def cleanup_holds(self) -> None:
         """Remove expired holds and release stock"""
         expired_orders = self._order_query().filter(
             Order.status == OrderStatus.HOLD,
             Order.expires_at <= datetime.now(timezone.utc)
         ).all()
-        
+
         for order in expired_orders:
             for item in order.items:
                 product = self._product_query().filter(Product.sku == item.sku).with_for_update().first()
                 if product and product.reserved_qty >= item.quantity:
                     product.reserved_qty -= item.quantity
-            
+
             order.status = OrderStatus.EXPIRED
-        
+
         self.session.commit()
         logger.info("cleanup_holds_completed", expired_count=len(expired_orders))
-    
+
     def release_hold(self, hold_id: str) -> bool:
         """Manually release a hold"""
         try:
@@ -320,22 +320,22 @@ class Database:
             order_id = UUID(hold_id)
         except:
             return False
-        
+
         order = self._order_query().filter(Order.id == order_id, Order.status == OrderStatus.HOLD).first()
-        
+
         if not order:
             return False
-        
+
         for item in order.items:
             product = self._product_query().filter(Product.sku == item.sku).with_for_update().first()
             if product and product.reserved_qty >= item.quantity:
                 product.reserved_qty -= item.quantity
-        
+
         order.status = OrderStatus.CANCELLED
         self.session.commit()
-        
+
         return True
-    
+
     def confirm_sale(
         self,
         hold_id: str,
@@ -348,42 +348,42 @@ class Database:
             order_id = UUID(hold_id)
         except:
             return False, "Hold ID inválido"
-        
+
         order = self._order_query().filter(Order.id == order_id, Order.status == OrderStatus.HOLD).first()
-        
+
         if not order:
             return False, "Hold expirado o no encontrado."
-        
+
         # Check physical stock
         for item in order.items:
             product = self._product_query().filter(Product.sku == item.sku).with_for_update().first()
             if not product or product.on_hand_qty <= 0:
                 return False, "Error crítico: Sin stock físico disponible."
-        
+
         # Update order metadata
         order.meta = order.meta or {}
         order.meta.update({
             "zone": zone,
             "payment_method": payment_method
         })
-        
+
         # Transition to confirmed (uses OrderService logic)
         from app.services.order_service import OrderService
         OrderService.transition_status(self.session, order.id, OrderStatus.CONFIRMED)
-        
+
         self.session.commit()
-        
+
         sale_id = str(order.id)
-        
+
         self.log_event("SALE_CONFIRMED", {
             "sale_id": sale_id,
             "order_id": str(order.id),
             "zone": zone,
             "payment": payment_method
         })
-        
+
         return True, sale_id
-    
+
     def upsert_lead(self, name: str, contact: str, note: str = "") -> Optional[str]:
         """Create a lead (for handoff scenarios) - Persists in DB."""
         tenant_id = self._require_tenant_id()
@@ -418,19 +418,19 @@ class Database:
             })
 
         return lead_id
-    
+
     def log_message(self, session_id: str, sender: str, message: str) -> None:
         """Log a chat message - Just use structured logging"""
         logger.info("chat_message", session_id=session_id, sender=sender, message=message[:100])
-    
+
     def upsert_customer(self, email: str, name: str, phone: str = None, amount_spent: int = 0) -> None:
         """Update or create customer profile - Skip for now or implement later"""
         logger.info("customer_upsert", email=email, name=name, amount_spent=amount_spent)
-    
+
     def load_stock(self) -> List[Dict[str, Any]]:
         """Load all stock items"""
         products = self._product_query().filter(Product.active == True).all()
-        
+
         return [
             {
                 "sku": p.sku,
@@ -446,18 +446,18 @@ class Database:
             }
             for p in products
         ]
-    
+
     def get_all_products(self) -> List[Dict[str, Any]]:
         """Alias for load_stock"""
         return self.load_stock()
-    
+
     def find_by_category(self, category: str) -> List[Dict[str, Any]]:
         """Find all products in a category"""
         products = self.session.query(Product).filter(
             Product.category.ilike(category),
             Product.active == True
         ).all()
-        
+
         return [
             {
                 "sku": p.sku,
@@ -473,22 +473,22 @@ class Database:
             }
             for p in products
         ]
-    
+
     def get_all_categories(self) -> List[str]:
         """Get list of all unique categories"""
         results = self.session.query(Product.category).filter(Product.active == True).distinct().all()
         return [r[0] for r in results if r[0]]
-    
+
     def get_all_models(self) -> List[str]:
         """Get list of all unique models"""
         results = self.session.query(Product.model).filter(Product.active == True).distinct().all()
         return [r[0] for r in results if r[0]]
-    
+
     def get_all_colors(self) -> List[str]:
         """Get list of all unique colors"""
         results = self.session.query(Product.color).filter(Product.active == True).distinct().all()
         return [r[0] for r in results if r[0]]
-    
+
     def close(self):
         """Close database connection"""
         ScopedSession.remove()

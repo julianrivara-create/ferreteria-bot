@@ -1,4 +1,3 @@
-
 """
 Fallback Service
 Handles basic FAQ responses when the main LLM is unavailable (offline/no credits).
@@ -10,8 +9,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 import unicodedata
 
-_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-_TENANTS_DIR = Path(__file__).resolve().parents[3] / "data" / "tenants"
+_DATA_DIR = Path(__file__).resolve().parent.parent / "bot" / "data"
+_TENANTS_DIR = Path(__file__).resolve().parents[2] / "data" / "tenants"
 
 
 class FallbackService:
