@@ -1,13 +1,6 @@
 """
 Guard that detects PENDIENTE placeholder markers in LLM responses and replaces
 the full response with a safe fallback message.
-
-Usage (connect from bot.py after receiving the LLM response string):
-    # TODO(A1): call this in bot_sales/bot.py → SalesBot._get_response()
-    # right before returning the final response string to the caller.
-    # Example:
-    #   raw_response = ... # result from LLM
-    #   return sanitize_response(raw_response)
 """
 
 import re

@@ -123,14 +123,6 @@ class IntentClassifier:
                 "tablet": "Tablets",
                 "auricular": "Audio",
                 "audio": "Audio",
-                "ropa": "Indumentaria",
-                "remera": "Indumentaria",
-                "pantalon": "Indumentaria",
-                "zapatilla": "Calzado",
-                "calzado": "Calzado",
-                "farmacia": "Farmacia",
-                "medicamento": "Farmacia",
-                "analgesico": "Farmacia",
             },
         )
 

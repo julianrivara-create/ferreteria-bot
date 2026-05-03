@@ -230,9 +230,6 @@ MAX_CONTEXT_MESSAGES = 20
 HOLD_MINUTES = config.HOLD_MINUTES
 LITE_MODE = config.LITE_MODE
 
-GEMINI_API_KEY = config.GEMINI_API_KEY
-GEMINI_MODEL = config.GEMINI_MODEL
-
 # Paths
 DB_FILE = os.path.join(BASE_DIR, config.DATABASE_PATH)
 CATALOG_CSV = os.path.join(BASE_DIR, 'config', 'catalog.csv')
