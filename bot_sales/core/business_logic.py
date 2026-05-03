@@ -508,62 +508,6 @@ class BusinessLogic:
         # No cross-sell available
         return {"status": "none", "offer": None, "message": "No hay ofertas disponibles"}
 
-    def obtener_politicas(self, tema: str) -> Dict[str, Any]:
-        """
-        Get policy information
-        
-        Args:
-            tema: One of: envios, pagos, garantia, devoluciones, cuotas
-        
-        Returns:
-            {
-                "status": "success",
-                "info": "...",
-                "message": "..."
-            }
-        """
-        policies = {
-            "envios": """🚚 ENVÍOS:
-• CABA: Gratis, moto 24-48hs (rango)
-• AMBA: Consultar costo, 48-72hs
-• Interior: Correo/Andreani, 3-5 días hábiles
-• Retiro en local: Coordinamos horario
-
-IMPORTANTE: No prometemos horarios exactos, solo rangos.""",
-            
-            "pagos": """💳 FORMAS DE PAGO:
-• Transferencia/Efectivo: Posible descuento (se confirma antes)
-• MercadoPago: Aceptamos
-• Tarjeta con cuotas: Según plan vigente, informamos recargo antes de cerrar
-
-Preguntame por la forma que prefieras.""",
-            
-            "cuotas": """📊 CUOTAS:
-Los pagos con tarjeta se procesan vía MercadoPago.
-Podés ver las cuotas y promociones bancarias disponibles directamente al momento de pagar.
-¿Te gustaría avanzar con la compra?""",
-            
-            "garantia": """🛡️ GARANTÍA:
-• Garantía oficial del fabricante: según producto
-• Garantía comercial adicional: según políticas vigentes
-• Cualquier tema de postventa se deriva al equipo comercial
-
-¿Tenés alguna duda específica?""",
-            
-            "devoluciones": """🔄 CAMBIOS Y DEVOLUCIONES:
-Dependen del estado del producto y días desde la compra.
-Para coordinar esto, te paso con un asesor.
-¿Me das tu contacto?"""
-        }
-
-        info = policies.get(tema.lower(), "No tengo info sobre ese tema. ¿Querés que te pase con un asesor?")
-        
-        return {
-            "status": "success",
-            "info": info,
-            "message": f"Información sobre {tema}"
-        }
-
     def agregar_producto_extra(
         self,
         original_sale_id: str,

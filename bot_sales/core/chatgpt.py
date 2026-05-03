@@ -669,15 +669,7 @@ def get_available_functions() -> List[Dict[str, Any]]:
                 "required": ["pregunta"],
             },
         },
-        {
-            "name": "obtener_politicas",
-            "description": "Devolver políticas de negocio (envíos, pagos, garantía, etc.).",
-            "parameters": {
-                "type": "object",
-                "properties": {"tema": {"type": "string", "description": "Tema a consultar"}},
-                "required": ["tema"],
-            },
-        },
+
         {
             "name": "listar_bundles",
             "description": "Listar bundles/combo activos.",
@@ -708,6 +700,11 @@ def get_available_functions() -> List[Dict[str, Any]]:
                 "required": ["sku1", "sku2"],
             },
         },
+        # Category C tools: registered so the LLM can call them reactively,
+        # but not documented in the system prompt because they are internal
+        # guardrails, not conversational steps.
+        # - validar_datos_cliente: input sanitisation called before confirmar_venta
+        # - detectar_fraude: risk scoring on customer signals
         {
             "name": "validar_datos_cliente",
             "description": "Validar datos del cliente antes de confirmar operación.",
