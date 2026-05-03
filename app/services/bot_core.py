@@ -1,6 +1,7 @@
 import structlog
 import time
 
+from app.services.exceptions import OpenAIServiceDegradedError
 from app.services.fallback_bot import get_fallback_service
 
 logger = structlog.get_logger()
@@ -23,46 +24,14 @@ class SimpleFallbackBot:
 
 
 class BotCore:
+    # Populated externally (e.g. by tenant_manager) or injected in tests.
+    # BotCore no longer instantiates any bot implementation on its own.
     _bot_instance = None
     _fallback_bot = None
     _init_failed = False
     _init_error = None
     _last_init_attempt = 0.0
     _init_retry_seconds = 30
-
-    @classmethod
-    def get_bot(cls):
-        if cls._bot_instance is not None:
-            return cls._bot_instance
-        now = time.time()
-        if cls._init_failed and (now - cls._last_init_attempt) < cls._init_retry_seconds:
-            return None
-        cls._last_init_attempt = now
-
-        try:
-            from app.bot.bot import SalesBot
-
-            cls._bot_instance = SalesBot()
-            cls._init_failed = False
-            cls._init_error = None
-
-            # Detect mock mode: bot initialized but without a valid OpenAI API key.
-            # In mock mode the bot returns pre-canned responses — not real AI.
-            chatgpt = getattr(cls._bot_instance, "chatgpt", None)
-            if chatgpt and getattr(chatgpt, "mock_mode", False):
-                logger.critical(
-                    "bot_running_in_mock_mode_no_openai_key",
-                    message="OPENAI_API_KEY no está configurada. El bot responde con respuestas pre-escritas en lugar de IA real. "
-                            "Configurá OPENAI_API_KEY en Railway → ferreteria-bot → Variables.",
-                )
-
-            logger.info("bot_core_initialized", bot_type="SalesBot", backend="postgres")
-            return cls._bot_instance
-        except Exception as e:
-            cls._init_failed = True
-            cls._init_error = str(e)
-            logger.error("bot_initialization_failed", error=cls._init_error, using_fallback=False)
-            return None
 
     @classmethod
     def get_fallback_bot(cls):
@@ -86,13 +55,11 @@ class BotCore:
     def reply_with_meta(cls, channel: str, user_id: str, text: str, metadata: dict = None, tenant_id: str = "") -> dict:
         del metadata
         session_id = f"{channel}_{user_id}"
-        bot = cls.get_bot()
+        bot = cls._bot_instance
 
         if not bot:
             logger.warning("bot_not_ready", init_failed=cls._init_failed, init_error=cls._init_error)
             return {"content": cls._unavailable_message(), "meta": None}
-
-        from app.services.exceptions import OpenAIServiceDegradedError
 
         try:
             if hasattr(bot, "process_message_with_meta"):
