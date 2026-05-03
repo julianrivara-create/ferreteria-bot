@@ -6,7 +6,6 @@ import time
 from pathlib import Path
 import structlog
 import requests
-from bs4 import BeautifulSoup
 import re
 import unicodedata
 from app.core.config import get_settings
