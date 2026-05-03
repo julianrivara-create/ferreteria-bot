@@ -1940,6 +1940,9 @@ class SalesBot:
                     storage_gb=args.get("storage_gb"),
                     color=args.get("color")
                 )
+                # Pass original LLM query (pre-normalization) back so the prompt
+                # can verify spec coincidence before presenting results.
+                result["_search_query"] = args.get("modelo", "")
                 # Track product queries
                 if result.get("status") == "found" and result.get("products"):
                     for prod in result["products"]:
