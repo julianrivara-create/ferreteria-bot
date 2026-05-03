@@ -700,6 +700,11 @@ def get_available_functions() -> List[Dict[str, Any]]:
                 "required": ["sku1", "sku2"],
             },
         },
+        # Category C tools: registered so the LLM can call them reactively,
+        # but not documented in the system prompt because they are internal
+        # guardrails, not conversational steps.
+        # - validar_datos_cliente: input sanitisation called before confirmar_venta
+        # - detectar_fraude: risk scoring on customer signals
         {
             "name": "validar_datos_cliente",
             "description": "Validar datos del cliente antes de confirmar operación.",
