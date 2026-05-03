@@ -31,3 +31,6 @@ unresolved_terms*.jsonl
 carniceria_bot/
 *.db-shm
 *.db-wal
+
+# Session summaries (notas locales del humano)
+SESSION_SUMMARY_*.md
