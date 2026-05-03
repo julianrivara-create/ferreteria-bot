@@ -43,7 +43,7 @@ from bot_sales.ferreteria_family_model import (
     infer_families,
     is_autopick_blocked,
 )
-from bot_sales.ferreteria_language import normalize_basic, normalize_live_language
+from bot_sales.ferreteria_language import normalize_basic, normalize_for_product_text, normalize_live_language
 from bot_sales.ferreteria_substitutions import filter_safe_alternatives
 from bot_sales.ferreteria_unresolved_log import log_unresolved_item as _log_unresolved
 from bot_sales.knowledge.defaults import (
@@ -237,7 +237,10 @@ def _significant_words(text: str) -> set:
 
 
 def _product_text(product: Dict[str, Any]) -> str:
-    return _normalize(
+    # normalize_for_product_text intentionally excludes "llaves"→"llave" and
+    # "francesas"→"francesa" to prevent false partial-match bonuses in scoring.
+    # (normalize_basic is still used for query normalization — Fix C intact.)
+    return normalize_for_product_text(
         " ".join(
             str(product.get(field) or "")
             for field in ("model", "name", "sku", "category")
@@ -345,6 +348,40 @@ def _score_product(
 _SCORE_HIGH = 5.0
 # Plausible threshold: product is ambiguous (needs clarification)
 _SCORE_LOW = 2.0
+
+# ---------------------------------------------------------------------------
+# Context-of-use family filter
+# ---------------------------------------------------------------------------
+# Regex: captures the single word immediately after "para" (word boundary, then
+# either whitespace or end-of-string to avoid grabbing multi-word phrases).
+_PARA_CONTEXT_WORD_RE = re.compile(r'\bpara\s+(\w+)(?=\s|$)')
+
+
+def _families_without_para_context(
+    normalized: str, knowledge: Optional[Dict[str, Any]] = None
+) -> List[str]:
+    """Infer product families, stripping 'para [use-context]' from consideration.
+
+    Problem: "necesito una mecha de 8mm para taladro" causes infer_families to
+    return ['mecha', 'taladro'].  The 'taladro' family then gives expensive drill
+    products a +3 family-match bonus, displacing the correct broca 8mm results.
+
+    Fix: capture every single word after 'para' in the normalised text, re-infer
+    families from the text with those snippets removed, and drop any family that
+    (a) is NOT present in the core text AND (b) came from a 'para' context word.
+
+    Safety fallback: if filtering would produce an empty list, return the original
+    so the caller always gets at least one family gate to work with.
+    """
+    families_raw = infer_families(normalized, knowledge=knowledge)
+    para_words = {m.group(1) for m in _PARA_CONTEXT_WORD_RE.finditer(normalized)}
+    if not para_words:
+        return families_raw
+    core_text = _PARA_CONTEXT_WORD_RE.sub('', normalized).strip() or normalized
+    core_fams = set(infer_families(core_text, knowledge=knowledge))
+    filtered = [f for f in families_raw if f in core_fams or f not in para_words]
+    return filtered if filtered else families_raw
+
 
 # ---------------------------------------------------------------------------
 # Synonym / alias expansion
@@ -656,7 +693,7 @@ def resolve_quote_item(parsed: Dict[str, Any], logic: Any, knowledge: Optional[D
     unit_hint  = parsed.get("unit_hint")
     line_id    = parsed.get("line_id") or uuid.uuid4().hex[:8]
 
-    families = infer_families(normalized, knowledge=knowledge)
+    families = _families_without_para_context(normalized, knowledge=knowledge)
     family = families[0] if families else None
     family_rule = get_family_rule(family, knowledge)
     dims = extract_dimensions(normalized, family_rule=family_rule)

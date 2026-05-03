@@ -32,9 +32,20 @@ _BASE_SPELLING_VARIANTS: Dict[str, str] = {
     "brocas": "broca",
     "mechas": "mecha",
     "caños": "cano",
-    # Fix C: plural normalization for llave/francesa
+    # Fix C: plural normalization for llave/francesa (query side only — see below)
     "llaves": "llave",
     "francesas": "francesa",
+}
+
+# Subset of _BASE_SPELLING_VARIANTS safe for product-text normalization.
+# Intentionally excludes "llaves"→"llave" and "francesas"→"francesa" because
+# normalising those in product text causes false partial-match bonuses:
+# "Adaptador para Llaves Combinadas" would gain the "llave" token and score
+# +3 word-overlap against a "llave francesa" query, collapsing a pre-A2
+# 8-point margin down to 2 points and putting adaptadores above SCORE_LOW.
+_PRODUCT_SPELLING_VARIANTS: Dict[str, str] = {
+    k: v for k, v in _BASE_SPELLING_VARIANTS.items()
+    if k not in ("llaves", "francesas")
 }
 
 
@@ -55,6 +66,24 @@ def normalize_basic(text: str) -> str:
     normalized = text.lower().translate(_ACCENT_MAP)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     for variant, canonical in _BASE_SPELLING_VARIANTS.items():
+        normalized = re.sub(rf"\b{re.escape(variant)}\b", canonical, normalized)
+    return normalized
+
+
+def normalize_for_product_text(text: str) -> str:
+    """Normalize product catalog text for word-overlap scoring.
+
+    Like normalize_basic but uses _PRODUCT_SPELLING_VARIANTS, which excludes
+    "llaves"→"llave" and "francesas"→"francesa".  This keeps plural forms intact
+    in product names so that products like "Adaptador para Llaves Combinadas" do
+    NOT gain a false "llave" token that would match user queries for "llave francesa".
+
+    Used only in _product_text() for scoring; normalize_basic still applies the full
+    set of variants to user queries (Fix C intended behaviour is preserved).
+    """
+    normalized = text.lower().translate(_ACCENT_MAP)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    for variant, canonical in _PRODUCT_SPELLING_VARIANTS.items():
         normalized = re.sub(rf"\b{re.escape(variant)}\b", canonical, normalized)
     return normalized
 
