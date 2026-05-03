@@ -92,3 +92,27 @@ Luego eliminar este archivo o marcar cada ítem como ✅.
   - Configuración legacy (`tenant_config.yaml`): **1440 minutos (24 horas)**
   - Hoy en `profile.yaml`: `[PENDIENTE - confirmar con cliente: 45 min vs 24h]`
   - **Confirmar con el cliente** cuál es la política real para el local y actualizar `profile.yaml`
+
+---
+
+## Gaps detectados en el catálogo (probando demo)
+
+Detectados al probar el bot con un caso de uso mayorista típico. Necesitan 
+decisión del cliente:
+
+### Categorización
+- 7 llaves esféricas (1/2", 3/4", 20mm, 25mm, gas) están categorizadas como 
+  "General" en vez de "Plomería". Pregunta para el cliente: ¿Es correcto 
+  esto, o deberían moverse a Plomería?
+
+### Productos faltantes  
+- Caños de termofusión PP-R no están en el catálogo. Solo están las 
+  boquillas/accesorios de termofusión (en "Cintas y Adhesivos" y "General"). 
+  Pregunta para el cliente: ¿Vende caños PP-R y faltan cargar, o no los vende?
+
+### Decisión técnica para discutir
+- El bot hoy busca por categoría primero. Si un producto está mal 
+  categorizado, no lo encuentra aunque el nombre matchee. Posibilidades:
+  (a) Arreglar la categorización (recomendado si son pocos productos)
+  (b) Hacer la búsqueda menos restrictiva sobre categoría
+  (c) Combinación de ambos
