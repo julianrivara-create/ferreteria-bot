@@ -669,15 +669,7 @@ def get_available_functions() -> List[Dict[str, Any]]:
                 "required": ["pregunta"],
             },
         },
-        {
-            "name": "obtener_politicas",
-            "description": "Devolver políticas de negocio (envíos, pagos, garantía, etc.).",
-            "parameters": {
-                "type": "object",
-                "properties": {"tema": {"type": "string", "description": "Tema a consultar"}},
-                "required": ["tema"],
-            },
-        },
+
         {
             "name": "listar_bundles",
             "description": "Listar bundles/combo activos.",
