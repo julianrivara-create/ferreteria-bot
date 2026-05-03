@@ -35,7 +35,7 @@ import re
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
-from bot_sales.ferreteria_dimensions import extract_dimensions, missing_required_dimensions
+from bot_sales.ferreteria_dimensions import extract_dimensions
 from bot_sales.ferreteria_family_model import (
     build_clarification_prompt,
     detect_product_family,
