@@ -29,7 +29,7 @@ class TenantConfig:
             self.config = self._normalize_profile(config_data)
         else:
             if self.config_path is None:
-                self.config_path = base_dir / "data" / "tenant_config.yaml"
+                self.config_path = base_dir.parent / "data" / "tenants" / "ferreteria" / "profile.yaml"
             self.config = self._normalize_profile(self._load_config_from_path(self.config_path))
 
         if prompts_dir:
@@ -53,7 +53,7 @@ class TenantConfig:
             return yaml.safe_load(f) or {}
 
     def _normalize_profile(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Support both legacy tenant_config.yaml and new profile.yaml shape."""
+        """Normalize profile.yaml shape into a flat config dict."""
         if not data:
             return self._get_default_config()
 

@@ -2,7 +2,7 @@ id: ferreteria
 slug: ferreteria
 bot_name: "Ferretero"
 business:
-  name: Ferreteria Central
+  name: "Ferretería"  # TODO: confirmar nombre comercial con cliente [PENDIENTE-NOMBRE-COMERCIAL]
   description: Herramientas, fijaciones, pintureria y soluciones para obra, taller y hogar.
   industry: ferreteria
   language: es
@@ -25,8 +25,8 @@ business:
   - Puntas y Accesorios
   - General
 personality:
-  tone: cercano, vendedor consultivo y tecnico
-  emojis: "🛠️ ✅"
+  tone: "Argentino informal con vos/che/dale, vendedor consultivo y técnico, directo, sin relleno"
+  emojis: "🔧 🔩 💳 ✅ 🚚"
 contact:
   phone: "[PENDIENTE-TEL]"
   whatsapp: "[PENDIENTE-TEL]"
@@ -51,14 +51,10 @@ communication:
   whatsapp_numbers:
   - whatsapp:+5493333333333
 comparison_features:
-- brand
-- price_ars
 - category
-- power_w
-- material
-- size
-- volume_l
-- voltage
+- proveedor
+- price_ars
+- sku
 cross_sell_rules:
 - source_category: Herramientas Eléctricas
   recommend_categories:
@@ -82,7 +78,32 @@ cross_sell_rules:
   recommend_categories:
   - Herramientas Manuales
   - Seguridad
-hold_minutes: 45
+hold_minutes: "[PENDIENTE - confirmar con cliente: 45 min vs 24h]"
+features:
+  enable_upselling: true
+  enable_crossselling: true
+  enable_bundles: true
+required_reservation_fields:
+- nombre
+- contacto
+validation:
+  placeholder_names:
+  - "juan"
+  - "juan perez"
+  - "ejemplo"
+  - "usuario"
+  - "cliente"
+  - "example"
+  - "test"
+  placeholder_phones:
+  - "123456"
+  - "1111111"
+  - "0000000"
+  placeholder_emails:
+  - "ejemplo"
+  - "test"
+  - "@test"
+  - "@example"
 training:
   personality: ""
   objective: ""
