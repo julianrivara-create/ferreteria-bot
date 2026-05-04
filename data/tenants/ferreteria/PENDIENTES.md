@@ -124,14 +124,30 @@ Commit: dd9b985 (merge), 2a29fdd (fix)
 ## 📊 Estado del bot al cierre
 
 ### Suite original (31 casos) — `scripts/demo_test_suite.py`
-- **Referencia pre-fixes**: ~21 / 31 PASS (68%) — medido post-B2, pre-C1
-- **Post-D1-D6**: pendiente re-ejecutar para medir delta vs. 21/31 PASS pre-fixes
+- **Referencia pre-D6**: ~21 / 31 PASS (68%) — medido post-B2, pre-C1
+- **Post-D1-D6 (medido 2026-05-04, run b61977b4)**: **26/31 PASS (84%)** — +5 PASS vs pre-D6
+  - WARN: 3 (C14 dest philips, C18 PP-R evasivo, C29 mecha precio alto $1M)
+  - FAIL: 2 (C24 abrev "dest", C30 codos roscados)
+  - Mejoras confirmadas: C08, C09, C13, C21 → PASS (matcher D4/D6)
+  - Sin regresiones detectadas en suite original
+  - Informe detallado: `reports/suite_baseline_post_d6_2026-05-04.md`
 
 ### Suite extendido (53 casos) — `scripts/demo_test_suite_extended.py`
-- **Referencia pre-fixes**: 39 PASS (74%), 10 WARN, 4 FAIL (según extended_test_results_2026-05-03.md)
-- **Post-D1-D6**: pendiente re-ejecutar para medir delta vs. 39/53 PASS pre-fixes
-- **Nota E01/E08**: fallan intermitentemente por rate limits de OpenAI (TPM 30K) cuando
-  se corren los 53 casos seguidos — no son regresiones del código
+- **Referencia pre-D6**: 39 PASS (74%), 10 WARN, 4 FAIL (según extended_test_results_2026-05-03.md)
+- **Post-D1-D6 (medido 2026-05-04, run 635561c4)**: **41/53 PASS (77%)** — +2 PASS vs pre-D6
+  - WARN: 10 (E11, E14, E15, E20, E22, E28, E42, E43, E47, E51)
+  - FAIL: 2 (E09 falso positivo probable, E41 session reset en test runner)
+  - Mejoras: E33/E35/E38 FAIL→PASS (C1 validators), E40/E52 WARN→PASS (D-series)
+  - Regresiones: E11/E20/E51 PASS→WARN, E41 WARN→FAIL
+  - **Sin rate-limit failures** — ambos suites corrieron completos
+  - Informe detallado: `reports/suite_baseline_post_d6_2026-05-04.md`
+
+### Hallazgo nuevo (P2): `niple` y `ramal` con `allowed_categories: []`
+- Mismo patrón que `electrovalvula` hotfix (c8dc5ba) — knowledge loader falla en `niple`
+- El bot opera **sin knowledge scoring activo** en producción y en tests
+- PENDIENTES decía "Knowledge loader: carga OK con 20 familias" — dato incorrecto
+- Fix: eliminar o asignar categoría real a `niple` y `ramal` en `family_rules.yaml`
+- Hasta que se fixee, D3 (_score_product con familia) no está activo
 
 ### Tests unitarios — `bot_sales/tests/`
 - **119 passed, 1 pre-existing failure** (post-D6, post-hotfix)
