@@ -72,7 +72,37 @@ class BusinessLogic:
         # Normalize model name
         modelo = self._normalize_model(modelo)
 
+        # Bug 3: validate query specs before hitting the catalog
+        from bot_sales.services.search_validator import validate_query_specs
+        valid, reason = validate_query_specs(modelo)
+        if not valid:
+            return {
+                "status": "no_match",
+                "products": [],
+                "message": reason or f"No encontré productos para {modelo}",
+                "_validator_blocked": True,
+            }
+
         matches = self.db.find_matches_hybrid(modelo, storage_gb, color, categoria, proveedor)
+
+        # Bug 2: score and rank results; drop low-relevance matches
+        if matches:
+            from bot_sales.ferreteria_quote import _score_product, _SCORE_LOW
+            knowledge = getattr(self, "knowledge", None)
+            scored = [
+                (_score_product(m, modelo, knowledge=knowledge), m)
+                for m in matches
+            ]
+            scored.sort(key=lambda x: x[0], reverse=True)
+            matches = [m for score, m in scored if score > _SCORE_LOW][:5]
+
+            if not matches:
+                return {
+                    "status": "no_match",
+                    "products": [],
+                    "message": f"No encontré productos relevantes para {modelo}",
+                    "_filtered_by_scoring": True,
+                }
 
         if not matches:
             filtros = " ".join(filter(None, [categoria, proveedor]))
