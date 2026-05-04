@@ -94,3 +94,73 @@ entries:
       - electrovalvula
       - electrovalvula industrial
       - valvula electrica
+  - canonical: destornillador
+    family: destornillador
+    aliases:
+      - destornillador
+      - destornilladores
+      - destornillador philips
+      - destornillador plano
+      - destornillador estrella
+      - atornillador manual
+      - distornillador
+  - canonical: martillo
+    family: martillo
+    aliases:
+      - martillo
+      - martillos
+      - martillo carpintero
+  - canonical: llave
+    family: llave
+    aliases:
+      - llave
+      - llaves
+      - llave fija
+      - llave combinada
+      - llave francesa
+      - llave allen
+      - llave stillson
+      - llave para caño
+  - canonical: codo
+    family: codo
+    aliases:
+      - codo
+      - codos
+      - codo 90
+      - codo 45
+      - codo espiga
+  - canonical: cupla
+    family: cupla
+    aliases:
+      - cupla
+      - cuplas
+      - cupla bronce
+      - cupla pvc
+  - canonical: niple
+    family: niple
+    aliases:
+      - niple
+      - niples
+  - canonical: ramal
+    family: ramal
+    aliases:
+      - ramal
+      - ramales
+      - ramal tee
+      - ramal y
+  - canonical: tee
+    family: tee
+    aliases:
+      - tee
+      - te
+      - tees
+      - tee espiga
+  - canonical: llave de paso
+    family: llave_paso
+    aliases:
+      - llave de paso
+      - llave paso
+      - llave esferica
+      - llave esférica
+      - llave para gas
+      - paso total
