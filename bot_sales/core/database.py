@@ -10,6 +10,7 @@ import time
 import sqlite3
 import random
 import logging
+import threading
 from typing import Dict, Any, List, Optional, Tuple
 import csv
 import os
@@ -56,6 +57,9 @@ def iso_time(ts: Optional[float] = None) -> str:
 class Database:
     """Database manager for multi-industry catalog operations."""
 
+    # In-memory catalog cache TTL.  Stock changes (CSV reload, sales) reset it.
+    _STOCK_CACHE_TTL: float = 60.0
+
     def __init__(self, db_file: str, catalog_csv: str, log_path: str, api_key: str = ""):
         self.db_file = db_file
         self.catalog_csv = catalog_csv
@@ -67,6 +71,17 @@ class Database:
         self.conn.execute("PRAGMA synchronous=NORMAL;")
         self.conn.commit()
         self.cursor = self.conn.cursor()
+
+        # P1: in-memory catalog cache (eliminates repeated full-table scans)
+        self._stock_cache: Optional[List[Dict[str, Any]]] = None
+        self._stock_cache_ts: float = 0.0
+        self._stock_cache_lock = threading.Lock()
+        # P1: models cache (eliminates repeated SELECT DISTINCT model)
+        self._models_cache: Optional[List[str]] = None
+        self._models_cache_ts: float = 0.0
+        # P1: lock for cursor operations called from parallel threads
+        self._cursor_lock = threading.Lock()
+
         self._init_db()
 
         # Setup logging
@@ -451,6 +466,41 @@ class Database:
             self.conn.commit()
             action = "Loaded" if replace_existing else "Merged missing"
             logging.info("%s %s products from catalog", action, len(catalog_data))
+            self._invalidate_stock_cache()  # P1: flush cache after catalog reload
+
+    # ── P1: In-memory catalog cache ───────────────────────────────────────────
+
+    def _get_all_stock_cached(self) -> List[Dict[str, Any]]:
+        """Return all stock products from in-memory cache (TTL = _STOCK_CACHE_TTL).
+
+        Eliminates repeated full-table scans during multi-item quote resolution.
+        Thread-safe: the cursor lock serialises the initial DB load; once the
+        cache is warm, concurrent readers return immediately without locking.
+        """
+        now = time.time()
+        with self._stock_cache_lock:
+            if (
+                self._stock_cache is not None
+                and (now - self._stock_cache_ts) < self._STOCK_CACHE_TTL
+            ):
+                return self._stock_cache
+            # Cache miss — load under lock so concurrent threads don't race on cursor
+            with self._cursor_lock:
+                rows = self.cursor.execute("SELECT * FROM stock").fetchall()
+            products = [self._row_to_product(row) for row in rows]
+            self._stock_cache = products
+            self._stock_cache_ts = time.time()
+            return products
+
+    def _invalidate_stock_cache(self) -> None:
+        """Reset the in-memory cache so the next read reloads from SQLite."""
+        with self._stock_cache_lock:
+            self._stock_cache = None
+            self._stock_cache_ts = 0.0
+            self._models_cache = None
+            self._models_cache_ts = 0.0
+
+    # ─────────────────────────────────────────────────────────────────────────
 
     def find_matches(
         self,
@@ -467,8 +517,8 @@ class Database:
         - model query is tokenized and checked against model/category/proveedor/attributes
         - optional categoria and proveedor act as strict filters when provided
         """
-        rows = self.cursor.execute("SELECT * FROM stock").fetchall()
-        products = [self._row_to_product(row) for row in rows]
+        # P1: use in-memory cache instead of a full DB scan on every call
+        products = list(self._get_all_stock_cached())
 
         if model:
             raw_tokens = re.split(r"[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+", model.lower())
@@ -482,7 +532,10 @@ class Database:
             if not tokens:
                 tokens = [model.lower()]
 
-            filtered = []
+            # P1: collect (hit_count, product) to rank candidates before scoring
+            hits: List[tuple] = []
+            n_tokens = len(tokens)
+            min_hits = max(1, n_tokens // 2 + 1)
             for p in products:
                 haystack = " ".join(
                     [
@@ -492,17 +545,14 @@ class Database:
                         json.dumps(p.get("attributes", {}), ensure_ascii=False).lower(),
                     ]
                 )
-                if all(token in haystack for token in tokens):
-                    filtered.append(p)
-                    continue
-
-                # Majority fallback: prevents false positives from single-token overlap
-                # 1 token → 1, 2 tokens → 2 (all), 3 tokens → 2, 4 tokens → 3, etc.
                 hit_count = sum(1 for t in tokens if t in haystack)
-                min_hits = max(1, len(tokens) // 2 + 1)
                 if hit_count >= min_hits:
-                    filtered.append(p)
-            products = filtered
+                    hits.append((hit_count, p))
+
+            # Sort by hit_count descending; cap at 200 so downstream scoring
+            # (_score_product in buscar_stock) runs on a bounded candidate set.
+            hits.sort(key=lambda x: x[0], reverse=True)
+            products = [p for _, p in hits[:200]]
 
         products = [
             p
@@ -597,18 +647,16 @@ class Database:
         return self._row_to_product(row)
 
     def available_for_sku(self, sku: str) -> int:
-        """Calculate available stock for a SKU (stock - active holds)"""
+        """Calculate available stock for a SKU (stock - active holds). Thread-safe."""
         self.cleanup_holds()
-        
-        stock = self.cursor.execute(
-            "SELECT stock_qty FROM stock WHERE sku = ?", (sku,)
-        ).fetchone()
-        base = stock[0] if stock else 0
-        
-        reserved = self.cursor.execute(
-            "SELECT COUNT(*) FROM holds WHERE sku = ?", (sku,)
-        ).fetchone()[0]
-        
+        with self._cursor_lock:
+            stock = self.cursor.execute(
+                "SELECT stock_qty FROM stock WHERE sku = ?", (sku,)
+            ).fetchone()
+            base = stock[0] if stock else 0
+            reserved = self.cursor.execute(
+                "SELECT COUNT(*) FROM holds WHERE sku = ?", (sku,)
+            ).fetchone()[0]
         return max(0, base - reserved)
 
     def create_hold(
@@ -645,10 +693,11 @@ class Database:
         }
 
     def cleanup_holds(self) -> int:
-        """Remove expired holds. Returns count of deleted rows."""
-        self.cursor.execute("DELETE FROM holds WHERE expires_at <= ?", (now_ts(),))
-        self.conn.commit()
-        return self.cursor.rowcount
+        """Remove expired holds. Returns count of deleted rows. Thread-safe."""
+        with self._cursor_lock:
+            self.cursor.execute("DELETE FROM holds WHERE expires_at <= ?", (now_ts(),))
+            self.conn.commit()
+            return self.cursor.rowcount
 
     def release_hold(self, hold_id: str) -> bool:
         """Manually release a hold"""
@@ -748,8 +797,8 @@ class Database:
         self.conn.commit()
 
     def load_stock(self) -> List[Dict[str, Any]]:
-        """Load all stock items"""
-        return [self._row_to_product(row) for row in self.cursor.execute("SELECT * FROM stock")]
+        """Load all stock items (P1: served from in-memory cache)."""
+        return list(self._get_all_stock_cached())
 
     def load_stock_page(
         self,
@@ -825,11 +874,21 @@ class Database:
         ]
 
     def get_all_models(self) -> List[str]:
-        """Get list of all unique models"""
-        return [
-            row[0] for row in
-            self.cursor.execute("SELECT DISTINCT model FROM stock ORDER BY model").fetchall()
-        ]
+        """Get list of all unique models (P1: short TTL in-memory cache)."""
+        now = time.time()
+        if (
+            self._models_cache is not None
+            and (now - self._models_cache_ts) < self._STOCK_CACHE_TTL
+        ):
+            return self._models_cache
+        with self._cursor_lock:
+            models = [
+                row[0] for row in
+                self.cursor.execute("SELECT DISTINCT model FROM stock ORDER BY model").fetchall()
+            ]
+        self._models_cache = models
+        self._models_cache_ts = now
+        return models
 
     def get_all_colors(self) -> List[str]:
         """Get list of all unique colors"""
