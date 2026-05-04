@@ -1,7 +1,7 @@
 families:
   taladro:
     allowed_categories:
-      - Herramientas Eléctricas
+      - Herramientas Electricas
     required_dimensions: []
     optional_dimensions:
       - brand
@@ -9,9 +9,10 @@ families:
       - size
     pack_sensitive: false
     compatibility_sensitive: false
+
   amoladora:
     allowed_categories:
-      - Herramientas Eléctricas
+      - Herramientas Electricas
     required_dimensions: []
     optional_dimensions:
       - brand
@@ -19,9 +20,13 @@ families:
       - size
     pack_sensitive: false
     compatibility_sensitive: false
+
   atornillador:
     allowed_categories:
-      - Herramientas Eléctricas
+      - Bocallaves y Dados
+      - Herramientas Electricas
+      - Juegos y Sets
+      - Varios
     required_dimensions: []
     optional_dimensions:
       - brand
@@ -29,12 +34,10 @@ families:
       - voltage
     pack_sensitive: false
     compatibility_sensitive: false
+
   mecha:
     allowed_categories:
-      - Mechas y Brocas
-      - Herramientas Eléctricas
-      - Herramientas Manuales
-      - Puntas y Accesorios
+      - Herramientas Electricas
     required_dimensions:
       - size
       - material
@@ -42,12 +45,10 @@ families:
       - use
     pack_sensitive: false
     compatibility_sensitive: true
+
   broca:
     allowed_categories:
-      - Mechas y Brocas
-      - Herramientas Eléctricas
-      - Herramientas Manuales
-      - Puntas y Accesorios
+      - Herramientas Electricas
     required_dimensions:
       - size
       - material
@@ -55,10 +56,11 @@ families:
       - use
     pack_sensitive: false
     compatibility_sensitive: true
+
   tornillo:
     allowed_categories:
-      - Tornillería y Fijaciones
-      - Mechas y Brocas
+      - Bulonería
+      - Herramientas Electricas
     required_dimensions: []
     optional_dimensions:
       - size
@@ -66,25 +68,28 @@ families:
       - material
     pack_sensitive: true
     compatibility_sensitive: true
+
   tarugo:
     allowed_categories:
-      - Tornillería y Fijaciones
+      - Tarugos y Tacos
     required_dimensions: []
     optional_dimensions:
       - size
     pack_sensitive: true
     compatibility_sensitive: true
+
   taco:
     allowed_categories:
-      - Tornillería y Fijaciones
+      - Tarugos y Tacos
     required_dimensions: []
     optional_dimensions:
       - size
     pack_sensitive: true
     compatibility_sensitive: true
+
   pintura:
     allowed_categories:
-      - Pinturas y Acabados
+      - Pinturas
     required_dimensions:
       - type
       - presentation
@@ -93,9 +98,10 @@ families:
       - use
     pack_sensitive: false
     compatibility_sensitive: true
+
   latex:
     allowed_categories:
-      - Pinturas y Acabados
+      - Pinturas
     required_dimensions:
       - presentation
     optional_dimensions:
@@ -103,19 +109,21 @@ families:
       - use
     pack_sensitive: false
     compatibility_sensitive: true
+
   rodillo:
     allowed_categories:
-      - Pinturas y Acabados
+      - Varios
     required_dimensions: []
     optional_dimensions:
       - size
       - type
     pack_sensitive: false
     compatibility_sensitive: false
+
   silicona:
     allowed_categories:
-      - Plomería
-      - Cintas y Adhesivos
+      - Pinturas
+      - Varios
     required_dimensions: []
     optional_dimensions:
       - use
@@ -123,9 +131,10 @@ families:
       - presentation
     pack_sensitive: false
     compatibility_sensitive: true
+
   sellador:
     allowed_categories:
-      - Plomería
+      - Pinturas
     required_dimensions: []
     optional_dimensions:
       - use
@@ -133,18 +142,22 @@ families:
       - presentation
     pack_sensitive: false
     compatibility_sensitive: true
+
   teflon:
     allowed_categories:
-      - Cintas y Adhesivos
-      - Plomería
+      - Cintas y Precintos
+      - Varios
     required_dimensions: []
     optional_dimensions:
       - presentation
     pack_sensitive: false
     compatibility_sensitive: false
+
   cano:
     allowed_categories:
-      - Plomería
+      - Albañilería
+      - Bulonería
+      - Sanitaria
     required_dimensions:
       - material
       - diameter
@@ -152,9 +165,13 @@ families:
       - use
     pack_sensitive: false
     compatibility_sensitive: true
+
   cable:
+    # No "Electricidad" category exists in catalog. grep "cable" confirmed: Pinzas y Alicates, Sujeción, Varios
     allowed_categories:
-      - Electricidad
+      - Pinzas y Alicates
+      - Sujeción
+      - Varios
     required_dimensions:
       - size
       - use
@@ -162,21 +179,153 @@ families:
       - presentation
     pack_sensitive: false
     compatibility_sensitive: true
+
   guante:
+    # No "Seguridad" category exists in catalog. grep "guante" confirmed: Bocallaves y Dados, Pinturas, Varios
     allowed_categories:
-      - Seguridad
+      - Bocallaves y Dados
+      - Pinturas
+      - Varios
     required_dimensions: []
     optional_dimensions:
       - size
     pack_sensitive: false
     compatibility_sensitive: false
+
   electrovalvula:
-    allowed_categories:
-      - Plomería
+    # grep "electrovalvula" returned no results - product not found in catalog
+    allowed_categories: []
     required_dimensions:
       - diameter
       - voltage
     optional_dimensions:
       - use
+    pack_sensitive: false
+    compatibility_sensitive: true
+
+  destornillador:
+    match_terms:
+      - destornillador
+      - destornilladores
+    allowed_categories:
+      - Bocallaves y Dados
+      - Destornilladores
+    required_dimensions: []
+    optional_dimensions:
+      - type
+      - size
+    pack_sensitive: false
+    compatibility_sensitive: false
+
+  martillo:
+    match_terms:
+      - martillo
+      - martillos
+    allowed_categories:
+      - Herramientas Electricas
+      - Martillos
+    required_dimensions: []
+    optional_dimensions:
+      - type
+      - size
+    pack_sensitive: false
+    compatibility_sensitive: false
+
+  llave:
+    match_terms:
+      - llave
+      - llaves
+    allowed_categories:
+      - Bocallaves y Dados
+      - Juegos y Sets
+      - Llaves
+      - Sanitaria
+    required_dimensions: []
+    optional_dimensions:
+      - type
+      - size
+    pack_sensitive: false
+    compatibility_sensitive: false
+
+  codo:
+    match_terms:
+      - codo
+      - codos
+    # grep "codo" confirmed: Albañilería, Varios
+    allowed_categories:
+      - Albañilería
+      - Varios
+    required_dimensions: []
+    optional_dimensions:
+      - material
+      - diameter
+    pack_sensitive: false
+    compatibility_sensitive: true
+
+  cupla:
+    match_terms:
+      - cupla
+      - cuplas
+    # grep "cupla" confirmed: Varios
+    allowed_categories:
+      - Varios
+    required_dimensions: []
+    optional_dimensions:
+      - material
+      - diameter
+    pack_sensitive: false
+    compatibility_sensitive: true
+
+  niple:
+    match_terms:
+      - niple
+      - niples
+    # grep "niple" returned no results - product not found in catalog
+    allowed_categories: []
+    required_dimensions: []
+    optional_dimensions:
+      - material
+      - diameter
+    pack_sensitive: false
+    compatibility_sensitive: true
+
+  ramal:
+    match_terms:
+      - ramal
+      - ramales
+    # grep "ramal" returned no results - product not found in catalog
+    allowed_categories: []
+    required_dimensions: []
+    optional_dimensions:
+      - material
+      - diameter
+    pack_sensitive: false
+    compatibility_sensitive: true
+
+  tee:
+    match_terms:
+      - tee
+    # grep "tee" confirmed: Varios
+    allowed_categories:
+      - Varios
+    required_dimensions: []
+    optional_dimensions:
+      - material
+      - diameter
+    pack_sensitive: false
+    compatibility_sensitive: true
+
+  llave_paso:
+    match_terms:
+      - llave de paso
+      - llave paso
+      - llaves de paso
+    # grep "llave.*paso" confirmed: Varios
+    allowed_categories:
+      - Varios
+    required_dimensions: []
+    optional_dimensions:
+      - diameter
+      - type
     pack_sensitive: false
     compatibility_sensitive: true
