@@ -74,6 +74,67 @@ _ALL_HARDWARE_KWS = _V4_TOOL_KWS | _FASTENER_KWS | _DRILL_KWS | frozenset({
     "llave", "sierra", "serrucho", "martillo", "maza",
 })
 
+# Max realistic wattage per electric tool family.
+# Tuples are (frozenset_of_keywords, max_watts).
+# "sierra circular" is handled separately in V6 (two-word match).
+_TOOL_WATT_LIMITS: List[Tuple[frozenset, int]] = [
+    (frozenset({"taladro"}), 2000),
+    (frozenset({"amoladora", "esmeriladora"}), 2500),
+    (frozenset({"lijadora"}), 1500),
+    (frozenset({"aspiradora"}), 2500),
+    (frozenset({"soldadora"}), 5000),
+]
+
+# V7: Tool keywords relevant for impossible-adjective checks.
+# Broader than _V4_TOOL_KWS — includes power tools and more hand tools.
+_V7_TOOL_KWS = frozenset({
+    "martillo", "maza", "mazo",
+    "destornillador", "desarmador", "atornillador",
+    "alicate", "pinza", "tenaza",
+    "broca", "mecha",
+    "sierra", "serrucho",
+    "cincel",
+    "cutter",
+    "taladro",
+    "amoladora", "esmeriladora",
+    "lijadora",
+    "soldadora",
+    "cortadora",
+})
+
+# Adjectives that are physically impossible for any tool in the catalog.
+# Includes both masculine and feminine Spanish forms.
+_V7_UNIVERSAL_ABSURD = frozenset({
+    "cuántico", "cuantico", "cuántica", "cuantica",
+    "virtual",
+    "holográfico", "holografico", "holográfica", "holografica",
+    "volador", "voladora",
+    "telepático", "telepatico", "telepática", "telepatica",
+    "mágico", "magico", "mágica", "magica",
+})
+
+# Specific (adjective_kws, tool_kws) blocked pairs.
+# Fires when ANY adjective kw AND ANY tool kw appear in the same query.
+# Conservative list — only combinations that are clearly impossible.
+# Intentionally omits: "eléctrico" (taladros eléctricos existen),
+#                      "digital" on drills/grinders (digital gauges exist).
+_V7_BLOCKED_PAIRS: List[Tuple[frozenset, frozenset]] = [
+    (
+        frozenset({"láser", "laser"}),
+        frozenset({"destornillador", "desarmador", "martillo", "maza", "mazo",
+                   "alicate", "pinza", "tenaza"}),
+    ),
+    (
+        frozenset({"inflable"}),
+        frozenset({"alicate", "pinza", "tenaza", "martillo", "maza", "mazo",
+                   "destornillador", "desarmador", "taladro"}),
+    ),
+    (
+        frozenset({"digital"}),
+        frozenset({"martillo", "maza", "mazo"}),
+    ),
+]
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _has_word(text: str, keywords: frozenset) -> bool:
@@ -141,6 +202,23 @@ def _extract_mm_value(text: str) -> Optional[float]:
 def _segments(text: str) -> List[str]:
     """Split text into segments on structural connectors."""
     return _SEGMENT_SPLIT_RE.split(text)
+
+
+def _extract_watts(text: str) -> Optional[int]:
+    """
+    Extract the first wattage mentioned in text.
+    Recognises: "5000W", "5000 W", "5000w", "5000 watts", "5000 vatios".
+    Applied to lowercased text internally.
+    Returns None if no wattage found.
+    """
+    tl = text.lower()
+    m = re.search(r"(\d+)\s*(?:watts?|vatios?|w)\b", tl)
+    if m:
+        try:
+            return int(m.group(1))
+        except ValueError:
+            pass
+    return None
 
 
 # ─── Level 1: Impossible spec detection ───────────────────────────────────────
@@ -219,6 +297,61 @@ def validate_query_specs(text: str) -> Tuple[bool, Optional[str]]:
             reason = "especificación de almacenamiento digital en producto de hardware físico"
             logger.info(
                 "search_validator.L1.storage_on_hardware query=%r reason=%s",
+                text, reason,
+            )
+            return False, reason
+
+    # V6: Wattage impossible for known electric tool family
+    watts = _extract_watts(text)
+    if watts is not None:
+        for tool_kws, max_watts in _TOOL_WATT_LIMITS:
+            if _has_word(text, tool_kws) and watts > max_watts:
+                family_name = "/".join(sorted(tool_kws))
+                reason = (
+                    f"potencia {watts}W imposible para {family_name} "
+                    f"(máx ~{max_watts}W)"
+                )
+                logger.info(
+                    "search_validator.L1.watts_impossible query=%r reason=%s",
+                    text, reason,
+                )
+                return False, reason
+        # "sierra circular" requires both words to avoid matching manual saws
+        tl = text.lower()
+        if (re.search(r"\bsierra\b", tl) and re.search(r"\bcircular\b", tl)
+                and watts > 2500):
+            reason = f"potencia {watts}W imposible para sierra circular (máx ~2500W)"
+            logger.info(
+                "search_validator.L1.watts_impossible query=%r reason=%s",
+                text, reason,
+            )
+            return False, reason
+
+    # V7: Impossible adjective combinations
+    # 7a: Universal absurd adjectives — block with ANY known tool keyword
+    for absurd_kw in _V7_UNIVERSAL_ABSURD:
+        if _has_word(text, frozenset({absurd_kw})) and _has_word(text, _V7_TOOL_KWS):
+            reason = (
+                f"adjetivo imposible '{absurd_kw}' combinado con herramienta "
+                f"de ferretería — ese producto no existe"
+            )
+            logger.info(
+                "search_validator.L1.impossible_adjective query=%r reason=%s",
+                text, reason,
+            )
+            return False, reason
+
+    # 7b: Specific blocked (adjective, tool) pairs
+    for adj_kws, tool_kws in _V7_BLOCKED_PAIRS:
+        if _has_word(text, adj_kws) and _has_word(text, tool_kws):
+            matched_adj = next(
+                (a for a in sorted(adj_kws) if _has_word(text, frozenset({a}))), "?"
+            )
+            reason = (
+                f"combinación imposible: '{matched_adj}' no aplica a herramienta manual"
+            )
+            logger.info(
+                "search_validator.L1.impossible_adjective query=%r reason=%s",
                 text, reason,
             )
             return False, reason
