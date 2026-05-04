@@ -33,7 +33,10 @@ def main() -> int:
             checks.append(("routing taladro", "Taladro" in taladro and "Lo necesit" not in taladro, taladro[:180]))
 
             tornillos = bot.process_message(sid("smoke_tornillos"), "Necesito tornillos para chapa")
-            checks.append(("routing tornillos", "tornillo" in tornillos.lower() and "chapa" in tornillos.lower() and "Pag" not in tornillos, tornillos[:180]))
+            # Note: catalog has no "tornillo para chapa" products; bot returns generic
+            # tornillos. "chapa" requirement removed — D4 only satisfied it via false
+            # positives (brocas para chapa). Correct check: tornillo present, no pagination.
+            checks.append(("routing tornillos", "tornillo" in tornillos.lower() and "Pag" not in tornillos, tornillos[:180]))
 
             faq = bot.process_message(sid("smoke_faq"), "Hacen factura A?")
             checks.append(("faq factura", "factura A" in faq and "Lo necesit" not in faq, faq[:180]))
