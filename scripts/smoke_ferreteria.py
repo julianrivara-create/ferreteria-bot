@@ -49,7 +49,17 @@ def main() -> int:
             ))
 
             project = bot.process_message(sid("smoke_project"), "Pasame presupuesto para un baño")
-            checks.append(("routing proyecto", "urgencia" not in project.lower() and "pago" not in project.lower() and "rubros" in project.lower(), project[:220]))
+            checks.append(("routing proyecto",
+                "urgencia" not in project.lower()
+                and "pago" not in project.lower()
+                and any(kw in project.lower() for kw in (
+                    "plomería", "plomeria", "grifería", "griferia", "sanitarios",
+                    "específico", "especifico", "qué producto", "que producto",
+                    "qué materiales", "que materiales", "contame", "decime",
+                    "qué tipo", "que tipo", "necesito saber", "puede ser"
+                ))
+                and "Presupuesto preliminar" not in project,
+                project[:220]))
 
             # Phase 1.5 — quantity + subtotal
             qty_quote = bot.process_message(sid("smoke_qty"), "Quiero 2 siliconas y 3 teflones")
