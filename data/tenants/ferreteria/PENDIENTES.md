@@ -559,6 +559,14 @@ Commit: 6eb10eb → merge e5641c8
 
 ### Deuda técnica
 
+- **Bug de Python 3.14 (workaround documentado)**
+  - ThreadPoolExecutor + SQLite causa SIGSEGV (exit 139) en Python 3.14 local.
+  - Workaround: setear `MAX_WORKERS_OVERRIDE=1` en `.env` local (NO commitear).
+  - Implementado en `bot.py:1348` con override por env var; tests en `test_max_workers_override.py`.
+  - En producción (Railway, Python 3.11/3.12) el bug no aplica: no setear la variable y P1 funciona con paralelismo completo.
+  - Próxima sesión: confirmar versión Python en Railway antes de deploy.
+  - Issue upstream a monitorear cuando Python 3.14 reciba parche oficial.
+
 - **`bot_sales/planning/flow_manager.py`**: módulo diseñado para tech/USD, mal adaptado
   a ferretería. Refactor mayor pendiente para alinear con contexto ARS/pesos.
 - **`followup_scheduler.py:92`**: `datetime.utcnow()` deprecado en Python 3.14. Bajo

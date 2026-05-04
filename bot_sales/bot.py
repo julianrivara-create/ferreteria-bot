@@ -1345,7 +1345,17 @@ class SalesBot:
             _knowledge_snapshot = self._knowledge()
             def _resolve_item(p):
                 return fq.resolve_quote_item(p, self.logic, knowledge=_knowledge_snapshot)
-            n_workers = min(len(parsed_items), 5)
+            # MAX_WORKERS_OVERRIDE env var allows capping parallelism for local dev.
+            # Useful on Python 3.14 where ThreadPoolExecutor + SQLite causes SIGSEGV.
+            # In production (Railway, Python 3.11/3.12), leave unset for full P1 parallelism.
+            _override = os.environ.get("MAX_WORKERS_OVERRIDE")
+            if _override:
+                try:
+                    n_workers = max(1, int(_override))
+                except ValueError:
+                    n_workers = min(len(parsed_items), 5)
+            else:
+                n_workers = min(len(parsed_items), 5)
             with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as _pool:
                 resolved_items = list(_pool.map(_resolve_item, parsed_items))
 
