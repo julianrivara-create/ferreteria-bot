@@ -9,6 +9,7 @@ Coordinates ChatGPT, Business Logic, and Database
 import os
 import re
 import logging
+import concurrent.futures
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from cachetools import TTLCache
@@ -1278,7 +1279,13 @@ class SalesBot:
         # ── 5. New multi-item quote request ──────────────────────────────────
         parsed_items = self._parse_quote_items(user_message)
         if len(parsed_items) >= 2:
-            resolved_items = [self._resolve_quote_item(p) for p in parsed_items]
+            # P1: load knowledge once, resolve items in parallel (was sequential)
+            _knowledge_snapshot = self._knowledge()
+            def _resolve_item(p):
+                return fq.resolve_quote_item(p, self.logic, knowledge=_knowledge_snapshot)
+            n_workers = min(len(parsed_items), 5)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as _pool:
+                resolved_items = list(_pool.map(_resolve_item, parsed_items))
 
             # If there's an open non-accepted quote, ask merge vs replace
             if open_quote and quote_state == "open":

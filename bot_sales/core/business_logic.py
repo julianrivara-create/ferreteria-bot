@@ -51,6 +51,9 @@ class BusinessLogic:
         self.product_comparator = ProductComparator(db)
         self.translator = Translator()
 
+        # P1: cache fuzzy-match results to avoid repeated O(N) scans
+        self._normalize_cache: Dict[str, str] = {}
+
     def buscar_stock(
         self,
         modelo: str,
@@ -629,13 +632,19 @@ class BusinessLogic:
                 modelo = re.sub(pattern, replacement, modelo, flags=re.IGNORECASE)
                 break
 
+        # P1: return cached result if available (same term repeated across synonyms)
+        # Lazy init guards against __new__-constructed instances in tests.
+        if not hasattr(self, "_normalize_cache"):
+            self._normalize_cache = {}
+        if modelo in self._normalize_cache:
+            return self._normalize_cache[modelo]
+
         # Fuzzy match against known models in catalog
         known_models = self.db.get_all_models()
         matches = get_close_matches(modelo, known_models, n=1, cutoff=0.6)
-        if matches:
-            return matches[0]
-
-        return modelo
+        result = matches[0] if matches else modelo
+        self._normalize_cache[modelo] = result
+        return result
 
     def consultar_faq(self, pregunta: str) -> Dict[str, Any]:
         """
