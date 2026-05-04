@@ -7,6 +7,41 @@
 
 ---
 
+## 🎯 Prioridades del cliente (recibido 2026-05-04 PM)
+
+**Principio rector**: el bot debe llevar toda interacción real al cierre de venta sin
+perderla en el camino. Cualquier cosa que rompa esa cadena hace perder ventas y es
+prioridad alta.
+
+### Prioridades en orden:
+
+1. **NO inventar precios** — cero tolerancia. Si no tiene precio real, escala a humano.
+
+2. **Interpretar perfectamente al cliente** — el matcher debe ser quirúrgico. Incluye:
+   - Slang argentino ("che dale", "buenísimo", "voy con eso", "está mortal", "nahh")
+   - Ambigüedad ("tenés taladros?", "barato", "todo") — pedir aclaración bien, no
+     responder vago
+   - Typos, abreviaturas (ej: "dest" = destornillador), WhatsApp fragmentado
+
+3. **Cerrar la venta hasta el final** — multiturno largos (E40-E43, cierre de pedido)
+   deben funcionar siempre.
+
+### Regla nueva: descuentos = handoff a humano
+
+El bot NO negocia precios. Detecta el intento y escala. Triggers:
+descuento, rebaja, "me bajás", "mejor precio", "más barato", "X% off", "te ofrezco",
+"no me sirve, qué hacés".
+
+Comportamiento: NO acepta, NO contraoferta, escala con mensaje amable tipo
+"Para temas de precio especial te derivo con un asesor humano."
+
+### Lo que NO depende de nosotros:
+
+- Datos del cliente (profile.yaml, faqs.yaml) — esperando que el cuñado responda
+  cuestionarios.
+
+---
+
 ## ✅ Cerrados en sesión 2026-05-04
 
 ### Bug crítico del matcher base — RESUELTO
@@ -155,25 +190,37 @@ Commit: dd9b985 (merge), 2a29fdd (fix)
 
 ## 🔴 Bugs críticos para producción (bloquean Railway)
 
-### 1. Performance lenta en pedidos multi-item
-- Tiempo de respuesta: ~30s para queries con 5+ ítems
-- Inviable para producción real (clientes esperan 5-10s max)
-- Hipótesis: latencia LLM acumulada + búsquedas secuenciales en catálogo de 60K SKUs
-- Acción: investigar paralelización de búsquedas, caching de embeddings, batch LLM calls
+### ✅ Performance lenta en pedidos multi-item — RESUELTO (P1, 2026-05-04)
+Resuelto con caching + paralelización. Tiempo: ~25s → ~2.6s paralelo. Ver ✅ Cerrados.
 
-### 2. E01/E08 intermitentes (parser multi-item bajo rate limits)
-- "lista obra: caño/codos/cuplas/llaves/ramales" y "Bahco sets + taladros + amoladoras"
-  fallan intermitentemente al correr el suite completo de 53 casos
-- Causa raíz: OpenAI TPM 30K + posible fragilidad del parser con listas largas bajo presión
-- El bug existe pre-fixes (verificado con git stash, 3 runs c/u)
-- Para producción: necesitamos mayor TPM o procesamiento más eficiente
-
-### 3. Datos del cliente pendientes
+### 1. Datos del cliente pendientes
 - El cuñado no respondió los cuestionarios todavía
 - Sin estos datos, `profile.yaml` tiene placeholders que la `pending_guard` intercepta
 - **Necesario antes de demo real**: políticas de descuento, horarios, datos de contacto,
   condiciones mayoristas, zonas de envío, medios de pago
 - Ver checklist completo al final de este archivo
+
+### 2. Anti-alucinación de precios — prioridad #1 del cliente
+**Prioridad #1 del cliente.** Cero tolerancia: si el bot no tiene precio real, escala a
+humano. Acciones:
+- Auditar todos los paths donde el bot puede mencionar precios
+- Verificar que `_search_validator` cubre todos los casos edge
+- Verificar que el prompt LLM nunca permite inventar precios
+- Agregar tests específicos para alucinación de precios
+
+### 3. Cierre de venta multiturno (E41-E43) — prioridad #3 del cliente
+**Prioridad #3 del cliente.** E41 en FAIL, E42-E43 en WARN. Acciones:
+- Auditar el flujo de cierre de pedido completo
+- Identificar dónde se rompe la sesión (E41 "session reset turno 5")
+- Verificar que multiturno largo funciona end-to-end
+
+### 4. Robustez del matcher en slang/ambigüedad — prioridad #2 del cliente
+**Prioridad #2 del cliente.** Sin slang bien manejado se pierde la venta. Casos:
+E14 ("dale, mostrame qué hay"), E15 ("buenísimo, voy con eso"), E20 ("tipo Bosch tenés
+algo?"), E47 ("si tenes / mostrame / los caros"). Acciones:
+- Auditar el prompt LLM para responder a ambigüedad con aclaración específica
+- No responder vago — pedir aclaración concreta
+- E20: detectar "tipo X" como búsqueda de categoría/marca similar
 
 ---
 
@@ -206,30 +253,29 @@ real del producto, no keyword overlap. Pendiente aplicar el mismo patrón a
 ## 🟠 Bugs importantes (no bloquean producción)
 
 ### Matcher
-- **C29** (mecha 8mm para taladro — precio $2.4M) — WARN persistente
-  - Causa: "mecha para taladro" matchea bocallave en contexto equivocado
-  - Fix Plan A (definitivo): re-tag catálogo con LLM (costoso pero correcto)
-  - Fix Plan B: tabla de antagonistas (mecha vs bocallave en mismo query)
-  - Estado: `filter_para_context_families()` mitiga pero no elimina el problema
-  - **POST-D6: SIN VERIFICAR.** Re-correr para confirmar si el _score_product fix resolvió el WARN.
+- **C29** ✅ RESUELTO en Q3 — fix scoring mecha-vs-taladro (rama fix/Q3-c29-and-dest)
+- **C24** ✅ RESUELTO en Q3 — alias "dest" agregado en synonyms.yaml (rama fix/Q3-c29-and-dest)
+- **Llaves francesas interrogativa** — verificar si aún falla post-A2 (question mark stripping)
 
-- **Llaves francesas interrogativa** — FAIL en suite original
-  - Query: "tienen llaves francesas?" — el `?` triggeraba matching incorrecto
-  - Question mark stripping (A2) mejoró esto; verificar si aún falla
+### Rate limits (bajado de 🔴)
+- **E01/E08 intermitentes** (parser multi-item bajo rate limits)
+  - P1 redujo LLM calls. P2 reportó 0 rate limits. Verificar en próxima sesión.
+  - Si próxima sesión confirma: cerrar definitivamente.
 
-### Anti-alucinación
-- **E22** (descuento por volumen) — WARN
-  - "si llevo 100 me bajás?" — el bot no menciona la política de descuento por volumen
-  - Fix: agregar mención a política mayorista cuando detecta pregunta de volumen
-
+### Ambigüedad extrema
+- **E51, E52** ("todo", "barato") — el bot debería pedir aclaración bien. No crítico.
 - **E28** (reposición de stock) — WARN
-  - "cuándo te llega más mercadería?" — no escala a humano
-  - Fix: reconocer pregunta de reposición y escalar
+  - "cuándo te llega más mercadería?" — podría responder con alternativa en vez de solo escalar
+  - Fix: reconocer pregunta de reposición; a veces escalar, a veces ofrecer alternativa
 
-### Multiturno largo (E40-E43) — WARNs
-- Secuencias de 5 turnos: el cierre de pedido/carrito sigue siendo frágil
-- E43 (reserva con datos de cliente) y E42 (factura A en total) son features no implementadas
-- E40, E41: carrito parcialmente incompleto en turno 5
+### Slang/ambigüedad (escalado a 🔴)
+- E14, E15, E20, E47 → ver bloqueante crítico "Robustez del matcher en slang/ambigüedad"
+- E22, E25, E26 → ver sección "📌 Implementación regla handoff" (son casos de descuento)
+
+### Multiturno (parcial — núcleo escalado a 🔴)
+- E40 (carrito parcialmente incompleto en turno 5) — cierre de pedido frágil
+- E42 (factura A en total), E43 (reserva con datos de cliente) — features no implementadas
+- El núcleo del problema (E41, session reset) fue escalado a 🔴
 
 ---
 
@@ -242,6 +288,48 @@ real del producto, no keyword overlap. Pendiente aplicar el mismo patrón a
   (ver sección de gaps al final)
 - **Decisión técnica pendiente**: ¿búsqueda del bot menos restrictiva por categoría?
   (ver sección de gaps al final)
+
+---
+
+## 📌 Implementación de la regla "descuento = handoff"
+
+Pendiente para próxima sesión.
+
+### Diseño:
+
+1. **Detección por keywords** (en prompt LLM o validator pre-LLM):
+   - descuento, descuentos
+   - rebaja, rebajar
+   - "me bajás", "bajame", "bajar"
+   - "mejor precio"
+   - "más barato"
+   - "X% off", "X off", "X por ciento"
+   - "te ofrezco"
+   - "qué hacés con [precio]"
+   - "está caro" (cuando sigue de pregunta de descuento)
+
+2. **Comportamiento al detectar**:
+   - NO aceptar el descuento
+   - NO dar contraoferta
+   - Mensaje amable de handoff:
+     "Para temas de precio especial te derivo con un asesor humano, ¿OK?
+     Mientras tanto puedo ayudarte con otra cosa."
+   - Marcar la conversación con flag de handoff pendiente
+
+3. **Tests al suite extendido**:
+   - Cada keyword dispara handoff
+   - El bot NO acepta nunca el descuento
+   - El bot NO da contraofertas
+   - El bot mantiene el contexto del pedido al escalar (no resetea el carrito)
+
+### Casos cubiertos por esta regla:
+
+- **E22** ("si llevo 100 me bajás?") — antes clasificado como bug de anti-alucinación
+- **E25** ("15% off?")
+- **E26** ("dame mejor precio")
+- **E18** ("nahh está caro") — objeción de precio, puede no ser descuento directo; revisar
+  si la regla lo cubre o si requiere manejo separado
+- **E23** ("en otro lado lo conseguí más barato")
 
 ---
 
