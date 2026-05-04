@@ -97,7 +97,7 @@ class BusinessLogic:
                 "products": matches,
                 "message": f"El producto existe pero no hay stock disponible ahora"
             }
-        
+
         return {
             "status": "found",
             "products": products_with_availability,
@@ -180,16 +180,6 @@ class BusinessLogic:
                 item['available'] = avail
                 item['price_formatted'] = format_money_ars(item['price_ars'])
                 alternatives.append(item)
-        
-        # If no alternatives in same model, show other models
-        if not alternatives:
-            all_stock = self.db.load_stock()
-            for item in all_stock:
-                avail = self.db.available_for_sku(item['sku'])
-                if avail > 0:
-                    item['available'] = avail
-                    item['price_formatted'] = format_money_ars(item['price_ars'])
-                    alternatives.append(item)
         
         # Sort by availability
         alternatives = sorted(
