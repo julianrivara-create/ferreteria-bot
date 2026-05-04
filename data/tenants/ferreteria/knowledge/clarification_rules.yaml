@@ -73,11 +73,3 @@ rules:
     required_dimensions:
       - size
       - use
-  electrovalvula:
-    prompt: "decime medida y voltaje (ej: 1 pulgada 220v, 24v, etc.)"
-    examples:
-      - 1 pulgada 220v
-      - 24v para riego
-    required_dimensions:
-      - diameter
-      - voltage

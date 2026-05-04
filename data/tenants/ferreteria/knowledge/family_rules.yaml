@@ -37,7 +37,7 @@ families:
 
   mecha:
     allowed_categories:
-      - Herramientas Electricas
+      - Mechas y Brocas
     required_dimensions:
       - size
       - material
@@ -48,7 +48,7 @@ families:
 
   broca:
     allowed_categories:
-      - Herramientas Electricas
+      - Mechas y Brocas
     required_dimensions:
       - size
       - material
@@ -196,6 +196,7 @@ families:
     match_terms:
       - destornillador
       - destornilladores
+      - dest
     allowed_categories:
       - Bocallaves y Dados
       - Destornilladores
@@ -269,10 +270,10 @@ families:
     match_terms:
       - niple
       - niples
-    # No products found in catalog. allowed_categories=[] is intentional;
-    # the knowledge loader silently filters families with empty
-    # categories. Re-enable when supplier adds these products.
-    allowed_categories: []
+    # Products exist in catalog under Plomería (e.g. "Bronce niple", "Acople Niple").
+    # allowed_categories set to Plomería to pass loader validation.
+    allowed_categories:
+      - Plomería
     required_dimensions: []
     optional_dimensions:
       - material
@@ -284,10 +285,10 @@ families:
     match_terms:
       - ramal
       - ramales
-    # No products found in catalog. allowed_categories=[] is intentional;
-    # the knowledge loader silently filters families with empty
-    # categories. Re-enable when supplier adds these products.
-    allowed_categories: []
+    # Products exist under Plomería and Puntas y Accesorios in the catalog.
+    allowed_categories:
+      - Plomería
+      - Puntas y Accesorios
     required_dimensions: []
     optional_dimensions:
       - material

@@ -346,7 +346,7 @@ def _score_product(
         else:
             score -= 3.0  # no overlap at all
 
-    requested_families = requested_families or infer_families(requested_normalized, knowledge=knowledge)
+    requested_families = requested_families or _families_without_para_context(requested_normalized, knowledge=knowledge)
     product_family = detect_product_family(product, knowledge=knowledge)
     if requested_families:
         if product_family in requested_families:
