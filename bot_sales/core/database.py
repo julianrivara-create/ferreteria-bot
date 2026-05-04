@@ -461,7 +461,15 @@ class Database:
                         json.dumps(p.get("attributes", {}), ensure_ascii=False).lower(),
                     ]
                 )
-                if all(token in haystack for token in tokens) or any(token in haystack for token in tokens):
+                if all(token in haystack for token in tokens):
+                    filtered.append(p)
+                    continue
+
+                # Majority fallback: prevents false positives from single-token overlap
+                # 1 token → 1, 2 tokens → 2 (all), 3 tokens → 2, 4 tokens → 3, etc.
+                hit_count = sum(1 for t in tokens if t in haystack)
+                min_hits = max(1, len(tokens) // 2 + 1)
+                if hit_count >= min_hits:
                     filtered.append(p)
             products = filtered
 
