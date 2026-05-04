@@ -18,6 +18,33 @@ import re
 from pathlib import Path
 
 
+_SEARCH_STOPWORDS = frozenset({
+    "de", "en", "el", "la", "los", "las",
+    "para", "con", "sin", "del", "al", "y", "o",
+    "un", "una", "unos", "unas",
+})
+
+
+def _singularize(word: str) -> str:
+    """Conservative plural→singular for Spanish.
+    Also strips adjectival '-ado' suffix (e.g. siliconado→silicon)."""
+    if len(word) < 5:
+        return word
+    if word.endswith(('is', 'us')):
+        return word
+    if word.endswith('es') and len(word) >= 6:
+        singular = word[:-2]
+        if len(singular) >= 4:
+            return singular
+    if word.endswith('s'):
+        return word[:-1]
+    if word.endswith('ado') and len(word) >= 9:
+        candidate = word[:-3]
+        if len(candidate) >= 5:
+            return candidate
+    return word
+
+
 def now_ts() -> float:
     return time.time()
 
@@ -444,10 +471,14 @@ class Database:
         products = [self._row_to_product(row) for row in rows]
 
         if model:
-            tokens = [
-                t for t in re.split(r"[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+", model.lower())
-                if len(t) >= 2
-            ]
+            raw_tokens = re.split(r"[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+", model.lower())
+            tokens = []
+            for t in raw_tokens:
+                if len(t) < 2:
+                    continue
+                if t in _SEARCH_STOPWORDS:
+                    continue
+                tokens.append(_singularize(t))
             if not tokens:
                 tokens = [model.lower()]
 

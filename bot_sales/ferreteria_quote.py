@@ -229,11 +229,35 @@ _SCORE_STOP_WORDS = frozenset({
 })
 
 
+def _singularize(word: str) -> str:
+    """Conservative plural→singular for Spanish.
+    Only strips trailing 's' or 'es' when result is at least 4 chars
+    and avoids common false positives (words ending in -is, -us).
+    Also strips adjectival '-ado' suffix for long words (e.g. siliconado→silicon)."""
+    if len(word) < 5:
+        return word
+    if word.endswith(('is', 'us')):
+        return word
+    if word.endswith('es') and len(word) >= 6:
+        singular = word[:-2]
+        if len(singular) >= 4:
+            return singular
+    if word.endswith('s'):
+        return word[:-1]
+    if word.endswith('ado') and len(word) >= 9:
+        candidate = word[:-3]
+        if len(candidate) >= 5:
+            return candidate
+    return word
+
+
 def _significant_words(text: str) -> set:
-    return {
-        w for w in text.split()
-        if len(w) >= _SIGNIFICANT_WORDS_MIN_LEN and w not in _SCORE_STOP_WORDS
-    }
+    words = set()
+    for w in text.lower().split():
+        normalized = _singularize(w)
+        if len(normalized) >= _SIGNIFICANT_WORDS_MIN_LEN and normalized not in _SCORE_STOP_WORDS:
+            words.add(normalized)
+    return words
 
 
 def _product_text(product: Dict[str, Any]) -> str:
@@ -331,6 +355,19 @@ def _score_product(
             score -= 8.0
 
     score += _score_dimension_alignment(product, requested_dimensions or {})
+
+    # ── Primary-word alignment ─────────────────────────────────────────────
+    # Products whose first word is not a query word are likely accessories
+    # (e.g. "Adaptador Taladro SDS" for query "taladros") rather than the
+    # item itself. Apply a mild penalty to push them below true matches.
+    if req_words:
+        prod_first = prod_name.split()[0] if prod_name.split() else ""
+        if (
+            prod_first
+            and len(prod_first) >= _SIGNIFICANT_WORDS_MIN_LEN
+            and _singularize(prod_first.lower()) not in req_words
+        ):
+            score -= 2.0
 
     # ── Semantic Search Bonus ──────────────────────────────────────────────
     # If the product was retrieved via hybrid search, it might have a _vector_score.
