@@ -84,6 +84,22 @@ def _extract_prices(text: str) -> list[int]:
     return prices
 
 
+# ---------------------------------------------------------------------------
+# Helpers de identidad de producto (patrón de test_matcher_base.py)
+# Verifican falsos positivos CONOCIDOS en la respuesta del bot.
+# ---------------------------------------------------------------------------
+
+def _has_cerradura_false_positive(r: str) -> bool:
+    """Detecta el falso positivo 'Cerradura Cierre Gabinete Destornillador'.
+
+    El bot puede retornar este producto (una cerradura que menciona un
+    destornillador en su nombre) cuando se busca un destornillador real.
+    Bug documentado en PENDIENTES.md y test_matcher_base.py caso 1.
+    """
+    rl = r.lower()
+    return "cerradura" in rl and "destornillador" in rl
+
+
 class DemoTestSuite:
     def __init__(self):
         from bot_sales.runtime import get_runtime_bot, get_runtime_tenant
@@ -265,7 +281,7 @@ class DemoTestSuite:
             found = [
                 "cinta" in r or "aisladora" in r,
                 "llave" in r and ("francesa" in r or "ajustable" in r),
-                "destornillador" in r,
+                "destornillador" in r and not _has_cerradura_false_positive(r),
                 "mecha" in r or ("broca" in r and "8" in r),
             ]
             n = sum(found)
@@ -402,6 +418,9 @@ class DemoTestSuite:
     def case_14_matcher_destornillador_philips(self):
         def check(rs):
             r = rs[-1].lower()
+            # Verificar falso positivo conocido ANTES del check de keyword
+            if _has_cerradura_false_positive(r):
+                return "FAIL", "cerradura retornada como destornillador (falso positivo conocido)"
             has_destornillador = "destornillador" in r
             has_philips = "philips" in r or " ph" in r or "punta" in r or "ph2" in r
             if has_destornillador and has_philips:
@@ -598,6 +617,9 @@ class DemoTestSuite:
     def case_23_typo_medio_destornilador(self):
         def check(rs):
             r = rs[-1].lower()
+            # Verificar falso positivo conocido ANTES del check de keyword
+            if _has_cerradura_false_positive(r):
+                return "FAIL", "cerradura retornada como destornillador (falso positivo conocido)"
             has_destornillador = "destornillador" in r
             says_no_existe = any(kw in r for kw in ("no existe", "no encontré", "no tenemos")) and not has_destornillador
             if says_no_existe:
