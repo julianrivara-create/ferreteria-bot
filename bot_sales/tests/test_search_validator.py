@@ -95,6 +95,44 @@ class TestLevel1ShouldBlock(unittest.TestCase):
     def test_v5_broca_1tb(self):
         self.assertTrue(_should_block("broca 1TB punta cobalto"))
 
+    # V7: impossible adjective combinations
+    def test_v7_destornillador_laser_cuantico(self):
+        self.assertTrue(_should_block("destornillador láser cuántico"))
+
+    def test_v7_alicate_inflable(self):
+        self.assertTrue(_should_block("alicate inflable"))
+
+    def test_v7_martillo_virtual(self):
+        self.assertTrue(_should_block("martillo virtual"))
+
+    def test_v7_amoladora_cuantica(self):
+        self.assertTrue(_should_block("amoladora cuántica"))
+
+    def test_v7_taladro_inflable(self):
+        self.assertTrue(_should_block("taladro inflable"))
+
+    def test_v7_sierra_magica(self):
+        self.assertTrue(_should_block("sierra mágica para madera"))
+
+    def test_v7_martillo_digital(self):
+        self.assertTrue(_should_block("martillo digital"))
+
+    def test_v7_alicate_laser(self):
+        self.assertTrue(_should_block("alicate láser de precisión"))
+
+    # V6: wattage impossible for electric tool family
+    def test_v6_taladro_5000w(self):
+        self.assertTrue(_should_block("taladro de 5000W"))
+
+    def test_v6_amoladora_3000w(self):
+        self.assertTrue(_should_block("amoladora 3000W"))
+
+    def test_v6_lijadora_2000w(self):
+        self.assertTrue(_should_block("lijadora 2000W"))
+
+    def test_v6_sierra_circular_4000w(self):
+        self.assertTrue(_should_block("sierra circular 4000W"))
+
 
 class TestLevel1ShouldPass(unittest.TestCase):
     """L1 validators — legitimate queries that must NOT be blocked."""
@@ -147,6 +185,50 @@ class TestLevel1ShouldPass(unittest.TestCase):
 
     def test_pass_plain_search(self):
         self.assertTrue(_should_pass("necesito 10 mechas 6mm para hormigon"))
+
+    # V6: legitimate wattages that must NOT be blocked
+    def test_v6_pass_taladro_1500w(self):
+        self.assertTrue(_should_pass("taladro 1500W percutor"))
+
+    def test_v6_pass_amoladora_1200w(self):
+        self.assertTrue(_should_pass("amoladora 1200W 4.5 pulgadas"))
+
+    def test_v6_pass_soldadora_4000w(self):
+        """Soldadoras industriales pueden llegar a 5000W — 4000W es válido."""
+        self.assertTrue(_should_pass("soldadora 4000W MIG"))
+
+    def test_v6_pass_taladro_sin_watts(self):
+        """Query sin especificación de potencia — no debe bloquearse."""
+        self.assertTrue(_should_pass("necesito un taladro"))
+
+    def test_v6_pass_sierra_sola_no_circular(self):
+        """'sierra' sin 'circular' no aplica el límite de sierra circular."""
+        self.assertTrue(_should_pass("sierra 3000W para madera"))
+
+    # V7: legitimate queries that must NOT be blocked
+    def test_v7_pass_destornillador_electrico(self):
+        """Destornilladores eléctricos/de impacto existen."""
+        self.assertTrue(_should_pass("destornillador eléctrico de impacto"))
+
+    def test_v7_pass_alicate_amperometrico(self):
+        """Alicate amperométrico es herramienta real de electricista."""
+        self.assertTrue(_should_pass("alicate amperométrico 400A"))
+
+    def test_v7_pass_lampara_laser(self):
+        """'láser' con 'lámpara' — lámpara no es herramienta manual → PASS."""
+        self.assertTrue(_should_pass("lámpara láser para taller"))
+
+    def test_v7_pass_destornillador_sin_adjetivo(self):
+        """Query limpia sin adjetivo absurdo."""
+        self.assertTrue(_should_pass("destornillador philips punta 3"))
+
+    def test_v7_pass_alicate_presion(self):
+        """'alicate de presión' es herramienta real."""
+        self.assertTrue(_should_pass("alicate de presión regulable"))
+
+    def test_v7_pass_nivel_digital(self):
+        """Niveles digitales existen — 'nivel' no está en _V7_TOOL_KWS."""
+        self.assertTrue(_should_pass("nivel digital de burbuja"))
 
 
 class TestLevel2ShouldBlock(unittest.TestCase):
