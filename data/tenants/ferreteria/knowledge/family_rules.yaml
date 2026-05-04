@@ -269,7 +269,9 @@ families:
     match_terms:
       - niple
       - niples
-    # grep "niple" returned no results - product not found in catalog
+    # No products found in catalog. allowed_categories=[] is intentional;
+    # the knowledge loader silently filters families with empty
+    # categories. Re-enable when supplier adds these products.
     allowed_categories: []
     required_dimensions: []
     optional_dimensions:
@@ -282,7 +284,9 @@ families:
     match_terms:
       - ramal
       - ramales
-    # grep "ramal" returned no results - product not found in catalog
+    # No products found in catalog. allowed_categories=[] is intentional;
+    # the knowledge loader silently filters families with empty
+    # categories. Re-enable when supplier adds these products.
     allowed_categories: []
     required_dimensions: []
     optional_dimensions:

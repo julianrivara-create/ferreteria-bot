@@ -52,6 +52,14 @@ Resuelto en 6 ramas paralelas + hotfix:
   chapa, o el bot debería responder "no tenemos en ese formato específico, ¿te interesan
   estas alternativas?"?
 
+**3. niple, ramal y electrovalvula sin productos en catálogo**
+- D1 las creó con `allowed_categories: []` porque grep no encontró productos.
+- `electrovalvula` tiraba KnowledgeValidationError → hotfixeada (eliminada, commit c8dc5ba).
+- `niple` y `ramal` NO rompen el loader porque éste filtra silenciosamente entradas con
+  categorías vacías. Quedan en el YAML como recordatorio de productos a verificar con
+  el cliente.
+- Verificado con script de diagnóstico: loader carga 20 de 26 familias sin error.
+
 **2. BusinessLogic.knowledge nunca se inicializa**
 - `getattr(self, "knowledge", None)` devuelve None siempre, tanto en producción como
   en tests.
@@ -350,6 +358,9 @@ la guardia en `bot_sales/services/pending_guard.py`.
 ### Productos faltantes
 - Caños de termofusión PP-R no están en el catálogo (solo accesorios/boquillas)
   - Pregunta: ¿los vende y faltan cargar, o no los vende?
+- **niple, ramal**: presentes en `family_rules.yaml` pero sin productos en catálogo.
+  `allowed_categories: []` intencional — el knowledge loader los filtra silenciosamente.
+  Pregunta para el cliente: ¿los vende y faltan cargar, o no los vende?
 
 ### Decisión técnica
 - El bot busca por categoría primero. Si un producto está mal categorizado no lo encuentra.
