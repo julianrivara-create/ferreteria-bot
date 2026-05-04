@@ -33,7 +33,8 @@ from __future__ import annotations
 import difflib
 import re
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from bot_sales.ferreteria_dimensions import extract_dimensions
 from bot_sales.ferreteria_family_model import (
@@ -76,6 +77,104 @@ QuoteItem = Dict[str, Any]
 #   clarification   str | None   — short per-item clarification question
 #   notes           str | None
 #   complementary   list[str]    — grounded complementary search terms
+#   price_captured_at  str | None — ISO-8601 UTC timestamp when unit_price was set
+
+# ---------------------------------------------------------------------------
+# Stale price detection (R3)
+# ---------------------------------------------------------------------------
+
+STALE_PRICE_THRESHOLD_MINUTES = 30
+
+
+def _now_iso() -> str:
+    """Return current UTC time as ISO-8601 string."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def is_price_stale(
+    item: QuoteItem,
+    threshold_minutes: int = STALE_PRICE_THRESHOLD_MINUTES,
+) -> bool:
+    """Return True if the item's unit_price is older than threshold_minutes.
+
+    - Items without a price (unit_price is None) are never stale.
+    - Items with a price but no price_captured_at (legacy) are always stale.
+    - Malformed timestamps are treated as stale.
+    """
+    if item.get("unit_price") is None:
+        return False
+    captured_at = item.get("price_captured_at")
+    if captured_at is None:
+        return True  # Legacy: no timestamp → treat as stale
+    try:
+        captured = datetime.fromisoformat(captured_at)
+        if captured.tzinfo is None:
+            captured = captured.replace(tzinfo=timezone.utc)
+        age_seconds = (datetime.now(timezone.utc) - captured).total_seconds()
+        return age_seconds > threshold_minutes * 60
+    except (ValueError, TypeError):
+        return True  # Malformed timestamp → treat as stale
+
+
+def refresh_stale_prices(
+    active_quote: List[QuoteItem],
+    lookup_fn: "Callable[[str], Optional[float]]",
+    threshold_minutes: int = STALE_PRICE_THRESHOLD_MINUTES,
+) -> "Tuple[List[QuoteItem], List[str]]":
+    """Re-validate stale prices in active_quote against the catalog.
+
+    lookup_fn: callable(normalized_text) -> Optional[float]
+        Must return the current unit price for the item, or None if unavailable.
+
+    Returns:
+        (updated_quote, notifications)
+        - updated_quote: copy of active_quote with refreshed prices and timestamps
+        - notifications: human-readable messages for each price change (empty if none)
+
+    NOTE (R3 integration): This function is ready but not yet wired into the
+    per-turn bot.py flow. That wiring is a pending task for after the
+    Slang/bot.py merge. Until then, stale prices are visually flagged in
+    generate_quote_response() but not auto-refreshed from the catalog.
+    """
+    updated: List[QuoteItem] = []
+    notifications: List[str] = []
+    now = _now_iso()
+
+    for item in active_quote:
+        if not is_price_stale(item, threshold_minutes) or item.get("unit_price") is None:
+            updated.append(item)
+            continue
+
+        normalized = item.get("normalized") or item.get("original", "")
+        current_price = lookup_fn(normalized)
+
+        new_item = dict(item)
+        old_price = item["unit_price"]
+
+        if current_price is not None and current_price != old_price:
+            new_item["unit_price"] = current_price
+            qty = int(new_item.get("qty") or 1)
+            if not new_item.get("pack_note"):
+                new_item["subtotal"] = round(current_price * qty, 2)
+            new_item["price_captured_at"] = now
+            products = new_item.get("products") or [{}]
+            name = (
+                products[0].get("model")
+                or products[0].get("name")
+                or new_item.get("original", "producto")
+            )
+            notifications.append(
+                f"*{name.capitalize()}*: precio actualizado "
+                f"({_format_price(old_price)} → *{_format_price(current_price)}*)"
+            )
+        else:
+            # Price unchanged or lookup failed: refresh timestamp silently
+            new_item["price_captured_at"] = now
+
+        updated.append(new_item)
+
+    return updated, notifications
+
 
 # ---------------------------------------------------------------------------
 # Accent / typo normalisation
@@ -840,6 +939,7 @@ def resolve_quote_item(parsed: Dict[str, Any], logic: Any, knowledge: Optional[D
                     "status":       "ambiguous",
                     "products":     [best_product] + safe_alts[:2],
                     "unit_price":   unit_price,
+                    "price_captured_at": _now_iso() if unit_price is not None else None,
                     "subtotal":     None,
                     "pack_note":    None,
                     "clarification": _ambiguity_clarification(normalized, family or best_product.get("category", ""), missing_dimensions, knowledge=knowledge),
@@ -870,6 +970,7 @@ def resolve_quote_item(parsed: Dict[str, Any], logic: Any, knowledge: Optional[D
                 "status":       "resolved",
                 "products":     [best_product] + safe_alts[:2],
                 "unit_price":   unit_price,
+                "price_captured_at": _now_iso() if unit_price is not None else None,
                 "subtotal":     subtotal,
                 "pack_note":    pack,
                 "clarification": None,
@@ -919,6 +1020,7 @@ def resolve_quote_item(parsed: Dict[str, Any], logic: Any, knowledge: Optional[D
             "status":       "ambiguous",
             "products":     [best_product] + safe_alts[:2],
             "unit_price":   unit_price,
+            "price_captured_at": _now_iso() if unit_price is not None else None,
             "subtotal":     None,           # no subtotal for ambiguous
             "pack_note":    None,
             "clarification": _ambiguity_clarification(normalized, family or best_product.get("category", ""), missing_dimensions, knowledge=knowledge),
@@ -1133,12 +1235,25 @@ def generate_acceptance_response(active_quote: List[QuoteItem], knowledge: Optio
             "Cuando los definamos, lo paso a revisión del equipo para seguimiento."
         )
 
-    return (
+    base = (
         "✓ *Recibimos tu pedido para revisión.*\n\n"
         "Nuestro equipo va a revisar disponibilidad final, presentación y entrega.\n"
         "Te vamos a contactar para continuar el seguimiento.\n\n"
         "Todavía no es una venta confirmada."
     )
+
+    stale_items = [
+        it for it in active_quote
+        if it.get("status") == "resolved" and is_price_stale(it)
+    ]
+    if stale_items:
+        base += (
+            f"\n\n⚠️ _Algunos precios son referenciales (cotizados hace más de "
+            f"{STALE_PRICE_THRESHOLD_MINUTES} min) y se verifican con catálogo "
+            f"actualizado al momento de la revisión._"
+        )
+
+    return base
 
 
 # ---------------------------------------------------------------------------
@@ -1213,6 +1328,7 @@ def generate_quote_response(
     lines: List[str] = [header, ""]
     pending_questions: List[str] = []
     grand_total: float = 0.0
+    any_stale = False
 
     for item in resolved_items:
         status      = item["status"]
@@ -1227,11 +1343,15 @@ def generate_quote_response(
         if status == "resolved" and products:
             best = products[0]
             name = best.get("model") or best.get("name") or best.get("sku", "Producto")
+            stale = is_price_stale(item)
+            stale_marker = " ⚠️" if stale else ""
+            if stale:
+                any_stale = True
             if subtotal is not None and not pack_note:
-                price_part = f"{_format_price(unit_price)}/u → *{_format_price(subtotal)}*"
+                price_part = f"{_format_price(unit_price)}/u → *{_format_price(subtotal)}*{stale_marker}"
                 grand_total += subtotal
             elif unit_price is not None:
-                price_part = f"*{_format_price(unit_price)}*"
+                price_part = f"*{_format_price(unit_price)}*{stale_marker}"
                 grand_total += unit_price * qty
             else:
                 price_part = "precio a confirmar"
@@ -1282,6 +1402,15 @@ def generate_quote_response(
             else "*Total*"
         )
         lines.append(f"{label}: {_format_price(grand_total)}")
+
+    # Stale price footnote
+    if any_stale:
+        lines.append("")
+        lines.append(
+            f"⚠️ _Precios marcados se cotizaron hace más de "
+            f"{STALE_PRICE_THRESHOLD_MINUTES} min y son referenciales. "
+            f"Se verifican con catálogo actualizado al confirmar._"
+        )
 
     # Pending questions
     if pending_questions:
