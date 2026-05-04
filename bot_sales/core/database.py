@@ -740,7 +740,8 @@ class Database:
             (hold_id,)
         )
         self.conn.commit()
-        
+        self._invalidate_stock_cache()  # P1: flush stale stock_qty after sale
+
         self.log_event("SALE_CONFIRMED", {
             "sale_id": sale_id,
             "sku": sku,
@@ -748,7 +749,7 @@ class Database:
             "zone": zone,
             "payment": payment_method
         })
-        
+
         return True, sale_id
 
     def upsert_lead(self, name: str, contact: str, note: str = "") -> str:
