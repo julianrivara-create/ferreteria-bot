@@ -1896,7 +1896,22 @@ class SalesBot:
         """
         max_iterations = 5
         iteration = 0
-        
+
+        # R2: Accumulate all catalog prices the LLM sees this turn (Fuente A + Fuente B).
+        # Fuente A: seeded from last_catalog_result (TurnInterpreter pre-LLM search).
+        # Fuente B: extended below each time the LLM calls buscar_stock in the loop.
+        from bot_sales.services.price_validator import (
+            detect_hallucinated_prices,
+            has_approximate_language,
+        )
+        _r2_sess = self.sessions.get(session_id, {})
+        _r2_catalog = _r2_sess.get("last_catalog_result") or {}
+        catalog_prices_seen: list = [
+            int(c["price_ars"])
+            for c in _r2_catalog.get("candidates", [])
+            if c.get("price_ars") and int(c["price_ars"]) > 0
+        ]
+
         while iteration < max_iterations:
             iteration += 1
             
@@ -1916,7 +1931,14 @@ class SalesBot:
                 
                 # Execute function
                 func_result = self._execute_function(session_id, func_name, func_args)
-                
+
+                # R2: Fuente B — accumulate prices from buscar_stock calls within the loop.
+                if func_name == "buscar_stock":
+                    for _p in func_result.get("products", []):
+                        _pv = _p.get("price_ars")
+                        if _pv and int(_pv) > 0:
+                            catalog_prices_seen.append(int(_pv))
+
                 # Add function result to context — slim the payload first to
                 # prevent massive product lists from blowing the context window.
                 slimmed_result = self._slim_function_result(func_name, func_result)
@@ -1953,8 +1975,19 @@ class SalesBot:
                 latency_ms=int(meta.get("latency_ms") or 0),
                 response_mode=meta.get("response_mode"),
             )
-            return response.get("content", "...")
-        
+            # R2: Validate LLM free-text response against catalog prices seen this turn.
+            response_text = response.get("content", "...")
+            _hallucinated = detect_hallucinated_prices(response_text, catalog_prices_seen)
+            if _hallucinated:
+                _is_approx = has_approximate_language(response_text)
+                logging.warning(
+                    "hallucinated_prices_detected session=%s prices=%s catalog_count=%d"
+                    " is_approximation=%s preview=%.200s",
+                    session_id, _hallucinated, len(catalog_prices_seen),
+                    _is_approx, response_text,
+                )
+            return response_text
+
         # Max iterations reached
         self._set_last_turn_meta(session_id, route_source="fallback", response_mode="max_iterations")
         return "Perdón, tuve un problema procesando tu solicitud. ¿Empezamos de nuevo?"
