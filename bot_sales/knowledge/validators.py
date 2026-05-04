@@ -78,7 +78,7 @@ def validate_family_rules(payload: Dict[str, Any]) -> Dict[str, Any]:
             raise KnowledgeValidationError(f"family rule for {family} must be a mapping")
         allowed_categories = [str(x).strip() for x in _ensure_list(rule.get("allowed_categories", []), f"allowed_categories for {family}") if str(x).strip()]
         if not allowed_categories:
-            raise KnowledgeValidationError(f"family '{family}' must have allowed_categories")
+            continue  # catalog gap — no products assigned, skip silently
         required_dimensions = _normalize_dimensions(rule.get("required_dimensions", []), f"required_dimensions for {family}")
         optional_dimensions = _normalize_dimensions(rule.get("optional_dimensions", []), f"optional_dimensions for {family}")
         dimension_priority = _normalize_dimensions(rule.get("dimension_priority", []), f"dimension_priority for {family}")
