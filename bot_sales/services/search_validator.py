@@ -508,3 +508,150 @@ def detect_negotiation_intent(query: str) -> Tuple[bool, Optional[str]]:
             )
             return True, reason
     return False, None
+
+
+# ─── V9: Ambiguous query detection ────────────────────────────────────────────
+
+# Type A: Generic browse phrases — signal "show me everything" without a category.
+# Compound phrases are safe to match anywhere in the string.
+# Standalone phrases use anchors so they only fire when the whole message IS that phrase.
+_V9_BROWSE_PATTERNS: List[re.Pattern] = [
+    # "qué hay" at end of message — avoids "qué hay de nuevo?" false positive
+    re.compile(r"\bqu[eé]\s+ha[yí]\s*[?!]?\s*$", re.IGNORECASE),
+    # "qué tenés" / "qué tienen" at end
+    re.compile(r"\bqu[eé]\s+ten[eé]s?\s*[?!]?\s*$", re.IGNORECASE),
+    re.compile(r"\bqu[eé]\s+tienen\s*[?!]?\s*$", re.IGNORECASE),
+    # "los caros" / "lo más caro" / "los baratos" anywhere
+    re.compile(r"\blos?\s+(?:m[aá]s\s+)?caros?\b", re.IGNORECASE),
+    re.compile(r"\blos?\s+(?:m[aá]s\s+)?baratos?\b", re.IGNORECASE),
+    # Standalone: message is just "mostrame" or "si tenés"
+    re.compile(r"^\s*mostr[aá]me\s*[?!]?\s*$", re.IGNORECASE),
+    re.compile(r"^si\s+ten[eé]s?\s*[?!]?\s*$", re.IGNORECASE),
+    # "mostrá el catálogo" / "mostra el catalogo"
+    re.compile(r"\bmostr[aá]\s+el\s+cat[aá]logo\b", re.IGNORECASE),
+    # Compound: "mostrame qué hay" anywhere
+    re.compile(r"\bmostr[aá]me\b.*\bqu[eé]\s+ha[yí]\b", re.IGNORECASE),
+]
+
+# Product/category keywords — if ANY appear in the query, V9 Type A does NOT fire.
+# Covers all major families in the ferreteria catalog.
+_V9_PRODUCT_KWS: frozenset = frozenset({
+    # Power tools
+    "taladro", "amoladora", "sierra", "lijadora", "atornillador",
+    "soldadora", "compresor", "rotomartillo", "esmeriladora", "cortadora",
+    # Hand tools
+    "martillo", "maza", "mazo", "destornillador", "desarmador",
+    "llave", "alicate", "pinza", "tenaza", "cincel", "cutter",
+    "serrucho", "hacha", "formón", "formon",
+    # Drill bits
+    "broca", "mecha", "fresa",
+    # Plumbing
+    "caño", "tubo", "codo", "union", "canilla", "grifo", "valvula",
+    "válvula", "niple", "ramal",
+    # Electrical
+    "cable", "interruptor", "tomacorriente", "enchufe", "disyuntor",
+    "luminaria", "lampara", "lámpara",
+    # Paint
+    "pintura", "latex", "látex", "esmalte", "sellador", "rodillo", "pincel",
+    # Fasteners
+    "tornillo", "clavo", "perno", "bulón", "bulon", "tarugo", "taco",
+    "anclaje",
+    # Category names
+    "herramienta", "plomería", "plomeria", "bulonería", "buloneria",
+    "electricidad", "eléctrico", "electrico", "iluminación", "iluminacion",
+    "pinturas", "ferretería", "ferreteria", "sanitaria", "sanitario",
+    # Common hardware
+    "bisagra", "cerradura", "candado", "manija", "picaporte", "abrazadera",
+    "nivel",
+    # Materials as product specifiers
+    "madera", "metal", "hormigón", "hormigon", "pvc", "hierro", "acero",
+})
+
+V9_GENERIC_BROWSE_RESPONSE = (
+    "Tenemos varios rubros: herramientas eléctricas, herramientas manuales, "
+    "plomería, sanitaria, pinturas, bulonería, eléctrico e iluminación. "
+    "¿En cuál te enfocamos?"
+)
+
+# Type C: Known brands with canonical display names.
+# Shopping-intent signal is required for Type C to avoid false positives
+# like "trabajé para Bosch" (no shopping intent).
+_V9_BRAND_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\bbosch\b", re.IGNORECASE), "Bosch"),
+    (re.compile(r"\bmakita\b", re.IGNORECASE), "Makita"),
+    (re.compile(r"\bstanley\b", re.IGNORECASE), "Stanley"),
+    (re.compile(r"\bbahco\b", re.IGNORECASE), "Bahco"),
+    (re.compile(r"\bmilwaukee\b", re.IGNORECASE), "Milwaukee"),
+    (re.compile(r"\bdewalt\b", re.IGNORECASE), "DeWalt"),
+    (re.compile(r"\bblack\+?decker\b|\bblack\s+decker\b", re.IGNORECASE), "Black+Decker"),
+    (re.compile(r"\bgenrod\b", re.IGNORECASE), "Genrod"),
+]
+
+_V9_SHOPPING_SIGNAL_RE = re.compile(
+    r"\b(?:ten[eé]s?|tienen|ha[yí]|busco|buscan|busc[aá]s|necesito|quiero|algo|tipo)\b",
+    re.IGNORECASE,
+)
+
+
+def _v9_has_product_keyword(text: str) -> bool:
+    """True if text contains any known product/category keyword as a whole word."""
+    return _has_word(text, _V9_PRODUCT_KWS)
+
+
+def _v9_detect_brand(text: str) -> Optional[str]:
+    """
+    Return canonical brand name if a known brand appears in text, else None.
+    First match wins.
+    """
+    for pattern, canonical in _V9_BRAND_PATTERNS:
+        if pattern.search(text):
+            return canonical
+    return None
+
+
+def detect_ambiguous_query(query: str) -> Tuple[bool, Optional[str]]:
+    """
+    V9 — detect ambiguous queries needing clarification before any LLM call.
+
+    Type A: Generic browse without a product/category keyword.
+        "dale mostrame qué hay", "los caros", "si tenés" → return category menu.
+    Type C: Known-brand query without a product type.
+        "tipo Bosch tenés algo?" → ask what product from that brand.
+
+    Runs BEFORE TurnInterpreter (same gate level as V8 negotiation check).
+    Type C is evaluated first so brand queries get a brand-specific response.
+    Queries with any product keyword bypass both checks.
+
+    Returns:
+        (True, response_str)  — ambiguous; caller should return response_str immediately.
+        (False, None)         — not ambiguous; proceed normally.
+    """
+    if not query:
+        return False, None
+
+    has_product = _v9_has_product_keyword(query)
+
+    # Type C: brand present, no product keyword, shopping signal required
+    brand = _v9_detect_brand(query)
+    if brand and not has_product and _V9_SHOPPING_SIGNAL_RE.search(query):
+        response = (
+            f"Tenemos varias herramientas de {brand}. "
+            "¿Buscás taladros, amoladoras, sierras, o algún tipo específico?"
+        )
+        logger.info(
+            "search_validator.V9.brand_only query=%r brand=%s",
+            query, brand,
+        )
+        return True, response
+
+    # Type A: generic browse trigger, no product keyword
+    if not has_product:
+        for pattern in _V9_BROWSE_PATTERNS:
+            if pattern.search(query):
+                logger.info(
+                    "search_validator.V9.generic_browse query=%r pattern=%s",
+                    query, pattern.pattern,
+                )
+                return True, V9_GENERIC_BROWSE_RESPONSE
+
+    return False, None

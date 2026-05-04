@@ -513,6 +513,7 @@ class SalesBot:
             from bot_sales.services.search_validator import (
                 detect_negotiation_intent,
                 HANDOFF_NEGOTIATION_RESPONSE,
+                detect_ambiguous_query,
             )
             _is_neg, _neg_reason = detect_negotiation_intent(user_message)
             if _is_neg:
@@ -534,6 +535,25 @@ class SalesBot:
                 record_turn("escalate", "negotiation_handoff", turn_event.state_after)
                 record_latency_bucket(turn_event.latency_ms)
                 return _neg_result
+
+            # V9: Ambiguous query clarification — pre-LLM, saves TurnInterpreter cost
+            _is_ambig, _ambig_response = detect_ambiguous_query(user_message)
+            if _is_ambig:
+                logging.info(
+                    "ambiguity_clarification session=%s query=%r",
+                    session_id,
+                    user_message[:60],
+                )
+                _ambig_result = self._append_assistant_turn(session_id, _ambig_response)
+                turn_event.interpreted_intent = "unknown"
+                turn_event.handler = "ambiguity_clarification"
+                turn_event.state_after = StateStore.load(
+                    self.sessions.get(session_id, {})
+                ).state
+                turn_event.log()
+                record_turn("unknown", "ambiguity_clarification", turn_event.state_after)
+                record_latency_bucket(turn_event.latency_ms)
+                return _ambig_result
 
             ferreteria_route = self._try_ferreteria_intent_route(session_id, user_message)
             # Phase 10: Populate TurnEvent from interpretation stored by _try_ferreteria_intent_route
