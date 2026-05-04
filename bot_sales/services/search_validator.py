@@ -463,3 +463,48 @@ def validate_search_match(
                 return False, reason
 
     return True, None
+
+
+# ─── V8: Negotiation intent detection ─────────────────────────────────────────
+
+HANDOFF_NEGOTIATION_RESPONSE = (
+    "Para temas de precio especial te derivo con un asesor humano, "
+    "¿OK? Mientras tanto puedo ayudarte con otra cosa."
+)
+
+_V8_NEGOTIATION_PATTERNS = [
+    re.compile(r"\bdescuento(s)?\b", re.IGNORECASE),
+    re.compile(r"\brebaja(s|r)?\b", re.IGNORECASE),
+    re.compile(r"\bme baj[áa]s\b", re.IGNORECASE),
+    re.compile(r"\bbaj[áa]me\b", re.IGNORECASE),
+    re.compile(r"\bmejor precio\b", re.IGNORECASE),
+    re.compile(r"\bm[áa]s barato\b", re.IGNORECASE),
+    re.compile(r"\b\d+\s*%\s*(off|menos|descuento)\b", re.IGNORECASE),
+    re.compile(r"\bte ofrezco\b", re.IGNORECASE),
+]
+
+
+def detect_negotiation_intent(query: str) -> Tuple[bool, Optional[str]]:
+    """
+    V8 — detect price negotiation attempts before any LLM call.
+
+    Operates on the original user message. Returns (True, reason) when the
+    message contains explicit negotiation language. Cart is never modified by
+    the caller — the active_quote survives the handoff so the customer can resume.
+
+    Returns:
+        (True, reason_str)  — negotiation detected; return HANDOFF_NEGOTIATION_RESPONSE.
+        (False, None)       — no negotiation detected; proceed normally.
+    """
+    if not query:
+        return False, None
+    for pattern in _V8_NEGOTIATION_PATTERNS:
+        m = pattern.search(query)
+        if m:
+            reason = f"negotiation:{pattern.pattern!r} matched {m.group()!r}"
+            logger.info(
+                "search_validator.V8.negotiation query=%r reason=%s",
+                query, reason,
+            )
+            return True, reason
+    return False, None
