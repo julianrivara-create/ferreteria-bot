@@ -1,13 +1,131 @@
 # PENDIENTES — Bot Ferretería
 
-**Última actualización:** 2026-05-03
-**Estado del bot:** main @ dd9b985
+**Última actualización:** 2026-05-04
+**Estado del bot:** main @ 6772b73 (Fix A merged)
 **Producción:** NO en Railway todavía
 **Cliente:** datos pendientes (cuestionarios enviados, sin respuesta)
 
 ---
 
+## 🚨 BUG CRÍTICO PARA PRÓXIMA SESIÓN — Matcher base
+
+**Descubierto:** 2026-05-03 (testing manual post-Fix A merge)
+**Estado:** diagnóstico completo, fix NO aplicado (Fix A solo arregla fallback ciego)
+**Bloquea:** producción + demo viable
+**Tiempo estimado:** 4-6 horas (1 sesión enfocada)
+
+### Síntoma
+El matcher devuelve productos que comparten keywords con la query pero NO son ese
+producto. Verificado con código actualizado (post-Fix A) en testing manual:
+
+| Query | Bot devuelve | Debería devolver |
+|---|---|---|
+| "5 mechas 8mm Bosch" | Accesorio GDE $345k, Acople Atornillador $210k, Acople Broca $57k | Brocas Bosch reales (existen 26 en catálogo) |
+| "destornillador philips" | Cerradura Gabinete Destornillador $22k | Stanley Destornillador Basic Philips Nro 1 |
+| "taladros?" (anterior test) | Adaptador Taladro SDS, Aparejo Diamantado | Taladros Bosch/Makita/Milwaukee |
+| "llaves de paso" (anterior test) | Adaptador Llaves Combinadas | Llave 20mm Paso Total Acqua System |
+| "sellador siliconado" (anterior test) | Anteojo con Silicona | Adhesivo Sellador Genrod |
+| "codos 90 grados" (anterior test) | (no encuentra) | Alemite Codo 90° |
+| "cuplas" (anterior test) | (no encuentra, substring "cupla" en "recuplast") | Bronce cupla 1/4 |
+| "martillo Stanley 500kg" (anterior test) | Adaptador Stanley | (V1 debería bloquear pre-LLM) |
+
+**Productos correctos SÍ existen en catálogo.** El bug es del matcher.
+
+### Causas raíz (3 bugs independientes)
+
+**Bug 1 — find_matches() OR logic (CRÍTICO)**
+- Ubicación: db/...find_matches
+- Usa `any(token in haystack)` lógica permisiva
+- "philips" matchea iluminación Philips Home (1243 resultados)
+- "90" matchea abrazaderas con rango 70-90 (2085 resultados)
+- "cupla" hace substring match con "recuplast" → pinturas Sinteplast
+
+**Bug 2 — buscar_stock() no aplica scoring (CRÍTICO)**
+- Ubicación: bot_sales/core/business_logic.py::buscar_stock
+- Llama find_matches_hybrid y filtra por available > 0
+- NO llama a _score_product
+- Devuelve resultados en orden alfabético del catálogo
+- Resultado: siempre "Abrazadera", "Adaptador", "Aplique" primero
+- _score_product YA EXISTE en ferreteria_quote.py y funciona — solo no se conecta
+
+**Bug 3 — Validator desconectado**
+- search_validator.validate_query_specs("martillo 500kg") retorna (False, "peso imposible")
+- Pero buscar_stock no llama al validator
+- El path LLM→buscar_stock no pasa por search_validator
+- Solo _try_ferreteria_pre_route y _try_ferreteria_intent_route Phase 7 lo invocan
+
+### Verificación post-Fix A
+
+Testing manual con bot REINICIADO confirmó:
+- ✅ Fix A funciona: NO devuelve productos al azar del catálogo entero como alternativas
+- ❌ Bug del matcher persiste: devuelve productos no relacionados que comparten keyword
+- Conclusión: Fix A es necesario pero insuficiente. Bug central es matcher base.
+
+### Plan de ataque (próxima sesión)
+
+**Pre-flight (30 min) — CRÍTICO ANTES DE CODEAR:**
+1. Verificar item_family_map.yaml cubre plomería:
+   - "codo", "cupla", "niple", "llave de paso", "ramal", "tee"
+2. Si faltan, agregarlas (puede arreglar varios casos sin tocar código)
+3. Verificar también herramientas: "destornillador philips", "taladro" como families
+
+**Fase 1 — Bug 2 (más impacto, hacer primero):**
+En business_logic.buscar_stock, después de matches = self.db.find_matches_hybrid(...):
+```python
+from bot_sales.ferreteria_quote import _score_product, _SCORE_LOW
+scored = [(_score_product(m, modelo, knowledge), m) for m in matches]
+scored.sort(key=lambda x: x[0], reverse=True)
+matches = [m for score, m in scored if score > _SCORE_LOW][:5]
+```
+
+**Fase 2 — Bug 1 (estrictar el OR):**
+En db.find_matches:
+```python
+if all(token in haystack for token in tokens):
+    matches.append(...)
+elif sum(1 for t in tokens if t in haystack) >= len(tokens) // 2 + 1:
+    matches.append(...)  # mayoría, no any
+```
+
+**Fase 3 — Bug 3 (conectar validator):**
+Al inicio de buscar_stock:
+```python
+from bot_sales.services.search_validator import validate_query_specs
+valid, reason = validate_query_specs(modelo)
+if not valid:
+    return {"status": "no_match", "reason": reason, "_search_query": modelo}
+```
+
+**Fase 4 — Test obligatoria:**
+- Las 8 queries de la tabla arriba (manualmente, con bot reiniciado)
+- Extended suite completo (los 53 casos)
+- Smoke tests 17/17
+- Verificar que C29, E05 (acople-broca), E08, E01 NO regresionen
+
+### Trampas a evitar
+- NO hacer Bug 1 sin Bug 2 (queries quedarían con 0 resultados)
+- NO atacar Fix B (mecha→broca alias) hasta que Bug 2 esté funcionando — esa fue la trampa de hoy
+- NO confiar solo en suite — los checkers son tolerantes
+- IMPORTANTE: REINICIAR el bot después de cualquier cambio de código (auto-reload puede no funcionar)
+- _score_product depende de infer_families — si plomería no está en map, va a fallar igual
+
+### Archivos a tocar
+- bot_sales/core/business_logic.py (Bug 2, Bug 3)
+- bot_sales/db/[archivo de find_matches] (Bug 1)
+- data/tenants/ferreteria/knowledge/item_family_map.yaml (pre-flight)
+- bot_sales/tests/test_matcher_base.py (NUEVO archivo, tests específicos)
+
+---
+
 ## ✅ Cerrados en sesión 2026-05-03
+
+### Fix A — Safe alternatives fallback (CRÍTICO post-cierre)
+Commits: 7196752 (fix), 6772b73 (merge)
+- bot_sales/core/business_logic.py: buscar_alternativas() ya no hace
+  load_stock() ciego cuando no encuentra match relacionado
+- Verificado funciona: el bot ya no devuelve productos al azar como alternativas
+- Test: bot_sales/tests/test_alternatives_safety.py (5 tests)
+- NOTA: NO arregla el bug central del matcher (ver sección 🚨)
 
 ### A1 — Anti-alucinación (intento prompt-only)
 Commit: cda9377
@@ -99,12 +217,40 @@ Commit: dd9b985 (merge), 2a29fdd (fix)
 - El bug existe pre-fixes (verificado con git stash, 3 runs c/u)
 - Para producción: necesitamos mayor TPM o procesamiento más eficiente
 
+### 4. Matcher base con keyword overlap simple (ver sección 🚨 al inicio)
+- El bot devuelve productos no relacionados que comparten keywords
+- Bloquea demo viable y producción real
+- Plan completo en sección crítica al inicio del archivo
+- Verificado con testing manual post-Fix A
+
 ### 3. Datos del cliente pendientes
 - El cuñado no respondió los cuestionarios todavía
 - Sin estos datos, `profile.yaml` tiene placeholders que la `pending_guard` intercepta
 - **Necesario antes de demo real**: políticas de descuento, horarios, datos de contacto,
   condiciones mayoristas, zonas de envío, medios de pago
 - Ver checklist completo al final de este archivo
+
+---
+
+## ⚠️ Limitación crítica de los test suites
+
+### El problema
+Los checkers de demo_test_suite.py y demo_test_suite_extended.py verifican
+respuestas con keyword matching simple. Esto causa FALSOS POSITIVOS:
+
+- "destornillador philips" → bot devuelve "Cerradura Cierre Gabinete Destornillador"
+- Checker: respuesta contiene "destornillador" → PASS ✅
+- Realidad: producto NO es un destornillador → FAIL real
+
+### Impacto
+Los suites reportan 74-77% PASS pero el bot tiene bugs sistémicos.
+Solo testing manual los detecta.
+
+### Plan de mejora (próxima sesión, junto con matcher fix)
+1. Cambiar checkers a verificar **categoría del producto retornado**, no solo keywords
+2. Para queries de "destornillador", verificar que producto.category == "Herramientas Manuales > Destornilladores"
+3. Para queries con marca, verificar marca real, no solo presencia de palabra
+4. Tests de NO-MATCH: verificar que productos NO relacionados (cerraduras, adaptadores, accesorios) NO aparezcan en respuestas
 
 ---
 
