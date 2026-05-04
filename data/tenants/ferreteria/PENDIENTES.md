@@ -1,7 +1,7 @@
 # PENDIENTES — Bot Ferretería
 
 **Última actualización:** 2026-05-04
-**Estado del bot:** main @ 8aba5aa (post anti-hallucination + B1/B2/R1 fixes)
+**Estado del bot:** main @ e5641c8 (EOD — R2+R3+Slang+C+A completos)
 **Producción:** NO en Railway todavía
 **Cliente:** datos pendientes (cuestionarios enviados, sin respuesta)
 
@@ -511,29 +511,58 @@ la guardia en `bot_sales/services/pending_guard.py`.
 
 ---
 
+### A — R3 conexión bot.py (cierra R3 al 100%)
+Commit: 46a93f8
+
+- `refresh_stale_prices()` invocado en cada turno después de `_load_active_quote_from_store`
+- Si precio cambió desde la captura: notificación al cliente con `📌 *Actualización de precios:*`
+- `lookup_fn` vía lambda usando `self.logic.buscar_stock` (sin helpers nuevos)
+- `_generate_quote_response` recibe `session_id` opcional para popear y adjuntar notificaciones
+- 5 tests de integración nuevos en `test_r3_integration.py` — 5/5
+- 17 líneas modificadas en bot.py
+
+### R2 — Anti-alucinación LLM free-text (log-only, iteración 1)
+Commit: 6eb10eb → merge e5641c8
+
+- `bot_sales/services/price_validator.py` nuevo (134 líneas):
+  - `extract_prices_from_response(text)` — regex, solo `$` o `ARS/pesos`; ignora números solos
+  - `has_approximate_language(text)` — detecta "alrededor de", "aprox.", "más o menos", etc.
+  - `detect_hallucinated_prices(response, catalog_prices, tolerance=5%)` → `list[int]`
+- `bot.py _chat_with_functions`: 16 líneas nuevas — init + acumulación de precios vistos + validación post-response
+  - Fuente A: `last_catalog_result["candidates"]` (clave real es "candidates", no "products")
+  - Fuente B: `func_result["products"]` cuando LLM llama buscar_stock en el loop
+- Logging-only en esta iteración: `logging.warning` si detecta alucinación, no modifica respuesta
+- Detección de aproximaciones como señal adicional de riesgo
+- Tolerancia ±5% para precios del catálogo
+- 33 tests nuevos: 28 unitarios (`test_price_validator.py`) + 5 integración (`test_r2_integration.py`)
+- Hallazgo clave: el brief pseudocode usaba `"products"` pero la clave real en `last_catalog_result` es `"candidates"`. Corregido.
+
+---
+
 ## 🔮 Pendientes para próxima sesión
 
 ### Bloqueantes que quedan
 
-- **R2** (anti-alucinación LLM free-text): `bot.py:1824` sin validación post-response.
-  Plan: regex extractor de precios + comparación contra catálogo del turno actual.
-  Tiempo estimado: ~1.5h.
-- **R3** (precios stale en multiturno): `unit_price` almacenado sin timestamp. Plan:
-  marcar fecha de resolución en quote item; avisar si el precio tiene más de N turnos.
-  Tiempo estimado: ~1h.
-- **Cierre multiturno E41-E43**: auditar flujo completo de cierre de pedido. E41 reporta
-  session reset en turno 5 (¿artifact del test runner o bug real?). Tiempo estimado: ~2h.
-- **Slang/ambigüedad** (E14, E15, E20, E47): mejorar prompt LLM para pedir aclaración
-  específica en vez de respuesta vaga. Tiempo estimado: ~1h.
+- **Cierre multiturno E41-E43** (~2h): auditar flujo completo de cierre de pedido.
+  E41 reporta session reset en turno 5 (¿artifact del test runner o bug real?).
+- **clarification_rules.yaml**: el archivo existe y tiene reglas configurables pero NO
+  está conectado a ningún interceptor. Conectarlo permitiría reglas sin tocar código
+  (~45 min, natural follow-up a V9).
+
+### R2 iteración 2 (próxima fase)
+
+- Subir de log-only a **inline correction**: reemplazar precio alucinado con
+  `[precio a confirmar]` en la respuesta al cliente.
+- O bien: bloquear respuesta y forzar handoff cuando hay alucinación detectada.
+- Decisión depende de frecuencia observada en logs de producción.
+- Tiempo estimado: ~1h.
 
 ### Deuda técnica
 
-- **`bot_sales/planning/flow_manager.py`** completo: módulo diseñado para tech/USD, mal
-  adaptado a ferretería. Refactor mayor pendiente para alinear con contexto ARS/pesos.
-- **`bot_sales/knowledge/loader`**: enriquece mecha/broca con categorías "Herramientas
-  Manuales" y "Accesorios" que no existen en el catálogo. Investigar origen y corregir.
+- **`bot_sales/planning/flow_manager.py`**: módulo diseñado para tech/USD, mal adaptado
+  a ferretería. Refactor mayor pendiente para alinear con contexto ARS/pesos.
 - **`followup_scheduler.py:92`**: `datetime.utcnow()` deprecado en Python 3.14. Bajo
-  riesgo pero deuda técnica documentada.
+  riesgo pero deuda documentada.
 
 ### Esperando al cliente
 
@@ -543,6 +572,9 @@ la guardia en `bot_sales/services/pending_guard.py`.
 
 ---
 
-*Sesión 2026-05-04 cerrada. Día completo.*
-*30 commits a main hoy. Logros principales: matcher base resuelto (D-series), performance ~10x (P1), anti-alucinación parcial (R1), auditoría completa para R2/R3.*
-*Estado verde: 128/129 pytest (incl. 9 R1 anti-hallucination) + 8/8 matcher_base + 17/17 smoke. Pendiente: regla handoff (C en curso) y bloqueantes documentados arriba.*
+*Sesión 2026-05-04 cerrada definitivamente.*
+*Logros del día: matcher base resuelto (D-series), performance ~10x (P1),*
+*anti-alucinación COMPLETA (R1 + R2 + R3), handoff de negociación (V8/C),*
+*ambigüedad mejorada (V9/Slang).*
+*Tests EOD: 269/270 pytest + 8/8 matcher_base + 17/17 smoke.*
+*Pendiente: cierre multiturno E41-E43, clarification_rules conexión, datos del cliente.*
