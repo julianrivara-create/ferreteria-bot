@@ -37,7 +37,7 @@ families:
 
   mecha:
     allowed_categories:
-      - Mechas y Brocas
+      - Herramientas Electricas
     required_dimensions:
       - size
       - material
@@ -48,7 +48,7 @@ families:
 
   broca:
     allowed_categories:
-      - Mechas y Brocas
+      - Herramientas Electricas
     required_dimensions:
       - size
       - material
@@ -270,10 +270,15 @@ families:
     match_terms:
       - niple
       - niples
-    # Products exist in catalog under Plomería (e.g. "Bronce niple", "Acople Niple").
-    # allowed_categories set to Plomería to pass loader validation.
-    allowed_categories:
-      - Plomería
+    # No products found in catalog (verified 2026-05-04 via grep on
+    # config/catalog.csv: 0 matches for 'niple' or related terms).
+    # Q3 (commit da84517) claimed products in 'Plomería' but that
+    # category doesn't exist in the catalog and no niple products
+    # exist either. Reverted to empty.
+    # The knowledge loader silently filters families with empty
+    # allowed_categories — verified safe (no exception).
+    # Re-enable when supplier adds these products.
+    allowed_categories: []
     required_dimensions: []
     optional_dimensions:
       - material
@@ -285,10 +290,15 @@ families:
     match_terms:
       - ramal
       - ramales
-    # Products exist under Plomería and Puntas y Accesorios in the catalog.
-    allowed_categories:
-      - Plomería
-      - Puntas y Accesorios
+    # No products found in catalog (verified 2026-05-04 via grep on
+    # config/catalog.csv: 0 matches for 'ramal' or related terms).
+    # Q3 (commit da84517) claimed products in 'Plomería'/'Puntas y Accesorios'
+    # but neither category exists and no ramal products exist either.
+    # Reverted to empty.
+    # The knowledge loader silently filters families with empty
+    # allowed_categories — verified safe (no exception).
+    # Re-enable when supplier adds these products.
+    allowed_categories: []
     required_dimensions: []
     optional_dimensions:
       - material
