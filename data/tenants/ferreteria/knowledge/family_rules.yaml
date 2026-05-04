@@ -192,17 +192,6 @@ families:
     pack_sensitive: false
     compatibility_sensitive: false
 
-  electrovalvula:
-    # grep "electrovalvula" returned no results - product not found in catalog
-    allowed_categories: []
-    required_dimensions:
-      - diameter
-      - voltage
-    optional_dimensions:
-      - use
-    pack_sensitive: false
-    compatibility_sensitive: true
-
   destornillador:
     match_terms:
       - destornillador
