@@ -481,11 +481,9 @@ class SalesFlowManager:
         base_model = entities.get("model") or base_family
         storage = entities.get("storage") or "estándar"
         condition = entities.get("condition") or "disponible"
-        budget_value = float(entities.get("budget_value") or 0)
-
-        offer_a_price = f"USD {int(budget_value * 0.9)}" if budget_value else None
-        offer_b_price = f"USD {int(budget_value * 1.05)}" if budget_value else None
-
+        # Prices must come from catalog data only — never calculated from the user's
+        # stated budget. budget_value is used solely in _handoff_decision to trigger
+        # high-value handoffs, NOT to derive offer prices.
         tone_a = "directa" if variant == "A" else "empática"
         tone_b = "empática" if variant == "A" else "directa"
         reason_tail = "prioriza ahorro sin perder valor." if objection_type == "PRICE_OBJECTION" else "mantiene mejor equilibrio costo/beneficio."
@@ -494,13 +492,13 @@ class SalesFlowManager:
             RecommendedOffer(
                 variant="A",
                 product_config=f"{base_model} {storage} ({condition})",
-                price=offer_a_price,
+                price=None,  # catalog-sourced only — never invent from budget
                 why=f"Propuesta {tone_a}: {reason_tail}",
             ),
             RecommendedOffer(
                 variant="B",
                 product_config=f"{base_model} opción premium ({condition})",
-                price=offer_b_price,
+                price=None,  # catalog-sourced only — never invent from budget
                 why=f"Propuesta {tone_b}: sube valor percibido para mejor cierre.",
             ),
         ]
