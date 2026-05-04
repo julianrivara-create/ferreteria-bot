@@ -104,6 +104,7 @@ entries:
       - destornillador estrella
       - atornillador manual
       - distornillador
+      - dest
   - canonical: martillo
     family: martillo
     aliases:
