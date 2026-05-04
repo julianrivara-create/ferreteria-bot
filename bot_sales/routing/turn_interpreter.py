@@ -208,7 +208,7 @@ class TurnInterpreter:
     ) -> TurnInterpretation:
         """
         Classify the user turn into a TurnInterpretation.
-        Uses a cheap, fast model call with max 200 output tokens.
+        Uses a cheap, fast model call with max 1024 output tokens.
         Falls back to TurnInterpretation.unknown() on any error.
         """
         try:
@@ -219,7 +219,11 @@ class TurnInterpreter:
             orig_temperature = getattr(self.llm, "temperature", None)
             try:
                 self.llm.model = "gpt-4o-mini"
-                self.llm.max_tokens = 200
+                # max_tokens=1024 supports multi-item lists up to ~25 items
+                # without JSON truncation. Bug history: 200 was truncating
+                # JSON for 5+ item lists, causing JSONDecodeError → intent=unknown
+                # → fallback chain. See PENDIENTES.md "TurnInterpreter trunca JSON".
+                self.llm.max_tokens = 1024
                 self.llm.temperature = 0.0
                 response = self.llm.send_message(messages=messages)
             finally:
