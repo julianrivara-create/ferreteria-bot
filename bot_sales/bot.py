@@ -501,6 +501,22 @@ class SalesBot:
 
         if self._is_ferreteria_runtime():
             self._load_active_quote_from_store(session_id)
+            # R3: refresh stale prices at turn start, before any response is generated
+            _r3_sess = self.sessions.setdefault(session_id, {})
+            _r3_aq = _r3_sess.get("active_quote") or []
+            if _r3_aq:
+                from bot_sales.ferreteria_quote import refresh_stale_prices
+                _r3_aq, _r3_notifs = refresh_stale_prices(
+                    _r3_aq,
+                    lookup_fn=lambda q: next(
+                        (float(p.get("price_ars") or 0) or None
+                         for p in self.logic.buscar_stock(q).get("products", [])),
+                        None,
+                    ),
+                )
+                _r3_sess["active_quote"] = _r3_aq
+                if _r3_notifs:
+                    _r3_sess["_stale_price_notifications"] = _r3_notifs
 
         self._record_user_turn(session_id, user_message)
         self._reset_turn_meta(session_id)
@@ -1074,7 +1090,7 @@ class SalesBot:
                 sess.pop("pending_decision", None)
                 state_v2.transition("quote_drafting")
                 comps = self._get_suggestions(pending_items, knowledge=knowledge)
-                reply = self._generate_quote_response(pending_items, complementary=comps or None)
+                reply = self._generate_quote_response(pending_items, complementary=comps or None, session_id=session_id)
                 self._persist_quote_state(
                     session_id,
                     response_text=reply,
@@ -1348,7 +1364,7 @@ class SalesBot:
             sess.pop("pending_decision", None)
             state_v2.transition("quote_drafting")
             comps = self._get_suggestions(resolved_items, knowledge=knowledge)
-            reply = self._generate_quote_response(resolved_items, complementary=comps or None)
+            reply = self._generate_quote_response(resolved_items, complementary=comps or None, session_id=session_id)
             self._persist_quote_state(
                 session_id,
                 response_text=reply,
@@ -1463,7 +1479,7 @@ class SalesBot:
                     comps = []
                     if resolved_single.get("status") == "resolved":
                         comps = self._get_suggestions([resolved_single], knowledge=knowledge)
-                    reply = self._generate_quote_response([resolved_single], complementary=comps or None)
+                    reply = self._generate_quote_response([resolved_single], complementary=comps or None, session_id=session_id)
                     self._persist_quote_state(
                         session_id,
                         response_text=reply,
@@ -1622,9 +1638,15 @@ class SalesBot:
         self,
         resolved_items: List[Dict[str, Any]],
         complementary: Optional[List[str]] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         """Format resolved items into a structured customer-facing quote."""
-        return fq.generate_quote_response(resolved_items, complementary=complementary)
+        reply = fq.generate_quote_response(resolved_items, complementary=complementary)
+        if session_id:
+            _notifs = self.sessions.get(session_id, {}).pop("_stale_price_notifications", None)
+            if _notifs:
+                reply += "\n\n📌 *Actualización de precios:*\n" + "\n".join(_notifs)
+        return reply
 
     def _get_suggestions(
         self,
