@@ -509,6 +509,32 @@ class SalesBot:
         # Runs only for ferreteria; classifies into fine-grained intent before
         # passing to the quote builder.  Non-ferreteria flows are unaffected.
         if self._is_ferreteria_runtime():
+            # V8: Negotiation handoff — pre-LLM, cart-preserving
+            from bot_sales.services.search_validator import (
+                detect_negotiation_intent,
+                HANDOFF_NEGOTIATION_RESPONSE,
+            )
+            _is_neg, _neg_reason = detect_negotiation_intent(user_message)
+            if _is_neg:
+                logging.info(
+                    "handoff_negotiation session=%s reason=%s cart_preserved=%s",
+                    session_id,
+                    _neg_reason,
+                    "active_quote" in self.sessions.get(session_id, {}),
+                )
+                _neg_result = self._append_assistant_turn(
+                    session_id, HANDOFF_NEGOTIATION_RESPONSE
+                )
+                turn_event.interpreted_intent = "escalate"
+                turn_event.handler = "negotiation_handoff"
+                turn_event.state_after = StateStore.load(
+                    self.sessions.get(session_id, {})
+                ).state
+                turn_event.log()
+                record_turn("escalate", "negotiation_handoff", turn_event.state_after)
+                record_latency_bucket(turn_event.latency_ms)
+                return _neg_result
+
             ferreteria_route = self._try_ferreteria_intent_route(session_id, user_message)
             # Phase 10: Populate TurnEvent from interpretation stored by _try_ferreteria_intent_route
             _interp = self.sessions.get(session_id, {}).get("last_turn_interpretation") or {}

@@ -12,7 +12,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from bot_sales.services.search_validator import validate_query_specs, validate_search_match
+from bot_sales.services.search_validator import (
+    validate_query_specs,
+    validate_search_match,
+    detect_negotiation_intent,
+    HANDOFF_NEGOTIATION_RESPONSE,
+)
 
 
 def _should_block(text: str) -> bool:
@@ -287,6 +292,103 @@ class TestLevel2ShouldPass(unittest.TestCase):
         """Weight mentioned but no tool keyword (e.g. paint) → not a tool spec → pass."""
         products = [_product("Pintura Látex Blanco 20 kg - Alba")]
         self.assertTrue(_l2_passes("pintura 20kg blanca", products))
+
+
+class TestV8NegotiationDetection(unittest.TestCase):
+    """V8 — detect_negotiation_intent: cases that must and must not trigger."""
+
+    def _detects(self, text: str) -> bool:
+        found, _ = detect_negotiation_intent(text)
+        return found
+
+    # ── Should detect ──────────────────────────────────────────────────────────
+
+    def test_detects_descuento(self):
+        self.assertTrue(self._detects("me hacés un descuento?"))
+
+    def test_detects_descuentos_plural(self):
+        self.assertTrue(self._detects("dan descuentos por volumen?"))
+
+    def test_detects_rebaja(self):
+        self.assertTrue(self._detects("haceme una rebaja"))
+
+    def test_detects_rebajar(self):
+        self.assertTrue(self._detects("podés rebajar el precio?"))
+
+    def test_detects_me_bajas_con_acento(self):
+        """E22 — 'si llevo 100 me bajás?' debe disparar."""
+        self.assertTrue(self._detects("si llevo 100 me bajás?"))
+
+    def test_detects_me_bajas_sin_acento(self):
+        self.assertTrue(self._detects("me bajas algo?"))
+
+    def test_detects_bajame(self):
+        self.assertTrue(self._detects("bajáme el precio"))
+
+    def test_detects_mejor_precio(self):
+        """E26 — 'dame mejor precio' debe disparar."""
+        self.assertTrue(self._detects("dame mejor precio"))
+
+    def test_detects_mas_barato_con_acento(self):
+        """E23 — 'más barato' está en spec como trigger."""
+        self.assertTrue(self._detects("en otro lado lo conseguí más barato"))
+
+    def test_detects_mas_barato_sin_acento(self):
+        self.assertTrue(self._detects("consigo mas barato en la competencia"))
+
+    def test_detects_percentage_off(self):
+        """E25 — '15% off?' debe disparar."""
+        self.assertTrue(self._detects("15% off?"))
+
+    def test_detects_percentage_descuento(self):
+        self.assertTrue(self._detects("me hacés 10% de descuento?"))
+
+    def test_detects_percentage_menos(self):
+        self.assertTrue(self._detects("20% menos en efectivo"))
+
+    def test_detects_te_ofrezco(self):
+        self.assertTrue(self._detects("te ofrezco $50000 por todo"))
+
+    # ── Should NOT detect ─────────────────────────────────────────────────────
+
+    def test_does_not_detect_neutral_barato(self):
+        """'pintura barata' — 'barato' solo no es trigger; requiere 'más barato'."""
+        self.assertFalse(self._detects("pintura barata"))
+
+    def test_does_not_detect_esta_caro(self):
+        """E18 — objeción informal, no regateo explícito."""
+        self.assertFalse(self._detects("está caro"))
+
+    def test_does_not_detect_nahh_caro(self):
+        """E18 variant — 'nahh está caro' no tiene keyword de negociación."""
+        self.assertFalse(self._detects("nahh está caro"))
+
+    def test_does_not_detect_cuanto_el_ultimo(self):
+        """E21 — regateo implícito sin keyword explícita."""
+        self.assertFalse(self._detects("está caro, ¿cuánto el último?"))
+
+    def test_does_not_detect_percentage_alone(self):
+        """Porcentaje sin off/menos/descuento — no dispara (IVA, anticipo, etc.)."""
+        self.assertFalse(self._detects("el IVA es del 21%"))
+
+    def test_does_not_detect_percentage_anticipo(self):
+        self.assertFalse(self._detects("dejo el 15% de anticipo"))
+
+    def test_does_not_detect_empty(self):
+        self.assertFalse(self._detects(""))
+
+    def test_does_not_detect_normal_product_request(self):
+        self.assertFalse(self._detects("quiero 5 tornillos 6mm"))
+
+    def test_handoff_response_contains_asesor(self):
+        """HANDOFF_NEGOTIATION_RESPONSE debe mencionar 'asesor humano'."""
+        self.assertIn("asesor humano", HANDOFF_NEGOTIATION_RESPONSE.lower())
+
+    def test_handoff_response_no_price_invented(self):
+        """HANDOFF_NEGOTIATION_RESPONSE no debe contener precios ni porcentajes."""
+        import re
+        self.assertIsNone(re.search(r'\$[\d.,]+', HANDOFF_NEGOTIATION_RESPONSE))
+        self.assertNotIn("%", HANDOFF_NEGOTIATION_RESPONSE)
 
 
 if __name__ == "__main__":
