@@ -1679,19 +1679,45 @@ class SalesBot:
                     success = True
 
                 elif (opt_idx := fq.detect_option_selection(cmd_str)) is not None:
-                    # Pass ti_ref_idx directly so apply_followup skips classify_followup_message
-                    # re-classification and goes straight to option selection logic.
-                    followup = apply_followup_to_open_quote(
-                        cmd_str,
-                        current_cart,
-                        self.logic,
-                        knowledge=knowledge,
-                        ti_ref_idx=opt_idx,
-                    )
-                    if followup.get("status") == "updated":
-                        current_cart = followup["items"]
-                        success = True
-                    # status != "updated" (e.g. opt_idx out of range) → abort
+                    # Apply option selection directly — do NOT route through
+                    # apply_followup_to_open_quote because classify_followup_message
+                    # would return kind="none" for phrases starting with "dame"
+                    # (which is in _FRESH_REQUEST_WORDS), causing an early not_followup
+                    # return before the option selection branch is ever reached.
+                    _pending = [
+                        it for it in current_cart
+                        if it.get("status") in ("ambiguous", "unresolved", "blocked_by_missing_info")
+                    ]
+                    if _pending:
+                        target_id = _pending[0].get("line_id")
+                        _opt_updated: List = []
+                        _improved = False
+                        for _line in current_cart:
+                            if _line.get("line_id") != target_id:
+                                _opt_updated.append(_line)
+                                continue
+                            _candidates = _line.get("products") or []
+                            if opt_idx < len(_candidates):
+                                _chosen = _candidates[opt_idx]
+                                _uprice, _sub = fq._compute_subtotal(_chosen, _line.get("qty", 1))
+                                _new = dict(_line)
+                                _new.update({
+                                    "status": "resolved",
+                                    "products": [_chosen],
+                                    "unit_price": _uprice,
+                                    "subtotal": _sub,
+                                    "clarification": None,
+                                    "notes": None,
+                                    "issue_type": None,
+                                })
+                                _opt_updated.append(_new)
+                                _improved = True
+                            else:
+                                _opt_updated.append(_line)
+                        if _improved:
+                            current_cart = _opt_updated
+                            success = True
+                        # else: opt_idx out of range → success stays False → abort
 
             except Exception as exc:  # noqa: BLE001
                 logging.warning(
