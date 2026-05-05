@@ -15,6 +15,19 @@ Level 3: Structured logging of every block/filter for calibration.
 Both functions operate on the ORIGINAL user message (from session context),
 NOT on the LLM-extracted "modelo" arg, which may silently drop impossible
 specs like "500kg" or "dorado".
+
+Active validators:
+  V1 — weight impossible for known hand-tool type
+  V2 — drill/bit diameter impossible
+  V3 — fastener length impossible
+  V6 — wattage impossible for known electric tool family
+
+Removed (TurnInterpreter now handles these via LLM-first routing):
+  V4 — precious color on metal hand tool (B25)
+  V5 — digital storage spec on physical hardware (B25)
+  V7 — impossible adjective combinations (B25)
+  V8 — negotiation intent → intent=escalate, escalation_reason='negotiation' (B25)
+  V9 — ambiguous query → intent=product_search search_mode='browse' (B25)
 """
 import re
 import logging
@@ -46,34 +59,6 @@ _FASTENER_KWS = frozenset({
     "tornillo", "clavo", "perno", "esparrago", "espárrago"
 })
 
-# Metal hand tools where precious colors are absurd.
-# Intentionally excludes: llave, tornillo, bisagra, herraje, manija, perilla,
-# caño, abrazadera — all can legitimately have golden/rose finishes.
-_V4_TOOL_KWS = frozenset({
-    "martillo", "maza", "mazo",
-    "destornillador", "desarmador",
-    "alicate", "pinza", "tenaza",
-    "broca", "mecha", "fresa",
-    "sierra", "serrucho",
-    "cincel", "formón", "formon",
-    "cutter",
-})
-
-# Colors that are essentially impossible for the tools in _V4_TOOL_KWS.
-# Conservative list: only the most absurd. Excludes lila/morado (plastic
-# handles, sleeves, etc. can legitimately be purple/lilac).
-_PRECIOUS_COLORS = frozenset({
-    "dorado", "dorada", "rosa", "rosado", "rosada", "turquesa", "gold", "oro",
-})
-
-# Connectors used to split query into segments for V4 (segment-based check).
-_SEGMENT_SPLIT_RE = re.compile(r"\b(?:para|con|y|o)\b|,", re.IGNORECASE)
-
-# All physical hardware keywords for V5 (storage spec on hardware).
-_ALL_HARDWARE_KWS = _V4_TOOL_KWS | _FASTENER_KWS | _DRILL_KWS | frozenset({
-    "llave", "sierra", "serrucho", "martillo", "maza",
-})
-
 # Max realistic wattage per electric tool family.
 # Tuples are (frozenset_of_keywords, max_watts).
 # "sierra circular" is handled separately in V6 (two-word match).
@@ -83,56 +68,6 @@ _TOOL_WATT_LIMITS: List[Tuple[frozenset, int]] = [
     (frozenset({"lijadora"}), 1500),
     (frozenset({"aspiradora"}), 2500),
     (frozenset({"soldadora"}), 5000),
-]
-
-# V7: Tool keywords relevant for impossible-adjective checks.
-# Broader than _V4_TOOL_KWS — includes power tools and more hand tools.
-_V7_TOOL_KWS = frozenset({
-    "martillo", "maza", "mazo",
-    "destornillador", "desarmador", "atornillador",
-    "alicate", "pinza", "tenaza",
-    "broca", "mecha",
-    "sierra", "serrucho",
-    "cincel",
-    "cutter",
-    "taladro",
-    "amoladora", "esmeriladora",
-    "lijadora",
-    "soldadora",
-    "cortadora",
-})
-
-# Adjectives that are physically impossible for any tool in the catalog.
-# Includes both masculine and feminine Spanish forms.
-_V7_UNIVERSAL_ABSURD = frozenset({
-    "cuántico", "cuantico", "cuántica", "cuantica",
-    "virtual",
-    "holográfico", "holografico", "holográfica", "holografica",
-    "volador", "voladora",
-    "telepático", "telepatico", "telepática", "telepatica",
-    "mágico", "magico", "mágica", "magica",
-})
-
-# Specific (adjective_kws, tool_kws) blocked pairs.
-# Fires when ANY adjective kw AND ANY tool kw appear in the same query.
-# Conservative list — only combinations that are clearly impossible.
-# Intentionally omits: "eléctrico" (taladros eléctricos existen),
-#                      "digital" on drills/grinders (digital gauges exist).
-_V7_BLOCKED_PAIRS: List[Tuple[frozenset, frozenset]] = [
-    (
-        frozenset({"láser", "laser"}),
-        frozenset({"destornillador", "desarmador", "martillo", "maza", "mazo",
-                   "alicate", "pinza", "tenaza"}),
-    ),
-    (
-        frozenset({"inflable"}),
-        frozenset({"alicate", "pinza", "tenaza", "martillo", "maza", "mazo",
-                   "destornillador", "desarmador", "taladro"}),
-    ),
-    (
-        frozenset({"digital"}),
-        frozenset({"martillo", "maza", "mazo"}),
-    ),
 ]
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -197,11 +132,6 @@ def _extract_mm_value(text: str) -> Optional[float]:
             except ValueError:
                 pass
     return None
-
-
-def _segments(text: str) -> List[str]:
-    """Split text into segments on structural connectors."""
-    return _SEGMENT_SPLIT_RE.split(text)
 
 
 def _extract_watts(text: str) -> Optional[int]:
@@ -274,33 +204,6 @@ def validate_query_specs(text: str) -> Tuple[bool, Optional[str]]:
             )
             return False, reason
 
-    # V4: Precious color on metal hand tool — segment-based check
-    # Only triggers when the color and tool keyword are in the SAME segment,
-    # preventing false positives like "tornillo dorado para martillo de fibra".
-    # Color match uses optional trailing 's' to handle "dorados", "doradas".
-    for seg in _segments(text):
-        if _has_word(seg, _V4_TOOL_KWS):
-            for color in _PRECIOUS_COLORS:
-                if re.search(r"\b" + re.escape(color) + r"s?\b", seg, re.IGNORECASE):
-                    reason = (
-                        f"color '{color}' no estándar para herramienta manual metálica"
-                    )
-                    logger.info(
-                        "search_validator.L1.precious_color query=%r reason=%s",
-                        text, reason,
-                    )
-                    return False, reason
-
-    # V5: Digital storage spec on physical hardware
-    if _has_word(text, _ALL_HARDWARE_KWS):
-        if re.search(r"\b\d+\s*(?:gb|tb|mb)\b", text, re.IGNORECASE):
-            reason = "especificación de almacenamiento digital en producto de hardware físico"
-            logger.info(
-                "search_validator.L1.storage_on_hardware query=%r reason=%s",
-                text, reason,
-            )
-            return False, reason
-
     # V6: Wattage impossible for known electric tool family
     watts = _extract_watts(text)
     if watts is not None:
@@ -323,35 +226,6 @@ def validate_query_specs(text: str) -> Tuple[bool, Optional[str]]:
             reason = f"potencia {watts}W imposible para sierra circular (máx ~2500W)"
             logger.info(
                 "search_validator.L1.watts_impossible query=%r reason=%s",
-                text, reason,
-            )
-            return False, reason
-
-    # V7: Impossible adjective combinations
-    # 7a: Universal absurd adjectives — block with ANY known tool keyword
-    for absurd_kw in _V7_UNIVERSAL_ABSURD:
-        if _has_word(text, frozenset({absurd_kw})) and _has_word(text, _V7_TOOL_KWS):
-            reason = (
-                f"adjetivo imposible '{absurd_kw}' combinado con herramienta "
-                f"de ferretería — ese producto no existe"
-            )
-            logger.info(
-                "search_validator.L1.impossible_adjective query=%r reason=%s",
-                text, reason,
-            )
-            return False, reason
-
-    # 7b: Specific blocked (adjective, tool) pairs
-    for adj_kws, tool_kws in _V7_BLOCKED_PAIRS:
-        if _has_word(text, adj_kws) and _has_word(text, tool_kws):
-            matched_adj = next(
-                (a for a in sorted(adj_kws) if _has_word(text, frozenset({a}))), "?"
-            )
-            reason = (
-                f"combinación imposible: '{matched_adj}' no aplica a herramienta manual"
-            )
-            logger.info(
-                "search_validator.L1.impossible_adjective query=%r reason=%s",
                 text, reason,
             )
             return False, reason
@@ -383,27 +257,6 @@ def _product_matches_weight(product: Dict[str, Any], claimed_kg: float) -> bool:
     return False
 
 
-def _product_matches_color(product: Dict[str, Any], claimed_color: str) -> bool:
-    """True if the product mentions the claimed color in its model name or color field."""
-    model = (product.get("model") or product.get("name") or "").lower()
-    color_field = (product.get("color") or "").lower()
-    aliases: Dict[str, List[str]] = {
-        "dorado": ["dorado", "dorada", "gold", "oro"],
-        "dorada": ["dorado", "dorada", "gold", "oro"],
-        "rosa": ["rosa", "rosado", "rosada", "pink"],
-        "rosado": ["rosa", "rosado", "rosada", "pink"],
-        "rosada": ["rosa", "rosado", "rosada", "pink"],
-        "turquesa": ["turquesa", "turquoise"],
-        "gold": ["dorado", "dorada", "gold", "oro"],
-        "oro": ["dorado", "dorada", "gold", "oro"],
-    }
-    terms = aliases.get(claimed_color, [claimed_color])
-    for t in terms:
-        if t in model or t in color_field:
-            return True
-    return False
-
-
 def validate_search_match(
     text: str, products: List[Dict[str, Any]]
 ) -> Tuple[bool, Optional[str]]:
@@ -416,8 +269,6 @@ def validate_search_match(
     Logic:
       - If the user claimed a specific weight AND no product mentions a
         compatible weight → filter all products → return (False, reason).
-      - If the user claimed an unusual color (from PRECIOUS_COLORS) AND no
-        product mentions that color → filter all products → return (False, reason).
 
     Returns:
         (True, None)           — products are consistent with the query.
@@ -447,211 +298,4 @@ def validate_search_match(
                 )
                 return False, reason
 
-    # Check color claim (only unusual colors from PRECIOUS_COLORS)
-    for color in _PRECIOUS_COLORS:
-        if re.search(r"\b" + re.escape(color) + r"\b", text, re.IGNORECASE):
-            if not any(_product_matches_color(p, color) for p in products):
-                reason = (
-                    f"ningún producto tiene el color '{color}' — "
-                    f"{len(products)} producto(s) descartado(s)"
-                )
-                logger.info(
-                    "search_validator.L2.color_mismatch query=%r "
-                    "color=%r products=%d",
-                    text, color, len(products),
-                )
-                return False, reason
-
     return True, None
-
-
-# ─── V8: Negotiation intent detection ─────────────────────────────────────────
-
-HANDOFF_NEGOTIATION_RESPONSE = (
-    "Para temas de precio especial te derivo con un asesor humano, "
-    "¿OK? Mientras tanto puedo ayudarte con otra cosa."
-)
-
-_V8_NEGOTIATION_PATTERNS = [
-    re.compile(r"\bdescuento(s)?\b", re.IGNORECASE),
-    re.compile(r"\brebaja(s|r)?\b", re.IGNORECASE),
-    re.compile(r"\bme baj[áa]s\b", re.IGNORECASE),
-    re.compile(r"\bbaj[áa]me\b", re.IGNORECASE),
-    re.compile(r"\bmejor precio\b", re.IGNORECASE),
-    re.compile(r"\bm[áa]s barato\b", re.IGNORECASE),
-    re.compile(r"\b\d+\s*%\s*(off|menos|descuento)\b", re.IGNORECASE),
-    re.compile(r"\bte ofrezco\b", re.IGNORECASE),
-]
-
-
-def detect_negotiation_intent(query: str) -> Tuple[bool, Optional[str]]:
-    """
-    V8 — detect price negotiation attempts before any LLM call.
-
-    Operates on the original user message. Returns (True, reason) when the
-    message contains explicit negotiation language. Cart is never modified by
-    the caller — the active_quote survives the handoff so the customer can resume.
-
-    Returns:
-        (True, reason_str)  — negotiation detected; return HANDOFF_NEGOTIATION_RESPONSE.
-        (False, None)       — no negotiation detected; proceed normally.
-    """
-    if not query:
-        return False, None
-    for pattern in _V8_NEGOTIATION_PATTERNS:
-        m = pattern.search(query)
-        if m:
-            reason = f"negotiation:{pattern.pattern!r} matched {m.group()!r}"
-            logger.info(
-                "search_validator.V8.negotiation query=%r reason=%s",
-                query, reason,
-            )
-            return True, reason
-    return False, None
-
-
-# ─── V9: Ambiguous query detection ────────────────────────────────────────────
-
-# Type A: Generic browse phrases — signal "show me everything" without a category.
-# Compound phrases are safe to match anywhere in the string.
-# Standalone phrases use anchors so they only fire when the whole message IS that phrase.
-_V9_BROWSE_PATTERNS: List[re.Pattern] = [
-    # "qué hay" at end of message — avoids "qué hay de nuevo?" false positive
-    re.compile(r"\bqu[eé]\s+ha[yí]\s*[?!]?\s*$", re.IGNORECASE),
-    # "qué tenés" / "qué tienen" at end
-    re.compile(r"\bqu[eé]\s+ten[eé]s?\s*[?!]?\s*$", re.IGNORECASE),
-    re.compile(r"\bqu[eé]\s+tienen\s*[?!]?\s*$", re.IGNORECASE),
-    # "los caros" / "lo más caro" / "los baratos" anywhere
-    re.compile(r"\blos?\s+(?:m[aá]s\s+)?caros?\b", re.IGNORECASE),
-    re.compile(r"\blos?\s+(?:m[aá]s\s+)?baratos?\b", re.IGNORECASE),
-    # Standalone: message is just "mostrame" or "si tenés"
-    re.compile(r"^\s*mostr[aá]me\s*[?!]?\s*$", re.IGNORECASE),
-    re.compile(r"^si\s+ten[eé]s?\s*[?!]?\s*$", re.IGNORECASE),
-    # "mostrá el catálogo" / "mostra el catalogo"
-    re.compile(r"\bmostr[aá]\s+el\s+cat[aá]logo\b", re.IGNORECASE),
-    # Compound: "mostrame qué hay" anywhere
-    re.compile(r"\bmostr[aá]me\b.*\bqu[eé]\s+ha[yí]\b", re.IGNORECASE),
-]
-
-# Product/category keywords — if ANY appear in the query, V9 Type A does NOT fire.
-# Covers all major families in the ferreteria catalog.
-_V9_PRODUCT_KWS: frozenset = frozenset({
-    # Power tools
-    "taladro", "amoladora", "sierra", "lijadora", "atornillador",
-    "soldadora", "compresor", "rotomartillo", "esmeriladora", "cortadora",
-    # Hand tools
-    "martillo", "maza", "mazo", "destornillador", "desarmador",
-    "llave", "alicate", "pinza", "tenaza", "cincel", "cutter",
-    "serrucho", "hacha", "formón", "formon",
-    # Drill bits
-    "broca", "mecha", "fresa",
-    # Plumbing
-    "caño", "tubo", "codo", "union", "canilla", "grifo", "valvula",
-    "válvula", "niple", "ramal",
-    # Electrical
-    "cable", "interruptor", "tomacorriente", "enchufe", "disyuntor",
-    "luminaria", "lampara", "lámpara",
-    # Paint
-    "pintura", "latex", "látex", "esmalte", "sellador", "rodillo", "pincel",
-    # Fasteners
-    "tornillo", "clavo", "perno", "bulón", "bulon", "tarugo", "taco",
-    "anclaje",
-    # Category names
-    "herramienta", "plomería", "plomeria", "bulonería", "buloneria",
-    "electricidad", "eléctrico", "electrico", "iluminación", "iluminacion",
-    "pinturas", "ferretería", "ferreteria", "sanitaria", "sanitario",
-    # Common hardware
-    "bisagra", "cerradura", "candado", "manija", "picaporte", "abrazadera",
-    "nivel",
-    # Materials as product specifiers
-    "madera", "metal", "hormigón", "hormigon", "pvc", "hierro", "acero",
-})
-
-V9_GENERIC_BROWSE_RESPONSE = (
-    "Tenemos varios rubros: herramientas eléctricas, herramientas manuales, "
-    "plomería, sanitaria, pinturas, bulonería, eléctrico e iluminación. "
-    "¿En cuál te enfocamos?"
-)
-
-# Type C: Known brands with canonical display names.
-# Shopping-intent signal is required for Type C to avoid false positives
-# like "trabajé para Bosch" (no shopping intent).
-_V9_BRAND_PATTERNS: List[Tuple[re.Pattern, str]] = [
-    (re.compile(r"\bbosch\b", re.IGNORECASE), "Bosch"),
-    (re.compile(r"\bmakita\b", re.IGNORECASE), "Makita"),
-    (re.compile(r"\bstanley\b", re.IGNORECASE), "Stanley"),
-    (re.compile(r"\bbahco\b", re.IGNORECASE), "Bahco"),
-    (re.compile(r"\bmilwaukee\b", re.IGNORECASE), "Milwaukee"),
-    (re.compile(r"\bdewalt\b", re.IGNORECASE), "DeWalt"),
-    (re.compile(r"\bblack\+?decker\b|\bblack\s+decker\b", re.IGNORECASE), "Black+Decker"),
-    (re.compile(r"\bgenrod\b", re.IGNORECASE), "Genrod"),
-]
-
-_V9_SHOPPING_SIGNAL_RE = re.compile(
-    r"\b(?:ten[eé]s?|tienen|ha[yí]|busco|buscan|busc[aá]s|necesito|quiero|algo|tipo)\b",
-    re.IGNORECASE,
-)
-
-
-def _v9_has_product_keyword(text: str) -> bool:
-    """True if text contains any known product/category keyword as a whole word."""
-    return _has_word(text, _V9_PRODUCT_KWS)
-
-
-def _v9_detect_brand(text: str) -> Optional[str]:
-    """
-    Return canonical brand name if a known brand appears in text, else None.
-    First match wins.
-    """
-    for pattern, canonical in _V9_BRAND_PATTERNS:
-        if pattern.search(text):
-            return canonical
-    return None
-
-
-def detect_ambiguous_query(query: str) -> Tuple[bool, Optional[str]]:
-    """
-    V9 — detect ambiguous queries needing clarification before any LLM call.
-
-    Type A: Generic browse without a product/category keyword.
-        "dale mostrame qué hay", "los caros", "si tenés" → return category menu.
-    Type C: Known-brand query without a product type.
-        "tipo Bosch tenés algo?" → ask what product from that brand.
-
-    Runs BEFORE TurnInterpreter (same gate level as V8 negotiation check).
-    Type C is evaluated first so brand queries get a brand-specific response.
-    Queries with any product keyword bypass both checks.
-
-    Returns:
-        (True, response_str)  — ambiguous; caller should return response_str immediately.
-        (False, None)         — not ambiguous; proceed normally.
-    """
-    if not query:
-        return False, None
-
-    has_product = _v9_has_product_keyword(query)
-
-    # Type C: brand present, no product keyword, shopping signal required
-    brand = _v9_detect_brand(query)
-    if brand and not has_product and _V9_SHOPPING_SIGNAL_RE.search(query):
-        response = (
-            f"Tenemos varias herramientas de {brand}. "
-            "¿Buscás taladros, amoladoras, sierras, o algún tipo específico?"
-        )
-        logger.info(
-            "search_validator.V9.brand_only query=%r brand=%s",
-            query, brand,
-        )
-        return True, response
-
-    # Type A: generic browse trigger, no product keyword
-    if not has_product:
-        for pattern in _V9_BROWSE_PATTERNS:
-            if pattern.search(query):
-                logger.info(
-                    "search_validator.V9.generic_browse query=%r pattern=%s",
-                    query, pattern.pattern,
-                )
-                return True, V9_GENERIC_BROWSE_RESPONSE
-
-    return False, None

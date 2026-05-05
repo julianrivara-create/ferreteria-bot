@@ -3,6 +3,9 @@ Unit tests for bot_sales.services.search_validator.
 
 No LLM calls — all tests run at commit time.
 
+Active validators tested: V1 (weight), V2 (drill diameter), V3 (fastener length),
+V6 (wattage). V4/V5/V7/V8/V9 removed (B25) — TurnInterpreter handles those cases.
+
 Run:
     pytest bot_sales/tests/test_search_validator.py -v
 """
@@ -15,8 +18,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from bot_sales.services.search_validator import (
     validate_query_specs,
     validate_search_match,
-    detect_negotiation_intent,
-    HANDOFF_NEGOTIATION_RESPONSE,
 )
 
 
@@ -52,7 +53,7 @@ class TestLevel1ShouldBlock(unittest.TestCase):
 
     # V1: weight impossible for tool type
     def test_v1_martillo_500kg(self):
-        self.assertTrue(_should_block("tienen martillos Stanley dorados de 500kg?"))
+        self.assertTrue(_should_block("tienen martillos Stanley de 500kg?"))
 
     def test_v1_martillo_explicit_heavy(self):
         self.assertTrue(_should_block("martillo de 100kg"))
@@ -79,51 +80,6 @@ class TestLevel1ShouldBlock(unittest.TestCase):
 
     def test_v3_clavo_2000mm(self):
         self.assertTrue(_should_block("clavo 2000mm"))
-
-    # V4: precious color on metal hand tool (segment-based)
-    def test_v4_martillo_dorado(self):
-        self.assertTrue(_should_block("martillo dorado Stanley"))
-
-    def test_v4_destornillador_rosa(self):
-        self.assertTrue(_should_block("destornillador rosa philips"))
-
-    def test_v4_alicate_turquesa(self):
-        self.assertTrue(_should_block("alicate turquesa 8 pulgadas"))
-
-    def test_v4_maza_oro(self):
-        self.assertTrue(_should_block("maza de oro para demolición"))
-
-    # V5: storage spec on hardware
-    def test_v5_martillo_32gb(self):
-        self.assertTrue(_should_block("martillo 32GB"))
-
-    def test_v5_broca_1tb(self):
-        self.assertTrue(_should_block("broca 1TB punta cobalto"))
-
-    # V7: impossible adjective combinations
-    def test_v7_destornillador_laser_cuantico(self):
-        self.assertTrue(_should_block("destornillador láser cuántico"))
-
-    def test_v7_alicate_inflable(self):
-        self.assertTrue(_should_block("alicate inflable"))
-
-    def test_v7_martillo_virtual(self):
-        self.assertTrue(_should_block("martillo virtual"))
-
-    def test_v7_amoladora_cuantica(self):
-        self.assertTrue(_should_block("amoladora cuántica"))
-
-    def test_v7_taladro_inflable(self):
-        self.assertTrue(_should_block("taladro inflable"))
-
-    def test_v7_sierra_magica(self):
-        self.assertTrue(_should_block("sierra mágica para madera"))
-
-    def test_v7_martillo_digital(self):
-        self.assertTrue(_should_block("martillo digital"))
-
-    def test_v7_alicate_laser(self):
-        self.assertTrue(_should_block("alicate láser de precisión"))
 
     # V6: wattage impossible for electric tool family
     def test_v6_taladro_5000w(self):
@@ -160,30 +116,6 @@ class TestLevel1ShouldPass(unittest.TestCase):
         """8mm diameter — well within limits."""
         self.assertTrue(_should_pass("broca 8mm concreto"))
 
-    def test_pass_tornillo_dorado(self):
-        """tornillo is NOT in V4 tool list — dorado screws are valid."""
-        self.assertTrue(_should_pass("tornillo dorado para madera"))
-
-    def test_pass_llave_dorada(self):
-        """llave excluded from V4 — golden finish keys exist."""
-        self.assertTrue(_should_pass("llave dorada de 13mm"))
-
-    def test_pass_tornillo_dorado_para_martillo(self):
-        """Segment check: 'dorado' is in tornillo segment, martillo is in other segment."""
-        self.assertTrue(_should_pass("tornillo dorado para martillo de fibra"))
-
-    def test_pass_alicate_mango_lila(self):
-        """lila not in PRECIOUS_COLORS — plastic handles can be lilac."""
-        self.assertTrue(_should_pass("alicate con mango lila ergonómico"))
-
-    def test_pass_alicate_mango_morado(self):
-        """morado not in PRECIOUS_COLORS — same reason."""
-        self.assertTrue(_should_pass("alicate mango morado antideslizante"))
-
-    def test_pass_bisagra_dorada(self):
-        """bisagra not in V4 tool list — golden hinges are standard."""
-        self.assertTrue(_should_pass("bisagra dorada 3 pulgadas"))
-
     def test_pass_tornillo_100mm(self):
         """100mm screws are common."""
         self.assertTrue(_should_pass("tornillo 100mm para deck"))
@@ -210,31 +142,6 @@ class TestLevel1ShouldPass(unittest.TestCase):
         """'sierra' sin 'circular' no aplica el límite de sierra circular."""
         self.assertTrue(_should_pass("sierra 3000W para madera"))
 
-    # V7: legitimate queries that must NOT be blocked
-    def test_v7_pass_destornillador_electrico(self):
-        """Destornilladores eléctricos/de impacto existen."""
-        self.assertTrue(_should_pass("destornillador eléctrico de impacto"))
-
-    def test_v7_pass_alicate_amperometrico(self):
-        """Alicate amperométrico es herramienta real de electricista."""
-        self.assertTrue(_should_pass("alicate amperométrico 400A"))
-
-    def test_v7_pass_lampara_laser(self):
-        """'láser' con 'lámpara' — lámpara no es herramienta manual → PASS."""
-        self.assertTrue(_should_pass("lámpara láser para taller"))
-
-    def test_v7_pass_destornillador_sin_adjetivo(self):
-        """Query limpia sin adjetivo absurdo."""
-        self.assertTrue(_should_pass("destornillador philips punta 3"))
-
-    def test_v7_pass_alicate_presion(self):
-        """'alicate de presión' es herramienta real."""
-        self.assertTrue(_should_pass("alicate de presión regulable"))
-
-    def test_v7_pass_nivel_digital(self):
-        """Niveles digitales existen — 'nivel' no está en _V7_TOOL_KWS."""
-        self.assertTrue(_should_pass("nivel digital de burbuja"))
-
 
 class TestLevel2ShouldBlock(unittest.TestCase):
     """L2 validators — product lists that don't match spec claims."""
@@ -247,14 +154,6 @@ class TestLevel2ShouldBlock(unittest.TestCase):
         ]
         self.assertTrue(_l2_blocks("martillo Stanley 500kg", products))
 
-    def test_l2_color_mismatch_dorado_not_in_products(self):
-        """User claims dorado, no product has dorado — must block."""
-        products = [
-            _product("Martillo Carpintero Negro - Stanley"),
-            _product("Martillo Galponero Mango Rojo - Bahco"),
-        ]
-        self.assertTrue(_l2_blocks("martillo dorado Stanley", products))
-
     def test_l2_weight_mismatch_tool_keyword_present(self):
         """Weight claim + tool keyword + no matching product weight → block."""
         products = [_product("Broca 8mm Cobalto - Dewalt")]
@@ -265,7 +164,7 @@ class TestLevel2ShouldPass(unittest.TestCase):
     """L2 validators — cases that must NOT be blocked."""
 
     def test_l2_pass_no_spec_claim(self):
-        """No weight or unusual color claimed → pass."""
+        """No weight claimed → pass."""
         products = [_product("Martillo Stanley 16oz"), _product("Martillo Bahco")]
         self.assertTrue(_l2_passes("martillo Stanley", products))
 
@@ -279,11 +178,6 @@ class TestLevel2ShouldPass(unittest.TestCase):
         products = [_product("Martillo 1.5 kg Demolición - Irimo")]
         self.assertTrue(_l2_passes("martillo 1kg demolición", products))
 
-    def test_l2_pass_color_in_product(self):
-        """User claims dorado, product has 'dorado' → pass."""
-        products = [_product("Bisagra Dorada 3 pulgadas - Impo")]
-        self.assertTrue(_l2_passes("bisagra dorada 3 pulgadas", products))
-
     def test_l2_pass_empty_products_list(self):
         """No products returned → L2 passes (L1 or catalog already handled it)."""
         self.assertTrue(_l2_passes("martillo 500kg", []))
@@ -292,103 +186,6 @@ class TestLevel2ShouldPass(unittest.TestCase):
         """Weight mentioned but no tool keyword (e.g. paint) → not a tool spec → pass."""
         products = [_product("Pintura Látex Blanco 20 kg - Alba")]
         self.assertTrue(_l2_passes("pintura 20kg blanca", products))
-
-
-class TestV8NegotiationDetection(unittest.TestCase):
-    """V8 — detect_negotiation_intent: cases that must and must not trigger."""
-
-    def _detects(self, text: str) -> bool:
-        found, _ = detect_negotiation_intent(text)
-        return found
-
-    # ── Should detect ──────────────────────────────────────────────────────────
-
-    def test_detects_descuento(self):
-        self.assertTrue(self._detects("me hacés un descuento?"))
-
-    def test_detects_descuentos_plural(self):
-        self.assertTrue(self._detects("dan descuentos por volumen?"))
-
-    def test_detects_rebaja(self):
-        self.assertTrue(self._detects("haceme una rebaja"))
-
-    def test_detects_rebajar(self):
-        self.assertTrue(self._detects("podés rebajar el precio?"))
-
-    def test_detects_me_bajas_con_acento(self):
-        """E22 — 'si llevo 100 me bajás?' debe disparar."""
-        self.assertTrue(self._detects("si llevo 100 me bajás?"))
-
-    def test_detects_me_bajas_sin_acento(self):
-        self.assertTrue(self._detects("me bajas algo?"))
-
-    def test_detects_bajame(self):
-        self.assertTrue(self._detects("bajáme el precio"))
-
-    def test_detects_mejor_precio(self):
-        """E26 — 'dame mejor precio' debe disparar."""
-        self.assertTrue(self._detects("dame mejor precio"))
-
-    def test_detects_mas_barato_con_acento(self):
-        """E23 — 'más barato' está en spec como trigger."""
-        self.assertTrue(self._detects("en otro lado lo conseguí más barato"))
-
-    def test_detects_mas_barato_sin_acento(self):
-        self.assertTrue(self._detects("consigo mas barato en la competencia"))
-
-    def test_detects_percentage_off(self):
-        """E25 — '15% off?' debe disparar."""
-        self.assertTrue(self._detects("15% off?"))
-
-    def test_detects_percentage_descuento(self):
-        self.assertTrue(self._detects("me hacés 10% de descuento?"))
-
-    def test_detects_percentage_menos(self):
-        self.assertTrue(self._detects("20% menos en efectivo"))
-
-    def test_detects_te_ofrezco(self):
-        self.assertTrue(self._detects("te ofrezco $50000 por todo"))
-
-    # ── Should NOT detect ─────────────────────────────────────────────────────
-
-    def test_does_not_detect_neutral_barato(self):
-        """'pintura barata' — 'barato' solo no es trigger; requiere 'más barato'."""
-        self.assertFalse(self._detects("pintura barata"))
-
-    def test_does_not_detect_esta_caro(self):
-        """E18 — objeción informal, no regateo explícito."""
-        self.assertFalse(self._detects("está caro"))
-
-    def test_does_not_detect_nahh_caro(self):
-        """E18 variant — 'nahh está caro' no tiene keyword de negociación."""
-        self.assertFalse(self._detects("nahh está caro"))
-
-    def test_does_not_detect_cuanto_el_ultimo(self):
-        """E21 — regateo implícito sin keyword explícita."""
-        self.assertFalse(self._detects("está caro, ¿cuánto el último?"))
-
-    def test_does_not_detect_percentage_alone(self):
-        """Porcentaje sin off/menos/descuento — no dispara (IVA, anticipo, etc.)."""
-        self.assertFalse(self._detects("el IVA es del 21%"))
-
-    def test_does_not_detect_percentage_anticipo(self):
-        self.assertFalse(self._detects("dejo el 15% de anticipo"))
-
-    def test_does_not_detect_empty(self):
-        self.assertFalse(self._detects(""))
-
-    def test_does_not_detect_normal_product_request(self):
-        self.assertFalse(self._detects("quiero 5 tornillos 6mm"))
-
-    def test_handoff_response_contains_asesor(self):
-        """HANDOFF_NEGOTIATION_RESPONSE debe mencionar 'asesor humano'."""
-        self.assertIn("asesor humano", HANDOFF_NEGOTIATION_RESPONSE.lower())
-
-    def test_handoff_response_no_price_invented(self):
-        """HANDOFF_NEGOTIATION_RESPONSE no debe contener precios ni porcentajes."""
-        import re
-        self.assertIsNone(re.search(r'\$[\d.,]+', HANDOFF_NEGOTIATION_RESPONSE))
-        self.assertNotIn("%", HANDOFF_NEGOTIATION_RESPONSE)
 
 
 if __name__ == "__main__":
