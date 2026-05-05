@@ -112,6 +112,13 @@ class TurnInterpretation:
     referenced_offer_index: Optional[int] = None
     # 0-indexed position in last_offered_products the client is referring to
     # ("el primero" → 0, "el segundo" → 1). None when no referential or no offered context.
+    # B22a addition
+    sub_commands: List[str] = field(default_factory=list)
+    # When compound_message=true, the individual sub-commands as they appear in the original
+    # message, preserving phrasing and order. Max 5 elements (sanity bound).
+    # Example: "dame el primero, agregame martillo" →
+    #   sub_commands=["dame el primero", "agregame martillo"]
+    # Empty list when compound_message=false.
 
     def is_low_confidence(self) -> bool:
         return self.confidence < 0.55
@@ -129,6 +136,7 @@ class TurnInterpretation:
             "compound_message": self.compound_message,
             "escalation_reason": self.escalation_reason,
             "referenced_offer_index": self.referenced_offer_index,
+            "sub_commands": self.sub_commands,
         }
 
     @classmethod
@@ -160,6 +168,11 @@ class TurnInterpretation:
                     raw_ref_idx = None
             except (TypeError, ValueError):
                 raw_ref_idx = None
+        raw_sub = d.get("sub_commands")
+        if not isinstance(raw_sub, list):
+            sub_commands: List[str] = []
+        else:
+            sub_commands = [s for s in raw_sub if isinstance(s, str)][:5]
         return cls(
             intent=intent,
             confidence=confidence,
@@ -172,6 +185,7 @@ class TurnInterpretation:
             compound_message=bool(d.get("compound_message", False)),
             escalation_reason=escalation_reason,
             referenced_offer_index=raw_ref_idx,
+            sub_commands=sub_commands,
         )
 
     @classmethod
@@ -203,6 +217,7 @@ Dado un mensaje del cliente, devolvé SOLO JSON válido con esta estructura exac
   },
   "reset_signal": false,
   "compound_message": false,
+  "sub_commands": [],
   "escalation_reason": "explicit_request|negotiation|frustration|null",
   "referenced_offer_index": null
 }
@@ -294,13 +309,21 @@ el mensaje contiene "el primero".
 
 === REGLA COMPOUND_MESSAGE ===
 Si el mensaje contiene 2+ comandos/peticiones claramente distintos en el mismo turno,
-marcar compound_message=true. El intent principal es el más importante.
+marcar compound_message=true Y llenar sub_commands con la lista de sub-comandos como
+aparecen en el mensaje. Preservar fraseo original, mantener orden temporal.
 
 Ejemplos:
-- "dame el primero. agregame también un martillo" → compound_message=true, intent="quote_modify"
-- "sacame el segundo y poneme dos del primero" → compound_message=true, intent="quote_modify"
-- "me llevo todo y mandalo a Quilmes" → compound_message=true, intent="quote_accept"
-- "necesito un taladro Bosch" → compound_message=false (un solo pedido)
+- "dame el primero, agregame martillo" →
+    compound_message=true, intent="quote_modify",
+    sub_commands=["dame el primero", "agregame martillo"]
+- "sacame el segundo y poneme dos del primero" →
+    compound_message=true, intent="quote_modify",
+    sub_commands=["sacame el segundo", "poneme dos del primero"]
+- "me llevo todo y mandalo a Quilmes" →
+    compound_message=true, intent="quote_accept",
+    sub_commands=["me llevo todo", "mandalo a Quilmes"]
+- "necesito un taladro Bosch" →
+    compound_message=false, sub_commands=[] (un solo pedido)
 
 === REGLA ESCALATION EXPLÍCITA ===
 Si el cliente pide hablar con una persona explícitamente ("quiero hablar con alguien",

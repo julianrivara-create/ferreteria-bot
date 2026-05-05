@@ -721,6 +721,25 @@ class SalesBot:
         # _try_ferreteria_pre_route first so deterministic handlers apply correctly.
         if interpretation.intent == "quote_modify" and not interpretation.is_low_confidence():
             _open_q = sess.get("active_quote")
+
+            # B22a: compound modify-modify handler.
+            # Fires only when TI explicitly provided sub_commands (compound_message=true)
+            # and every sub-command maps to a deterministic modify handler.
+            # If processing succeeds → return unified response.
+            # If it fails → fall through to the normal single-turn path unchanged.
+            if (
+                interpretation.compound_message
+                and interpretation.sub_commands
+                and _open_q
+                and self._all_sub_commands_look_like_modify(interpretation.sub_commands)
+            ):
+                _compound_reply = self._process_compound_modify(
+                    session_id, interpretation, user_message, sess, self._knowledge()
+                )
+                if _compound_reply is not None:
+                    return self._append_assistant_turn(session_id, _compound_reply)
+                # else: sub-command processing failed — continue to normal path
+
             _is_clarification_via_llm = (
                 interpretation.quote_reference.references_existing_quote
                 and bool(_open_q)
@@ -1584,6 +1603,137 @@ class SalesBot:
     def _looks_like_escalation_request(user_message: str) -> bool:
         norm = (user_message or "").strip().lower()
         return any(kw in norm for kw in _ESCALATION_REQUEST_KEYWORDS)
+
+    @staticmethod
+    def _all_sub_commands_look_like_modify(sub_commands: List) -> bool:
+        """Return True iff every sub-command maps to a deterministic modify handler.
+
+        Uses the union of all four detectors — at least one must match each sub-command.
+        A sub-command that matches none triggers a fallback to the normal single-turn path.
+        """
+        if not sub_commands:
+            return False
+        for cmd in sub_commands:
+            cmd_str = str(cmd)
+            if (
+                fq.looks_like_remove(cmd_str)
+                or fq.looks_like_additive(cmd_str)
+                or fq.looks_like_reset(cmd_str)
+                or fq.detect_option_selection(cmd_str) is not None
+            ):
+                continue
+            return False
+        return True
+
+    def _process_compound_modify(
+        self,
+        session_id: str,
+        interpretation: Any,
+        user_message: str,
+        sess: dict,
+        knowledge: Any,
+    ) -> Optional[str]:
+        """Process a compound quote_modify turn by dispatching each sub-command sequentially.
+
+        Atomic processing: takes a shallow copy of the cart on entry. Each handler
+        (apply_additive, apply_remove, apply_followup_to_open_quote) is expected to
+        RETURN a new list of items, NOT mutate the input in-place. If any handler raises
+        or returns an empty/invalid result, the original cart is restored and None is
+        returned (fallback to normal single-turn path).
+
+        Returns reply text on success, or None to signal fallback.
+        """
+        sub_commands = interpretation.sub_commands
+        original_cart = list(sess.get("active_quote") or [])
+        current_cart = list(original_cart)
+
+        logging.info(
+            "compound_modify session=%s intent=%s n_sub=%d sub_cmds=%r",
+            session_id, interpretation.intent,
+            len(sub_commands), sub_commands,
+        )
+
+        for i, cmd in enumerate(sub_commands):
+            cmd_str = str(cmd).strip()
+            success = False
+            try:
+                # Dispatch order matters: explicit intent (remove) wins over implicit intent
+                # (option_select). E.g. "sacame el segundo" matches both looks_like_remove
+                # and detect_option_selection(→1), but the user clearly means remove.
+                if fq.looks_like_remove(cmd_str):
+                    updated, _msg = fq.apply_remove(cmd_str, current_cart)
+                    if updated is not None:
+                        current_cart = updated
+                        success = True
+
+                elif fq.looks_like_additive(cmd_str):
+                    updated = fq.apply_additive(
+                        cmd_str, current_cart, self.logic, knowledge=knowledge
+                    )
+                    if updated is not None:
+                        current_cart = updated
+                        success = True
+
+                elif fq.looks_like_reset(cmd_str):
+                    current_cart = []
+                    success = True
+
+                elif (opt_idx := fq.detect_option_selection(cmd_str)) is not None:
+                    # Pass ti_ref_idx directly so apply_followup skips classify_followup_message
+                    # re-classification and goes straight to option selection logic.
+                    followup = apply_followup_to_open_quote(
+                        cmd_str,
+                        current_cart,
+                        self.logic,
+                        knowledge=knowledge,
+                        ti_ref_idx=opt_idx,
+                    )
+                    if followup.get("status") == "updated":
+                        current_cart = followup["items"]
+                        success = True
+                    # status != "updated" (e.g. opt_idx out of range) → abort
+
+            except Exception as exc:  # noqa: BLE001
+                logging.warning(
+                    "compound_modify_fallback session=%s reason=exception step=%d cmd=%r exc=%s",
+                    session_id, i, cmd_str, exc,
+                )
+                sess["active_quote"] = original_cart
+                return None
+
+            logging.info(
+                "compound_modify_step session=%s step=%d/%d cmd=%r ok=%s",
+                session_id, i + 1, len(sub_commands), cmd_str, success,
+            )
+
+            if not success:
+                logging.warning(
+                    "compound_modify_fallback session=%s reason=step_no_progress step=%d cmd=%r",
+                    session_id, i, cmd_str,
+                )
+                sess["active_quote"] = original_cart
+                return None
+
+        # All sub-commands processed — commit and respond
+        sess["active_quote"] = current_cart
+        sess["quote_state"] = "open"
+        comps = self._get_suggestions(current_cart, knowledge=knowledge)
+        reply = fq.generate_updated_quote_response(current_cart, complementary=comps or None)
+        self._persist_quote_state(
+            session_id,
+            response_text=reply,
+            user_message=user_message,
+            event_type="compound_modify",
+            event_payload={
+                "sub_commands": sub_commands,
+                "n_sub": len(sub_commands),
+            },
+        )
+        logging.info(
+            "compound_modify_done session=%s n_sub=%d cart_size=%d",
+            session_id, len(sub_commands), len(current_cart),
+        )
+        return reply
 
     def _chat_with_functions(self, session_id: str) -> str:
         """
