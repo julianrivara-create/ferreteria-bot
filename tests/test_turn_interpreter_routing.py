@@ -169,64 +169,14 @@ class TestTurnInterpreterParsing:
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _should_bypass_sales_intelligence regex
-# ---------------------------------------------------------------------------
-
-class TestShouldBypassSalesIntelligence:
-    """Direct tests of the regex that routes conversational messages past SalesFlowManager."""
-
-    def _bypass(self, bot: SalesBot, text: str) -> bool:
-        return bot._should_bypass_sales_intelligence(text)
-
-    def test_me_llamo_matches(self, tmp_path):
-        bot = build_bot(tmp_path, "bypass1.db")
-        try:
-            assert self._bypass(bot, "Me llamo Juan")
-            assert self._bypass(bot, "me llamo Pedro García")
-        finally:
-            bot.close()
-
-    def test_soy_x_matches(self, tmp_path):
-        bot = build_bot(tmp_path, "bypass2.db")
-        try:
-            assert self._bypass(bot, "Soy Pedro de Constructora ABC")
-        finally:
-            bot.close()
-
-    def test_hola_matches(self, tmp_path):
-        bot = build_bot(tmp_path, "bypass3.db")
-        try:
-            assert self._bypass(bot, "hola")
-            assert self._bypass(bot, "Buenas tardes")
-        finally:
-            bot.close()
-
-    def test_short_non_product_matches(self, tmp_path):
-        bot = build_bot(tmp_path, "bypass4.db")
-        try:
-            assert self._bypass(bot, "ok")
-            assert self._bypass(bot, "dale")
-        finally:
-            bot.close()
-
-    def test_product_request_does_not_match(self, tmp_path):
-        bot = build_bot(tmp_path, "bypass5.db")
-        try:
-            assert not self._bypass(bot, "Necesito 100 tornillos M6 de acero inoxidable")
-            assert not self._bypass(bot, "Quiero cotizar 3 taladros para obra")
-        finally:
-            bot.close()
-
-
-# ---------------------------------------------------------------------------
-# Integration tests: the 3 critical bypass cases
+# Integration tests: the 3 critical routing cases
 # ---------------------------------------------------------------------------
 
 class TestCriticalBypassRouting:
     """
-    Verify the 3 conversational intents are routed correctly by TurnInterpreter.
-    The core/IntentClassifier bypass has been removed; TurnInterpreter is the sole
-    routing entry point. Tests mock TurnInterpreter and handlers directly.
+    Verify critical conversational intents are routed correctly by TurnInterpreter.
+    TurnInterpreter is the sole routing entry point; all pre-route heuristics removed.
+    Tests mock TurnInterpreter and handlers directly.
     """
 
     def test_greeting_routes_to_offtopic_handler(self, tmp_path, monkeypatch):
@@ -251,36 +201,10 @@ class TestCriticalBypassRouting:
         finally:
             bot.close()
 
-    def test_customer_info_does_not_hit_offtopic_fallback(self, tmp_path, monkeypatch):
-        """
-        'Me llamo Juan' must NOT get "fuera de lo que manejo" (OfftopicHandler fallback).
-        Path: unknown (low confidence) -> all handler guards fail ->
-        _should_bypass_sales_intelligence() matches 'me llamo' -> _chat_with_functions().
-        """
-        bot = build_bot(tmp_path, "t_custinfo.db")
-        try:
-            # Low confidence unknown -> all handler guards fail -> falls through to bypass check
-            monkeypatch.setattr(
-                bot.turn_interpreter, "interpret",
-                lambda *a, **kw: TurnInterpretation(intent="unknown", confidence=0.4),
-            )
-            monkeypatch.setattr(bot, "_chat_with_functions", lambda sid: "Anotado, Juan. ¿Qué necesitás cotizar?")
-            monkeypatch.setattr(bot, "_run_sales_intelligence", lambda sid, msg: None)
-
-            response = bot.process_message("s_custinfo", "Me llamo Juan")
-
-            assert response is not None
-            assert "fuera de lo que manejo" not in response
-            assert not _is_questionnaire(response)
-            assert bot.sessions.get("s_custinfo", {}).get("active_quote", []) == []
-        finally:
-            bot.close()
-
     def test_customer_info_falls_through_to_main_llm(self, tmp_path, monkeypatch):
         """
         'Me llamo Juan' with customer_info intent must NOT hit OfftopicHandler.
-        Falls through _try_ferreteria_intent_route() -> None ->
-        _should_bypass_sales_intelligence() matches 'me llamo' -> _chat_with_functions().
+        Falls through _try_ferreteria_intent_route() -> None -> _chat_with_functions().
         """
         bot = build_bot(tmp_path, "t_custinfo2.db")
         try:

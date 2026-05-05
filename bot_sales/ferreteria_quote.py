@@ -1700,18 +1700,6 @@ def looks_like_additive(message: str) -> bool:
     return bool(_ADDITIVE_RE.match(message.strip()))
 
 
-def looks_like_clarification(message: str, open_items: List[QuoteItem]) -> bool:
-    if not open_items:
-        return False
-    pending = [it for it in open_items if it["status"] in ("ambiguous", "unresolved", "blocked_by_missing_info")]
-    if not pending:
-        return False
-    norm = _normalize(message.strip())
-    words = norm.split()
-    return len(words) <= 9
-
-
-
 def detect_option_selection(text: str) -> Optional[int]:
     """
     Return the 0-indexed option number if the user text looks like:
