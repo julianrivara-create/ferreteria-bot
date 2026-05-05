@@ -1,13 +1,15 @@
 """
-test_b22a_compound_modify.py — Regression tests for B22a compound modify handler.
+test_b22a_compound_modify.py — Regression tests for B22a+B22b compound modify handler.
 
-TurnInterpretation gains sub_commands field; bot.py processes compound quote_modify
-turns by dispatching each sub-command sequentially without a second LLM call.
+B22a: TurnInterpretation gains sub_commands field; bot.py processes compound
+      quote_modify turns by dispatching each sub-command sequentially.
+B22b: _ADDITIVE_RE extended (sumame/súmame/sumar); _extract_qty_from_phrase
+      propagates explicit qty into option selection branch.
 
 Fast tests (no LLM):
     pytest bot_sales/tests/test_b22a_compound_modify.py -v -m "not slow"
 
-Slow test (LLM real):
+Slow tests (LLM real):
     source .env
     PYTHONPATH=. pytest bot_sales/tests/test_b22a_compound_modify.py -v -m slow
 """
@@ -203,6 +205,118 @@ class TestB22aCompoundModifyE2E:
         bot.process_message(sid, "stanley")
 
         # T4 — final quote must show both products + at least one price
+        r4 = bot.process_message(sid, "presupuesto?")
+        r4l = r4.lower()
+        assert "destornillador" in r4l, f"T4 debe mencionar destornillador. Got: {r4[:300]}"
+        assert "martillo" in r4l, f"T4 debe mencionar martillo. Got: {r4[:300]}"
+        assert "$" in r4 or "precio" in r4l, (
+            f"T4 debe mostrar precios. Got: {r4[:300]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# B22b — Fast unit tests: _extract_qty_from_phrase + extended _ADDITIVE_RE
+# ---------------------------------------------------------------------------
+
+
+class TestB22bQtyExtraction:
+    """Unit tests for _extract_qty_from_phrase (B22b qty propagation utility)."""
+
+    def test_leading_digit_qty(self):
+        from bot_sales.ferreteria_quote import _extract_qty_from_phrase
+        assert _extract_qty_from_phrase("2 martillos") == 2
+
+    def test_embedded_word_number(self):
+        """'dame dos del primero' — qty embedded mid-phrase."""
+        from bot_sales.ferreteria_quote import _extract_qty_from_phrase
+        assert _extract_qty_from_phrase("dame dos del primero") == 2
+
+    def test_no_explicit_qty_returns_none(self):
+        """'dame el primero' contains only an ordinal, no cardinal — must return None."""
+        from bot_sales.ferreteria_quote import _extract_qty_from_phrase
+        assert _extract_qty_from_phrase("dame el primero") is None
+
+
+class TestB22bAdditiveRe:
+    """Regression: new verbs in _ADDITIVE_RE; poneme stays False (gap known)."""
+
+    def test_sumame(self):
+        from bot_sales.ferreteria_quote import looks_like_additive
+        assert looks_like_additive("sumame un martillo") is True
+
+    def test_sumame_accented(self):
+        from bot_sales.ferreteria_quote import looks_like_additive
+        assert looks_like_additive("súmame dos tornillos") is True
+
+    def test_sumar(self):
+        from bot_sales.ferreteria_quote import looks_like_additive
+        assert looks_like_additive("sumar 3 clavos") is True
+
+    def test_poneme_still_false(self):
+        """poneme excluded from regex — intentional gap documented in B22b commit."""
+        from bot_sales.ferreteria_quote import looks_like_additive
+        assert looks_like_additive("poneme un martillo") is False
+
+
+# ---------------------------------------------------------------------------
+# B22b — Slow E2E: qty propagation via option selection branch
+# ---------------------------------------------------------------------------
+
+
+class TestB22bCompoundQtyE2E:
+    @pytest.mark.slow
+    def test_compound_modify_with_qty_propagation(self):
+        """B22b regression: 'dame dos del primero y agregame martillo' must
+        resolve destornillador with qty=2 AND add martillo in one turn.
+
+        T1: 'destornillador philips' → bot offers options
+        T2: 'dame dos del primero y agregame martillo' → compound:
+              sub_cmd[0]='dame dos del primero' → option_select(idx=0, qty=2)
+              sub_cmd[1]='agregame martillo'    → additive (new item)
+        T3: 'stanley' → martillo brand clarification
+        T4: 'presupuesto?' → final quote shows dest (qty=2) + martillo + prices
+
+        Pre-B22b: qty stays at 1 even when user said "dos".
+        Post-B22b: qty=2 propagated from phrase into resolved cart item.
+        """
+        from bot_sales.runtime import get_runtime_bot, get_runtime_tenant
+
+        tenant = get_runtime_tenant("ferreteria")
+        bot = get_runtime_bot(tenant.id)
+        sid = f"test_b22b_e2e_{uuid.uuid4().hex[:8]}"
+
+        # T1
+        r1 = bot.process_message(sid, "destornillador philips")
+        assert "destornillador" in r1.lower(), (
+            f"T1 debe ofrecer destornilladores. Got: {r1[:200]}"
+        )
+
+        # T2 — compound: option selection with qty + additive in one turn
+        r2 = bot.process_message(sid, "dame dos del primero y agregame martillo")
+        r2l = r2.lower()
+        assert "martillo" in r2l, f"T2: martillo debe aparecer en respuesta. Got: {r2[:300]}"
+        sess_t2 = bot.sessions.get(sid, {})
+        aq_t2 = sess_t2.get("active_quote") or []
+        assert len(aq_t2) >= 2, (
+            f"T2: carrito debe tener dest + martillo (>=2 items). Cart: {aq_t2}"
+        )
+        dest_item = next(
+            (it for it in aq_t2 if "destornillador" in str(it.get("normalized", "")).lower()),
+            None,
+        )
+        assert dest_item is not None, f"T2: destornillador debe estar en el carrito. Cart: {aq_t2}"
+        assert dest_item.get("status") == "resolved", (
+            f"T2: destornillador debe quedar 'resolved'. Got: {dest_item.get('status')!r}"
+        )
+        assert dest_item.get("qty") == 2, (
+            f"T2: destornillador debe tener qty=2 (B22b qty propagation). "
+            f"Got qty={dest_item.get('qty')!r}"
+        )
+
+        # T3
+        bot.process_message(sid, "stanley")
+
+        # T4 — final quote must show both products + prices
         r4 = bot.process_message(sid, "presupuesto?")
         r4l = r4.lower()
         assert "destornillador" in r4l, f"T4 debe mencionar destornillador. Got: {r4[:300]}"

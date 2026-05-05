@@ -1684,6 +1684,8 @@ class SalesBot:
                     # would return kind="none" for phrases starting with "dame"
                     # (which is in _FRESH_REQUEST_WORDS), causing an early not_followup
                     # return before the option selection branch is ever reached.
+                    # B22b: extract explicit qty from cmd ("dame dos del primero" → qty=2).
+                    _opt_qty = fq._extract_qty_from_phrase(cmd_str)
                     _pending = [
                         it for it in current_cart
                         if it.get("status") in ("ambiguous", "unresolved", "blocked_by_missing_info")
@@ -1699,11 +1701,13 @@ class SalesBot:
                             _candidates = _line.get("products") or []
                             if opt_idx < len(_candidates):
                                 _chosen = _candidates[opt_idx]
-                                _uprice, _sub = fq._compute_subtotal(_chosen, _line.get("qty", 1))
+                                _qty = _opt_qty if _opt_qty is not None else _line.get("qty", 1)
+                                _uprice, _sub = fq._compute_subtotal(_chosen, _qty)
                                 _new = dict(_line)
                                 _new.update({
                                     "status": "resolved",
                                     "products": [_chosen],
+                                    "qty": _qty,
                                     "unit_price": _uprice,
                                     "subtotal": _sub,
                                     "clarification": None,
