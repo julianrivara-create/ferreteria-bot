@@ -47,6 +47,16 @@ from .config import (
     MAX_CONTEXT_MESSAGES
 )
 
+_ESCALATION_REQUEST_KEYWORDS = (
+    "hablar con humano", "hablar con persona", "hablar con alguien",
+    "atender humano", "atendeme un humano", "atendeme alguien",
+    "hablar con un asesor", "hablar con asesor", "asesor humano",
+    "una persona real", "alguien real", "persona de verdad",
+    "no quiero un bot", "dame un humano", "pasame con alguien",
+    "pasame con un humano", "pasame con alguien real",
+    "necesito un humano", "necesito una persona",
+)
+
 
 class SalesBot:
     """
@@ -669,10 +679,10 @@ class SalesBot:
         user_message: str,
     ) -> Optional[str]:
         """
-        Run the ferreteria TurnInterpreter (Phase 6) then fall back to IntentRouter.
+        Run the ferreteria TurnInterpreter (Phase 6) and dispatch to intent handlers.
 
-        TurnInterpreter runs first: it classifies intent, extracts entities, detects tone,
-        and fills quote context in a single LLM call. Its result is stored and used to
+        TurnInterpreter classifies intent, extracts entities, detects tone, and fills
+        quote context in a single LLM call. Its result is stored and used to
         short-circuit common intents before the quote builder runs.
 
         Returns a final response string if the intent warrants special handling,
@@ -816,105 +826,31 @@ class SalesBot:
             StateStore.save(sess, state_v2)
             return self._append_assistant_turn(session_id, response_text)
 
-        # ── Fallback: original IntentRouter (kept for compatibility) ─────────
-        try:
-            from .routing.intent_router import IntentRouter
-        except ImportError as exc:
-            logging.warning("intent_router_import_failed error=%s", exc)
-            return None
+        # ── B24: Escalation safety net ──────────────────────────────────────
+        # When TurnInterpreter fails (interpretation.intent == "unknown" +
+        # confidence == 0.0), apply a minimal keyword-based escalation detector.
+        # Covers the edge case of LLM failure + user requesting human handoff
+        # in the same turn. Only activates on TurnInterpretation.unknown().
+        if interpretation.intent == "unknown" and interpretation.confidence == 0.0:
+            if self._looks_like_escalation_request(user_message):
+                logging.info(
+                    "escalation_safety_net session=%s reason=turn_interpreter_failed",
+                    session_id,
+                )
+                state_v2 = StateStore.load(sess)
+                customer_contact = sess.get("customer_ref") or session_id
+                response_text = self.escalation_handler.handle(
+                    session_id=session_id,
+                    user_message=user_message,
+                    interpretation=interpretation,
+                    state_v2=state_v2,
+                    customer_contact=customer_contact,
+                )
+                StateStore.save(sess, state_v2)
+                return self._append_assistant_turn(session_id, response_text)
 
-        try:
-            router = IntentRouter(self.chatgpt, preferred_model="gpt-4o-mini")
-            route = router.classify(user_message, history=history)
-            logging.info(
-                "ferreteria_intent_router session=%s intent=%s confidence=%.2f",
-                session_id,
-                route.get("intent"),
-                route.get("confidence", 0.0),
-            )
-            sess["ferreteria_intent"] = route
-        except Exception as exc:
-            logging.warning(
-                "ferreteria_intent_router_failed session=%s error=%s",
-                session_id,
-                exc,
-                exc_info=True,
-            )
-            return None
-
-        intent = route.get("intent", "ambiguous")
-        confidence = float(route.get("confidence", 0.0))
-
-        # Low-confidence or ambiguous → fall through to normal flow
-        if intent == "ambiguous" or confidence < 0.5:
-            return None
-
-        # FAQ: route through PolicyHandler, same as policy_faq from TurnInterpreter (C4)
-        if intent == "faq_informational":
-            messages = list(self.contexts.get(session_id, []))
-            response_text = self.policy_handler.handle(
-                user_message=user_message,
-                interpretation=interpretation,
-                messages=messages,
-                system_prompt=self.system_prompt,
-            )
-            return self._append_assistant_turn(session_id, response_text)
-
-        # Acceptance: route directly to the acceptance handler in pre-route
-        if intent == "acceptance":
-            # Let _try_ferreteria_pre_route handle it (it checks open_quote + looks_like_acceptance)
-            return None
-
-        # Escalation: send a warm acknowledgment first, then trigger handoff
-        if intent == "escalation_signal":
-            self._trim_context(session_id)
-            # Build a warm, natural handoff acknowledgment via LLM
-            # Inject a one-shot instruction into the context so the LLM
-            # responds empathetically before the human takes over.
-            ctx = self.contexts.get(session_id, [])
-            escalation_instruction = {
-                "role": "system",
-                "content": (
-                    "El cliente quiere hablar con una persona o la situación requiere atención humana. "
-                    "Respondé de forma cálida y empática: reconocé su pedido, disculpate si hubo algún inconveniente, "
-                    "y confirmá que un asesor se va a comunicar con él a la brevedad. "
-                    "Sé breve (2-3 oraciones), en tono argentino cercano. No inventes tiempos de espera exactos."
-                ),
-            }
-            self.contexts[session_id] = list(ctx) + [escalation_instruction]
-            try:
-                response_text = self._chat_with_functions(session_id)
-            finally:
-                # Restore context without the injected instruction
-                self.contexts[session_id] = list(self.contexts.get(session_id, []))
-                # Remove the escalation_instruction if it's still there
-                self.contexts[session_id] = [
-                    m for m in self.contexts[session_id]
-                    if not (
-                        m.get("role") == "system"
-                        and "El cliente quiere hablar con una persona" in (m.get("content") or "")
-                    )
-                ]
-
-            if not self.sandbox_mode:
-                try:
-                    summary = self._generate_handoff_summary(session_id)
-                    self.logic.derivar_humano(
-                        razon="Señal de escalación detectada por el clasificador de intenciones",
-                        contacto=session_id,
-                        resumen=summary,
-                    )
-                except Exception as exc:
-                    logging.warning(
-                        "ferreteria_escalation_handoff_failed session=%s error=%s",
-                        session_id,
-                        exc,
-                        exc_info=True,
-                    )
-            return self._append_assistant_turn(session_id, response_text)
-
-        # All other intents (product_search, quote_build, rejection, off_topic):
-        # continue with existing flow
+        # ── B24: legacy IntentRouter fallback removed.
+        # TurnInterpretation.unknown() + downstream handlers cover the empty case.
         return None
 
     def _try_ferreteria_pre_route(self, session_id: str, user_message: str) -> Optional[str]:
@@ -1898,6 +1834,11 @@ class SalesBot:
             "qué cambia",
         )
         return any(pattern in normalized_message for pattern in patterns)
+
+    @staticmethod
+    def _looks_like_escalation_request(user_message: str) -> bool:
+        norm = (user_message or "").strip().lower()
+        return any(kw in norm for kw in _ESCALATION_REQUEST_KEYWORDS)
 
     def _chat_with_functions(self, session_id: str) -> str:
         """
