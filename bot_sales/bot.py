@@ -817,6 +817,24 @@ class SalesBot:
                 StateStore.save(sess, state_v2)
                 return self._append_assistant_turn(session_id, response_text)
 
+        # ── B22c: compound accept + customer_info ───────────────────────────
+        # Fires when TI classified quote_accept + compound_message=true AND
+        # sub_commands include at least one customer info phrase. Processes
+        # info storage + acceptance in one turn without a second LLM call.
+        # Fallback: returns None → pre_route section-0.5 handles acceptance.
+        if (
+            interpretation.intent == "quote_accept"
+            and interpretation.compound_message
+            and interpretation.sub_commands
+            and sess.get("active_quote")
+        ):
+            _mixed_reply = self._process_compound_mixed(
+                session_id, interpretation, user_message, sess, self._knowledge()
+            )
+            if _mixed_reply is not None:
+                return self._append_assistant_turn(session_id, _mixed_reply)
+            # else: fallthrough → pre_route handles acceptance normally
+
         # ── B24: legacy IntentRouter fallback removed.
         # TurnInterpretation.unknown() + downstream handlers cover the empty case.
         return None
@@ -1764,6 +1782,97 @@ class SalesBot:
             session_id, len(sub_commands), len(current_cart),
         )
         return reply
+
+    def _process_compound_mixed(
+        self,
+        session_id: str,
+        interpretation: Any,
+        user_message: str,
+        sess: dict,
+        knowledge: Any,
+    ) -> Optional[str]:
+        """Process a compound quote_accept + customer_info turn.
+
+        B22c-min scope: TI classified overall intent=quote_accept and
+        compound_message=true. Sub-commands contain at least one customer
+        info phrase (shipping zone, name, phone, etc.) in addition to the
+        acceptance command. No extra LLM call.
+
+        Atomicity: if acceptance fails (pending blocked items, exception),
+        customer_delivery_info is restored to its pre-call state and None
+        is returned to signal fallback to the normal pre_route path.
+
+        customer_delivery_info.raw is free text. Structuring to specific
+        fields (shipping_zone, customer_name, billing_target) is a follow-up
+        when the reviewer handoff format is defined.
+        """
+        sub_cmds = interpretation.sub_commands
+        if not sub_cmds:
+            return None
+
+        info_cmds = [c for c in sub_cmds if fq.looks_like_customer_info(c)]
+        if not info_cmds:
+            return None
+
+        logging.info(
+            "compound_mixed session=%s n_info=%d info_cmds=%r",
+            session_id, len(info_cmds), info_cmds,
+        )
+
+        open_quote = sess.get("active_quote")
+        if not open_quote:
+            return None
+
+        # Snapshot for atomic rollback
+        customer_info_backup = dict(sess.get("customer_delivery_info") or {})
+
+        try:
+            # Step 1: store customer info (append — preserves multi-turn accumulation)
+            delivery = sess.setdefault("customer_delivery_info", {})
+            new_text = " | ".join(info_cmds)
+            existing = delivery.get("raw", "")
+            delivery["raw"] = f"{existing} | {new_text}" if existing else new_text
+
+            # Step 2: process acceptance (inline section-0.5 logic, no re-check needed
+            # because TI already confirmed intent=quote_accept for this turn)
+            state_v2 = StateStore.load(sess)
+            response = fq.generate_acceptance_response(open_quote, knowledge=knowledge)
+            if "✓" in response:
+                self._accept_quote_for_review(session_id, user_message, response)
+                sess["quote_state"] = "accepted"
+                sess.pop("pending_decision", None)
+                sess.pop("pending_clarification_target", None)
+                state_v2.transition("awaiting_customer_confirmation")
+                state_v2.acceptance_pending = True
+            else:
+                # Quote has blocked items — cannot accept. Rollback info and fall through.
+                sess["customer_delivery_info"] = customer_info_backup
+                state_v2.transition("awaiting_clarification")
+                self._persist_quote_state(
+                    session_id,
+                    response_text=response,
+                    user_message=user_message,
+                    event_type="quote_acceptance_blocked",
+                    event_payload={"reason": "pending_lines"},
+                )
+                StateStore.save(sess, state_v2)
+                return None
+
+            StateStore.save(sess, state_v2)
+            self._set_last_turn_meta(session_id, route_source="compound_mixed")
+            logging.info(
+                "compound_mixed_done session=%s info_stored=%r",
+                session_id, delivery.get("raw"),
+            )
+            return response
+
+        except Exception as exc:
+            logging.warning(
+                "compound_mixed_fallback session=%s reason=exception exc=%s",
+                session_id, exc,
+            )
+            sess["customer_delivery_info"] = customer_info_backup
+            return None
 
     def _chat_with_functions(self, session_id: str) -> str:
         """

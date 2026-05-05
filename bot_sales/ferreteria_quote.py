@@ -1242,6 +1242,24 @@ def looks_like_acceptance(
     return _match_known_phrase(message, patterns.get("accept_phrases", []))
 
 
+# B22c: customer info detector for compound accept+info turns
+_CUSTOMER_INFO_RE = re.compile(
+    r"\b(?:soy|me\s+llamo|mi\s+nombre|nombre\s+es|"
+    r"mi\s+(?:tel[eé]fono|n[uú]mero|cel|celular)|"
+    r"mand(?:a|alo|ame)\s+a|"
+    r"(?:env[ií]a|envialo|envio|enviar)\s+a|"
+    r"factura\s+a\s+\w+|"
+    r"a\s+nombre\s+de|"
+    r"direcci[oó]n|domicilio)\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_customer_info(text: str) -> bool:
+    """Return True if *text* looks like the customer providing personal/delivery info."""
+    return bool(text and _CUSTOMER_INFO_RE.search(text))
+
+
 def generate_acceptance_response(active_quote: List[QuoteItem], knowledge: Optional[Dict[str, Any]] = None) -> str:
     """
     Return the acceptance reply.
