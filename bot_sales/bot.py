@@ -892,7 +892,16 @@ class SalesBot:
             return response
 
         # ── 0.5. Acceptance ──────────────────────────────────────────────────
-        if open_quote and fq.looks_like_acceptance(text, knowledge=knowledge, chatgpt_client=self.chatgpt):
+        # B21+B23: si TurnInterpreter clasificó quote_modify, confiar en esa
+        # señal — el cliente está modificando el carrito, no aceptando. Esto
+        # cubre casos como T2 de E41 ("cualquiera está bien" con item ambiguo)
+        # donde looks_like_acceptance disparaba prematuramente y el carrito
+        # quedaba accepted con un ítem sin resolver.
+        if (
+            open_quote
+            and intent != "quote_modify"
+            and fq.looks_like_acceptance(text, knowledge=knowledge, chatgpt_client=self.chatgpt)
+        ):
             response = fq.generate_acceptance_response(open_quote, knowledge=knowledge)
             if "✓" in response:
                 self._accept_quote_for_review(session_id, user_message, response)

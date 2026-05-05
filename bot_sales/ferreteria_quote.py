@@ -1684,7 +1684,7 @@ _RESET_PHRASES = frozenset({
 })
 
 _ADDITIVE_RE = re.compile(
-    r"^(?:agrega|agregale|suma|sumale|añadi|añadile|tambien\s+necesito|"
+    r"^(?:agrega|agregame|agregale|suma|sumale|añadi|añadile|tambien\s+necesito|"
     r"tambien\s+quiero|agrega\s+tambien|y\s+tambien|y\s+ademas)\b",
     re.IGNORECASE,
 )
