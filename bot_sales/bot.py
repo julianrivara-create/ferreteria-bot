@@ -1020,12 +1020,16 @@ class SalesBot:
         if open_quote:
             continuation = classify_followup_message(text, open_quote, knowledge=knowledge)
             if continuation.get("kind") == "followup":
+                # B23-FU: TurnInterpreter referenced_offer_index is primary source
+                # for option selection (e.g. "cualquiera está bien" → idx 0).
+                _ti_ref_idx = sess.get("last_turn_interpretation", {}).get("referenced_offer_index")
                 followup = apply_followup_to_open_quote(
                     text,
                     open_quote,
                     self.logic,
                     knowledge=knowledge,
                     pending_target_ids=pending_clarif_target,
+                    ti_ref_idx=_ti_ref_idx,
                 )
 
                 if followup.get("status") == "needs_disambiguation":

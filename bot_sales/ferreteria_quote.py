@@ -1704,6 +1704,7 @@ def detect_option_selection(text: str) -> Optional[int]:
     """
     Return the 0-indexed option number if the user text looks like:
     "A", "B", "la A", "el primero", "la primera opcion", etc.
+    Also handles generic-selection phrases ("cualquiera", "me da igual") → 0.
     Returns None if no clear selection is found.
     """
     norm = _normalize(text.strip())
@@ -1711,12 +1712,22 @@ def detect_option_selection(text: str) -> Optional[int]:
     m_letter = re.match(r"^\s*(?:la|el|opcion|opción)?\s*([a-e])(?:\)|\.|\s|,|$)", norm)
     if m_letter:
         return ord(m_letter.group(1)) - ord('a')
-    
+
     # Ordinals
     if any(p in norm for p in ("primero", "primera", "1ro", "1ra", "el 1")): return 0
     if any(p in norm for p in ("segundo", "segunda", "2do", "2da", "el 2")): return 1
     if any(p in norm for p in ("tercero", "tercera", "3ro", "3ra", "el 3")): return 2
-    
+
+    # Generic-selection phrases: "cualquiera", "el que sea", "me da igual", etc.
+    # Maps to index 0 (first available option). Used as safety-net fallback;
+    # TurnInterpreter.referenced_offer_index is the primary source (B23-FU).
+    _GENERIC_SELECT = (
+        "cualquiera", "el que sea", "la que sea", "me da igual",
+        "da igual", "da lo mismo", "cualquier",
+    )
+    if any(p in norm for p in _GENERIC_SELECT):
+        return 0
+
     return None
 
 

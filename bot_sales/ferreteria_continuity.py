@@ -39,7 +39,7 @@ def classify_followup_message(
     if not pending or not normalized:
         return {"kind": "none", "normalized": normalized, "dimensions": dims, "families": families}
 
-    if words and words[0] in _FRESH_REQUEST_WORDS and not dims and not families:
+    if words and words[0].rstrip("?!.¿") in _FRESH_REQUEST_WORDS and not dims and not families:
         return {"kind": "none", "normalized": normalized, "dimensions": dims, "families": families}
 
     if len(words) > 12 and not dims and not families:
@@ -198,6 +198,7 @@ def apply_followup_to_open_quote(
     logic: Any,
     knowledge: Dict[str, Any] | None = None,
     pending_target_ids: Optional[List[str]] = None,
+    ti_ref_idx: Optional[int] = None,
 ) -> Dict[str, Any]:
     from bot_sales import ferreteria_quote as fq
 
@@ -205,11 +206,16 @@ def apply_followup_to_open_quote(
     if classification.get("kind") != "followup":
         return {"status": "not_followup", "items": list(open_items)}
 
-    # Phase 2: Handle option selection (A, B, C or "el primero")
-    option_idx = fq.detect_option_selection(message)
-    if option_idx is not None and pending_target_ids:
-        # User is picking an option for a recently asked clarification
-        target_id = pending_target_ids[0]  # Focus on the most recent/first one
+    # Phase 2: Handle option selection.
+    # Primary source: TurnInterpreter referenced_offer_index (B21, LLM-first).
+    # Fallback: detect_option_selection regex (covers generic phrases + A/B/C letters).
+    _current_pending = pending_items(open_items)
+    option_idx = ti_ref_idx if ti_ref_idx is not None else fq.detect_option_selection(message)
+    # Gate: fire when pending_target_ids is set (explicit disambiguation context)
+    # OR when there is exactly one pending item (implicit — no need to disambiguate).
+    if option_idx is not None and (pending_target_ids or len(_current_pending) == 1):
+        # User is picking an option for a pending cart item
+        target_id = pending_target_ids[0] if pending_target_ids else _current_pending[0].get("line_id")
         updated_items: List[Dict[str, Any]] = []
         improved_line_ids: List[str] = []
         for line in open_items:
