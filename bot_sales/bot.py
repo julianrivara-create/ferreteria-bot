@@ -696,9 +696,14 @@ class SalesBot:
         state_v2 = StateStore.load(sess)
         current_state = state_v2.state if state_v2 else "idle"
 
+        last_offered = sess.get("last_offered_products") or []
+
         try:
             interpretation = self.turn_interpreter.interpret(
-                user_message, history=history, current_state=current_state
+                user_message,
+                history=history,
+                current_state=current_state,
+                last_offered_products=last_offered,
             )
             sess["last_turn_interpretation"] = interpretation.to_dict()
             logging.info(
@@ -872,6 +877,18 @@ class SalesBot:
         knowledge = self._knowledge()
 
         def _done(response: str, route_source: str = "deterministic", **meta: Any) -> str:
+            # Persist offered products so TurnInterpreter can resolve "el primero" etc.
+            offered = meta.pop("products", None)
+            if offered is not None:
+                sess["last_offered_products"] = [
+                    {
+                        "name": p.get("model") or p.get("name") or p.get("sku", "Producto"),
+                        "brand": p.get("proveedor") or p.get("brand") or "",
+                        "price_formatted": p.get("price_formatted") or "precio a confirmar",
+                        "sku": p.get("sku") or "",
+                    }
+                    for p in offered[:5]
+                ]
             payload = {"route_source": route_source}
             payload.update(meta)
             self._set_last_turn_meta(session_id, **payload)
@@ -1346,14 +1363,16 @@ class SalesBot:
         if short_category and normalized in generic_category_browse_terms:
             result = self.logic.buscar_por_categoria(short_category)
             if result.get("status") == "found":
+                _prods = result.get("products", [])
                 return _done(
                     self._format_ferreteria_products_reply(
-                        result.get("products", []),
+                        _prods,
                         heading=f"Te paso opciones de **{short_category}** con stock:",
                         category_hint=short_category,
                         query_hint=normalized,
                     ),
                     "deterministic",
+                    products=_prods,
                 )
 
         if self._looks_like_product_request(normalized):
@@ -1391,12 +1410,14 @@ class SalesBot:
                     and single_norm in generic_browse_terms
                     and len(single_raw_words) <= 2
                 ):
+                    _prods = resolved_single.get("products", [])
                     return _done(
                         self._format_ferreteria_products_reply(
-                            resolved_single.get("products", []),
+                            _prods,
                             query_hint=single_norm,
                         ),
                         "deterministic",
+                        products=_prods,
                     )
 
                 if resolved_single.get("status") in ("resolved", "ambiguous", "unresolved", "blocked_by_missing_info"):
@@ -1438,14 +1459,16 @@ class SalesBot:
             # Fallback direct stock search — also guarded by L1 (already checked above).
             stock_result = self.logic.buscar_stock(text)
             if stock_result.get("status") == "found":
-                return _done(self._format_ferreteria_products_reply(stock_result.get("products", [])), "deterministic")
+                _prods = stock_result.get("products", [])
+                return _done(self._format_ferreteria_products_reply(_prods), "deterministic", products=_prods)
             if stock_result.get("status") == "no_stock":
                 alternatives = self.logic.buscar_alternativas(text)
                 if alternatives.get("status") == "found":
+                    _prods = alternatives.get("alternatives", [])
                     return _done(self._format_ferreteria_products_reply(
-                        alternatives.get("alternatives", []),
+                        _prods,
                         heading="No tengo stock exacto de eso ahora, pero si estas alternativas:",
-                    ), "deterministic")
+                    ), "deterministic", products=_prods)
                 return _done("Ese producto existe pero hoy no tiene stock. Busco alternativa por uso o medida si queres.", "deterministic")
             if stock_result.get("status") == "no_match":
                 return _done(
@@ -1460,14 +1483,16 @@ class SalesBot:
         if category:
             result = self.logic.buscar_por_categoria(category)
             if result.get("status") == "found":
+                _prods = result.get("products", [])
                 return _done(
                     self._format_ferreteria_products_reply(
-                        result.get("products", []),
+                        _prods,
                         heading=f"Te paso opciones de **{category}** con stock:",
                         category_hint=category,
                         query_hint=normalized,
                     ),
                     "deterministic",
+                    products=_prods,
                 )
             return _done(f"No veo stock activo en **{category}** ahora. Decime uso, medida o presupuesto y te propongo alternativa.", "deterministic")
 

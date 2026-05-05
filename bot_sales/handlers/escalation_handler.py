@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 #   Frustration escalation (below):         >= 0.55  (requires confident signal before acting)
 _FRUSTRATION_ESCALATION_THRESHOLD = 0.55
 
+# B21 — reason-specific responses
+_NEGOTIATION_RESPONSE = (
+    "Para temas de precio especial te derivo con un asesor humano, ¿OK? "
+    "Mientras tanto puedo ayudarte con otra cosa."
+)
+_GENERIC_HANDOFF_RESPONSE = (
+    "Claro, te paso con un asesor ahora. "
+    "En un momento alguien de nuestro equipo se pone en contacto con vos."
+)
+
 
 class EscalationHandler:
     def __init__(self, handoff_service=None):
@@ -49,10 +59,9 @@ class EscalationHandler:
             except Exception as exc:
                 logger.warning("Handoff service failed: %s", exc)
 
-        return (
-            "Claro, te paso con un asesor ahora. "
-            "En un momento alguien de nuestro equipo se pone en contacto con vos."
-        )
+        if reason == "negotiation":
+            return _NEGOTIATION_RESPONSE
+        return _GENERIC_HANDOFF_RESPONSE
 
     def should_escalate_on_frustration(self, interpretation: Any) -> bool:
         """Return True if tone signals frustration AND confidence meets threshold."""
@@ -63,6 +72,12 @@ class EscalationHandler:
     def _infer_reason(self, interpretation: Any) -> str:
         tone = getattr(interpretation, "tone", "neutral")
         intent = getattr(interpretation, "intent", "unknown")
+        reason_field = getattr(interpretation, "escalation_reason", None)
+
+        # Prefer explicit reason from TurnInterpreter when present
+        if reason_field:
+            return reason_field
+
         if intent in ("escalate", "escalation_signal"):
             return "customer_requested"
         if tone == "frustrated":
