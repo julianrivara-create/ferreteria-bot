@@ -541,6 +541,152 @@ Commit: 6eb10eb → merge e5641c8
 
 ## 🔮 Pendientes para próxima sesión
 
+### 🚨 Hallazgos del testing manual EOD 2026-05-04 (versión completa)
+
+Tres rondas de testing manual exhaustivo en localhost:8000.
+6 bugs nuevos + 5 cosas confirmadas funcionando. Atacar mañana en este orden.
+
+---
+
+#### 🔴 CRÍTICOS (bloquean producción)
+
+**1. CRÍTICO — TurnInterpreter sobreclasifica como quote_modify**
+
+CAUSA RAÍZ ÚNICA. Afecta múltiples contextos:
+
+- Caso A: "hola, necesito cotización para una obra: 100 tornillos M6 cabeza hexagonal, 50 codos 90 grados, 30 cuplas, 10 llaves de paso, sellador siliconado"
+  → intent=quote_modify confidence=0.80
+  → debería ser: quote_build (cotización nueva)
+  → síntoma: fallback "Perdón, tuve un problema procesando tu solicitud" + 0 tokens
+
+- Caso B: "Pasame presupuesto para un baño"
+  → intent=quote_modify confidence=0.70
+  → debería ser: project_request → _looks_like_project_request() en _try_ferreteria_pre_route
+  → síntoma: bot dice "Eso está fuera de mi área" (consume 3477 tokens en respuesta robótica)
+
+Mecánica común: TurnInterpreter dispara con confidence > 0.55 → handler de quote_modify chequea active_quote → sesión idle no tiene → cae al LLM con function calling sin la guidance correcta → respuesta incorrecta o crash.
+
+Path correcto perdido:
+- Caso A debería ir a quote_build → quote builder determinístico
+- Caso B debería ir a _looks_like_project_request → BROAD_REQUEST_REPLY
+
+Acción próxima sesión (~1.5h):
+- Mejorar prompt del TurnInterpreter para distinguir:
+  - quote_build: cotización nueva con productos
+  - quote_modify: modificación de cotización ya existente
+  - project_request: pedido de proyecto/rubro sin productos específicos
+- Pasar state al classifier (idle vs has_active_quote informa)
+- O bien workaround: si quote_modify con sesión idle, redirigir según contenido (productos→quote_build, proyecto→pre_route)
+- Tests específicos con queries reproductoras de Caso A y Caso B
+
+Archivo: bot_sales/routing/turn_interpreter.py
+
+**2. CRÍTICO — Stock falsamente reportado como NO disponible**
+
+Secuencia que reproduce:
+- Usuario: "necesito un destornillador philips"
+- Bot: ofrece A) Destornillador 10mm Bahco $6552 ... C) Philips Kettler $3629 (todos con stock 999)
+- Usuario: "El primero. agregame también un martillo"
+- Bot: muestra el destornillador A correctamente + ofrece 3 martillos
+- Usuario: "Cual es el total?"
+- Bot ALUCINA: "Lamentablemente, el destornillador que elegiste no está disponible en este momento" (FALSO — stock era 999)
+
+Bugs combinados:
+a) Pérdida de contexto: el bot "olvida" el destornillador entre turnos
+b) Alucinación: inventa que no está disponible cuando sí lo está
+
+Acción próxima sesión:
+- Verificar handler de "Cual es el total?" — ¿está releyendo active_quote correctamente?
+- Investigar si los items se pierden o si solo el bot habla mal
+- Revisar logs de R2 para ver si disparó hallucinated_prices
+- Esto está conectado con bloqueante E41-E43 (cierre multiturno)
+
+**3. CRÍTICO — Parser multi-item splittea conectores**
+
+- Turno 1: "che, tenés taladros?" → V9 dispara, pide aclaración (BIEN)
+- Turno 2: "dale, mostrame los Bosch" → bot trata como dos ítems separados ("dale" + "mostrame los bosch") y devuelve respuesta fija con 0 tokens:
+  "❌ Dale — no lo encontré ❌ Mostrame los bosch — no lo encontré"
+
+Causa: el parser multi-item se activa pre-LLM y trata cada fragmento separado por coma como producto. NO usa contexto del turno anterior.
+
+Acción próxima sesión:
+- Detectar conectores ("dale", "ok", "sí", "perfecto", "bueno") como NO-items
+- O bien: no aplicar parser cuando hay context activo (V9 pidió aclaración → siguiente turno responde a esa)
+- Conectado con bloqueante E41-E43 (cierre multiturno)
+
+---
+
+#### 🟠 IMPORTANTES (afectan UX)
+
+**4. IMPORTANTE — Inconsistencia razonamiento specs (8mm vs 80mm)**
+
+- Query 1: "5 mechas de 8mm Bosch" → "No tenemos" + ofrece Mecha Biseladora 8mm BREMEN + Mechas Centradoras Bosch
+- Query 2: "5 mechas de 80mm Bosch" → "No tenemos. Además, 80mm es inusual, las mechas no superan 60mm" (razonamiento correcto pero solo aparece en spec extrema)
+
+Bug: el bot razona bien para 80mm pero no para 8mm que es estándar. Sub-bug: Mechas Centradoras NO son sustituto de mechas comunes (centradoras son para precisión inicial, no uso general).
+
+Acción próxima sesión:
+- Verificar catálogo: grep -i "bosch.*8mm\|8mm.*bosch\|broca.*bosch\|mecha.*bosch" config/catalog.csv
+- Si hay productos válidos: investigar por qué matcher no los prioriza
+- Si no hay: lógica de "alternativas" más restrictiva, no ofrecer centradoras como sustituto general
+
+**5. IMPORTANTE — UX bot "muy robótico"**
+
+Feedback cualitativo del usuario: el resto safa, no está tan mal. Pero hay que cambiar un poco el wording de cómo responder, muy robótico.
+
+Ejemplos:
+- "*Presupuesto preliminar:* ❓ Taladros — ¿cuál de estos?"
+- "Necesito confirmar: • Taladros: decime mas detalles..."
+- "Respondé y te actualizo el total. 🛠️"
+
+Funcional pero suena a chatbot, no a humano de ferretería.
+
+Acción próxima sesión:
+- Revisar templates de quote_response y clarification responses
+- Suavizar lenguaje, eliminar viñetas/asteriscos cuando posible
+- Más conversacional, menos burocrático
+- Considerar si LLM puede generar la respuesta con data estructurada en lugar de templates fijos
+
+**6. IMPORTANTE — Multiturno re-imprime productos elegidos**
+
+- Cliente eligió "Destornillador Philips" en turno N
+- Cliente pidió "martillo" en turno N+1
+- Bot re-imprime el destornillador completo + agrega martillo
+- Esperado: el destornillador ya está fijado, mostrar resumen breve
+
+Acción próxima sesión:
+- En generate_quote_response, distinguir items "ya fijos" (resumen breve) vs items "nuevos para confirmar" (mostrar opciones)
+
+---
+
+#### ✅ CONFIRMADO FUNCIONANDO (no requiere acción)
+
+**7. ✅ Saludo simple "hola"** → respuesta natural y abierta
+**8. ✅ Anti-alucinación specs imposibles** ("martillos Stanley dorados de 500kg") → bloqueado por V1+V4
+**9. ✅ Server SIGSEGV en multi-item** → mitigado con MAX_WORKERS_OVERRIDE=1 en .env (workaround Python 3.14)
+**10. ✅ JSON truncado en TurnInterpreter** → fixeado en f703af2 (max_tokens 200→1024)
+**11. ✅ V9 ambigüedad primer turno** → "che, tenés taladros?" correctamente pide aclaración con opciones
+
+---
+
+#### PRIORIDAD PROPUESTA PARA PRÓXIMA SESIÓN
+
+Día 1 (mañana, ~5-7h):
+1. Bug #1 (TurnInterpreter intent classification) — ~1.5h ← cierra DOS críticos (multi-item + routing baño) de un saque
+2. Bug #2 (alucinación stock + pérdida contexto) — ~2h
+3. Bug #3 (parser multi-item con conectores) — ~1.5h
+4. Verificación con testing manual de las queries problemáticas
+5. (opcional) Bug #4 (matcher mechas + alternativas)
+
+Día 2 (más adelante):
+- Bug #5 (UX robótico — refactor de templates)
+- Bug #6 (multiturno fijación de items)
+- Cierre multiturno E41-E43 (bloqueante separado, relacionado a #3)
+- clarification_rules.yaml conexión
+- Datos del cliente (cuestionarios)
+
+---
+
 ### Bloqueantes que quedan
 
 - **Cierre multiturno E41-E43** (~2h): auditar flujo completo de cierre de pedido.
@@ -581,8 +727,6 @@ Commit: 6eb10eb → merge e5641c8
 ---
 
 *Sesión 2026-05-04 cerrada definitivamente.*
-*Logros del día: matcher base resuelto (D-series), performance ~10x (P1),*
-*anti-alucinación COMPLETA (R1 + R2 + R3), handoff de negociación (V8/C),*
-*ambigüedad mejorada (V9/Slang).*
-*Tests EOD: 269/270 pytest + 8/8 matcher_base + 17/17 smoke.*
-*Pendiente: cierre multiturno E41-E43, clarification_rules conexión, datos del cliente.*
+*Logros del día: matcher base resuelto (D-series), performance ~10x (P1), anti-alucinación COMPLETA (R1+R2+R3), handoff de negociación (V8/C), ambigüedad mejorada (V9/Slang), max_tokens fix (TurnInterpreter), workaround Python 3.14 SIGSEGV.*
+*22+ commits a main. Tests EOD: 276/277 + matcher 8/8 + smoke 17/17.*
+*Pendiente próxima sesión (orden de prioridad documentado en sección Hallazgos del testing manual EOD): TurnInterpreter intent classification (cierra 2 críticos), alucinación stock multiturno, parser conectores, alternativas matcher, UX robótico, datos del cliente.*
