@@ -752,6 +752,29 @@ def _extract_qty_and_item(raw: str) -> Tuple[int, bool, Optional[str], str]:
     return qty, True, unit, item_text
 
 
+_QTY_SCAN_RE = re.compile(
+    r"\b(\d+|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_qty_from_phrase(text: str) -> Optional[int]:
+    """Return the first explicit cardinal quantity found anywhere in *text*, or None.
+
+    Handles both leading ("2 martillos") and embedded ("dame dos del primero") forms.
+    Deliberately excludes "un/una" to avoid false positives; qty=1 is already the default.
+    """
+    norm = normalize_basic(text)
+    qty, explicit, _, _ = _extract_qty_and_item(norm)
+    if explicit:
+        return qty
+    m = _QTY_SCAN_RE.search(norm)
+    if not m:
+        return None
+    val = m.group(1).lower()
+    return _WORD_NUMBERS.get(val) or (int(val) if val.isdigit() else None)
+
+
 # ---------------------------------------------------------------------------
 # Item splitting (parser)
 # ---------------------------------------------------------------------------
@@ -1684,7 +1707,7 @@ _RESET_PHRASES = frozenset({
 })
 
 _ADDITIVE_RE = re.compile(
-    r"^(?:agrega|agregame|agregale|suma|sumale|añadi|añadile|tambien\s+necesito|"
+    r"^(?:agrega|agregame|agregale|suma|sumale|sumame|s\u00famame|sumar|a\u00f1adi|a\u00f1adile|tambien\s+necesito|"
     r"tambien\s+quiero|agrega\s+tambien|y\s+tambien|y\s+ademas)\b",
     re.IGNORECASE,
 )
