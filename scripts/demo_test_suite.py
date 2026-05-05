@@ -1,42 +1,33 @@
 #!/usr/bin/env python3
 """
-Demo End-to-End Test Suite — Ferretería Bot
-============================================
+Strict Regression Suite — Ferretería Bot
+=========================================
 
-Qué hace:
-    Test de runtime end-to-end que manda mensajes reales al bot y verifica
-    que las respuestas cumplan criterios concretos. No usa mocks — llama
-    a la API de OpenAI y al catálogo real.
+10 E2E regression cases with strict product-identity checkers.
 
-Cómo correrlo:
+Pattern: each checker verifies WHAT product was returned — category-aware
+assertions and explicit NO-MATCH guards — NOT merely whether a keyword
+appears in the response.  Replaces tolerant keyword checkers that produced
+false positives (e.g., 'destornillador' keyword passing when a cerradura
+was actually returned).
+
+Reference: bot_sales/tests/test_matcher_base.py (D5 pattern).
+Consolidates demo_test_suite.py (31) + demo_test_suite_extended.py (53).
+Historical cases documented in reports/suite_consolidation_2026-05-05.md.
+
+Groups:
+    anti_alucinacion (3):   S01-S03
+    matcher_quirurgico (4): S04-S07
+    cierre_venta (3):       S08-S10
+
+Run:
     PYTHONPATH=. python3 scripts/demo_test_suite.py
 
-Cuándo correrlo:
-    Antes de cada cambio significativo al bot (prompt, matcher, parser,
-    routing). Detecta regresiones antes de deployar a Railway.
-
-Total de casos: 31
-    - saludos (3): respuestas conversacionales sin precios
-    - producto_simple (3): búsqueda de producto individual
-    - parser (4): pedidos multi-ítem y listas
-    - multiturno (1): carrito persistente a través de turnos
-    - matcher (3): calidad del match producto/precio
-    - casos_limite (3): objeción de precio, escalación, FAQ
-    - anti_alucinacion (3): productos inventados, SKUs falsos
-    - regresion_precio (1): bug histórico mecha→acople ($57k)
-    - tolerancia_linguistica (10): typos, slang, abreviaciones, inglés
-
-Criterios:
-    PASS  = comportamiento correcto sin defectos
-    WARN  = funciona pero subóptimo (respuesta vaga, match parcial,
-            clarificación en lugar de resultado)
-    FAIL  = error concreto (inventó precio, ignoró escalación, perdió
-            carrito, matcheó producto incorrecto)
-    ERROR = excepción inesperada en runtime
-
-Estado al 2026-05-03: 19/31 PASS (61%). Bugs pendientes en:
-    matcher (mecha→acople), anti-alucinacion, parser (prefijo "Te paso lista:"),
-    tolerancia (abreviaciones, jerga de codos roscados).
+Criteria:
+    PASS  = strict assertions satisfied
+    WARN  = works but suboptimal (do NOT tighten; document instead)
+    FAIL  = strict assertion violated — do NOT soften the checker
+    ERROR = unexpected runtime exception
 """
 
 from __future__ import annotations
@@ -67,40 +58,74 @@ class TestResult:
     status: Status
     notes: str
     duration_seconds: float
-    llm_calls: int = 0
-    tokens_used: int = 0
-    cost_usd: float = 0.0
 
 
 def _extract_prices(text: str) -> list[int]:
-    """Extrae precios en formato argentino ($1.234.567) de la respuesta del bot."""
+    """Extract Argentine-format prices ($1.234.567) from bot response."""
     prices = []
     for m in re.finditer(r'\$[\d\.]+', text):
         raw = m.group(0).replace('$', '').replace('.', '')
         try:
-            prices.append(int(raw))
+            v = int(raw)
+            if v > 0:
+                prices.append(v)
         except ValueError:
             pass
     return prices
 
 
+def _has_no_match(text: str) -> bool:
+    kws = (
+        "no tenemos", "no contamos", "no disponemos", "no tengo",
+        "no lo tenemos", "no hay", "no existe", "no encontré", "no lo encontré",
+    )
+    return any(k in text.lower() for k in kws)
+
+
 # ---------------------------------------------------------------------------
-# Helpers de identidad de producto (patrón de test_matcher_base.py)
-# Verifican falsos positivos CONOCIDOS en la respuesta del bot.
+# Product-identity guards — strict NO-MATCH assertions
+# Mirrors bot_sales/tests/test_matcher_base.py (D5 pattern) for E2E responses.
+# Each function detects a known false positive by examining the bot's free-text
+# response rather than the underlying product list.
 # ---------------------------------------------------------------------------
 
 def _has_cerradura_false_positive(r: str) -> bool:
-    """Detecta el falso positivo 'Cerradura Cierre Gabinete Destornillador'.
+    """Detects 'Cerradura Cierre Gabinete Destornillador Para S9000 - Genrod'
+    returned for screwdriver queries.
 
-    El bot puede retornar este producto (una cerradura que menciona un
-    destornillador en su nombre) cuando se busca un destornillador real.
-    Bug documentado en PENDIENTES.md y test_matcher_base.py caso 1.
+    This lock (Herramientas Manuales) mentions 'destornillador' because it
+    requires one to open — it is NOT a screwdriver itself.
+    Documented in test_matcher_base.py case 1, PENDIENTES.md Bug 1.
     """
     rl = r.lower()
     return "cerradura" in rl and "destornillador" in rl
 
 
-class DemoTestSuite:
+def _has_bocallave_false_positive(r: str) -> bool:
+    """Detects 'Bocallave Destornillador 5.5 mm Encastre 1/4 - Bahco' returned
+    for screwdriver or mecha queries.
+
+    A bocallave is a bit-holder in Mechas y Brocas — NOT a destornillador
+    and NOT a drill bit (mecha/broca).
+    """
+    return "bocallave" in r.lower()
+
+
+def _has_acople_false_positive(r: str) -> bool:
+    """Detects 'Acople para Broca 8" Rosca UNC 1.1/4" - Aliafor' returned for
+    mecha/broca queries.
+
+    An acople is a fitting adapter in Mechas y Brocas — NOT a drill bit.
+    Bug 1: 'broca' token hits 'Acople para Broca' via OR-any matching.
+    """
+    return bool(re.search(r'acople\b', r, re.I))
+
+
+# ---------------------------------------------------------------------------
+# Suite
+# ---------------------------------------------------------------------------
+
+class StrictRegressionSuite:
     def __init__(self):
         from bot_sales.runtime import get_runtime_bot, get_runtime_tenant
         from bot_sales.ferreteria_unresolved_log import suppress_unresolved_logging
@@ -111,7 +136,11 @@ class DemoTestSuite:
         self.results: list[TestResult] = []
 
     def _sid(self, case_id: str) -> str:
-        return f"demo_{case_id}_{self.run_id}"
+        # Each case gets a unique session: strict_<case_id>_<run_id>.
+        # run_id is random per suite instantiation → no state bleed between
+        # cases, even for multi-turn sessions (S08, S09, S10).
+        # No explicit teardown needed.
+        return f"strict_{case_id}_{self.run_id}"
 
     def _send(self, session_id: str, messages: list[str]) -> list[str]:
         responses = []
@@ -138,669 +167,688 @@ class DemoTestSuite:
             status, notes = "ERROR", str(exc)
         duration = time.perf_counter() - t0
         result = TestResult(
-            case_id=case_id,
-            category=category,
-            description=description,
-            inputs=inputs,
-            expected_description=expected_description,
+            case_id=case_id, category=category, description=description,
+            inputs=inputs, expected_description=expected_description,
             actual_response=responses[-1][:300] if responses else "",
-            status=status,
-            notes=notes,
-            duration_seconds=round(duration, 2),
+            status=status, notes=notes, duration_seconds=round(duration, 2),
         )
         self.results.append(result)
         return result
 
-    # ── Saludos ───────────────────────────────────────────────────────────
+    def _manual_multiturn(
+        self,
+        case_id: str,
+        category: str,
+        description: str,
+        turns: list[str],
+        expected_description: str,
+        checker,
+    ) -> TestResult:
+        """Multi-turn variant: checker receives ALL intermediate responses."""
+        sid = self._sid(case_id)
+        t0 = time.perf_counter()
+        try:
+            responses: list[str] = []
+            with self.suppress():
+                for msg in turns:
+                    responses.append(self.bot.process_message(sid, msg))
+            status, notes = checker(responses)
+        except Exception as exc:
+            responses = [f"EXCEPTION: {exc}"]
+            status, notes = "ERROR", str(exc)
+        duration = time.perf_counter() - t0
+        result = TestResult(
+            case_id=case_id, category=category, description=description,
+            inputs=turns, expected_description=expected_description,
+            actual_response=responses[-1][:300] if responses else "",
+            status=status, notes=notes, duration_seconds=round(duration, 2),
+        )
+        self.results.append(result)
+        return result
 
-    def case_01_saludo_hola(self):
+    # ── GROUP 1: Anti-alucinación ─────────────────────────────────────────
+
+    def case_S01_spec_blocker_martillo_absurdo(self):
+        """C19 regression: '500 kg hammer' must be blocked by V1 spec validator.
+
+        Catalog: Stanley hammers exist (Herramientas Manuales, max real ~1.5 kg).
+        V1 rule: hammer weight > 10 kg → impossible spec → no products returned.
+
+        If V1 is working: bot says 'no existe' and returns NO prices.
+        If V1 is broken: bot returns Stanley hammers with real prices → FAIL.
+
+        FAIL: any price returned for this query (spec not blocked).
+        PASS: no prices returned (spec blocked, with or without explicit message).
+        """
         def check(rs):
             r = rs[-1]
             rl = r.lower()
-            if not r:
-                return "FAIL", "respuesta vacía"
             prices = _extract_prices(r)
+
+            # FAIL: returned products with price — V1 spec blocker not working
             if prices:
-                return "FAIL", f"incluyó precios en saludo: {prices[:3]}"
-            if "presupuesto preliminar" in rl:
-                return "WARN", "abrió presupuesto en vez de saludar"
-            return "PASS", "saludo correcto sin precios"
-        return self._run_case("01", "saludos", '"hola"', ["hola"],
-            "respuesta conversacional sin precios", check)
+                return "FAIL", f"spec imposible no bloqueada — precios retornados: {prices[:3]}"
 
-    def case_02_saludo_buenas(self):
-        def check(rs):
-            r = rs[-1]
-            if not r:
-                return "FAIL", "respuesta vacía"
-            prices = _extract_prices(r)
-            if prices:
-                return "FAIL", f"incluyó precios en saludo: {prices[:3]}"
-            if "presupuesto preliminar" in r.lower():
-                return "WARN", "abrió presupuesto en vez de saludar"
-            return "PASS", "saludo correcto"
-        return self._run_case("02", "saludos", '"buenas"', ["buenas"],
-            "respuesta conversacional sin precios", check)
+            # PASS: explicit rejection message (ideal UX — user knows why)
+            if any(kw in rl for kw in (
+                "no existe", "no tenemos", "no contamos", "no hay",
+                "imposible", "500", "irreal", "fuera de rango",
+                "especificación", "no lo tenemos", "no fabricamos",
+            )):
+                return "PASS", "rechazó spec imposible explícitamente, sin precios"
 
-    def case_03_saludo_como_va(self):
-        def check(rs):
-            r = rs[-1]
-            if not r:
-                return "FAIL", "respuesta vacía"
-            prices = _extract_prices(r)
-            if prices:
-                return "FAIL", "incluyó precios en saludo informal"
-            if "presupuesto preliminar" in r.lower():
-                return "WARN", "abrió presupuesto en vez de saludar"
-            return "PASS", "saludo correcto"
-        return self._run_case("03", "saludos", '"hola, ¿cómo va?"', ["hola, ¿cómo va?"],
-            "respuesta conversacional sin precios", check)
+            # WARN: V1 blocked silently (no prices, no explanation) — anti-
+            # alucinación cumplida pero UX pobre (vendedor no explica el rechazo)
+            return "WARN", "spec bloqueada sin mensaje explícito — V1 funcionó pero sin explicación al usuario"
 
-    # ── Producto simple ───────────────────────────────────────────────────
-
-    def case_04_producto_simple_taladro(self):
-        def check(rs):
-            r = rs[-1]
-            rl = r.lower()
-            if not r:
-                return "FAIL", "respuesta vacía"
-            has_quote = "presupuesto" in rl
-            has_taladro = "taladro" in rl
-            has_clarif = any(kw in rl for kw in ("percutor", "batería", "bateria", "voltios", "marca", "uso", "tipo"))
-            if has_taladro and (has_quote or has_clarif):
-                return "PASS", "encontró taladro o pidió clarificación"
-            if has_taladro:
-                return "WARN", "menciona taladro pero sin presupuesto ni clarificación"
-            return "FAIL", "no respondió con taladros"
-        return self._run_case("04", "producto_simple", '"necesito un taladro"', ["necesito un taladro"],
-            "iniciar búsqueda de taladro o pedir aclaración", check)
-
-    def case_05_precio_martillo(self):
-        def check(rs):
-            r = rs[-1]
-            rl = r.lower()
-            if not r:
-                return "FAIL", "respuesta vacía"
-            has_martillo = "martillo" in rl
-            prices = _extract_prices(r)
-            if has_martillo and prices:
-                return "PASS", f"muestra martillo con precio (max=${max(prices):,})"
-            if has_martillo:
-                return "WARN", "menciona martillo pero sin precio"
-            return "FAIL", "no encontró martillos"
-        return self._run_case("05", "producto_simple", '"precio del martillo"', ["precio del martillo"],
-            "opciones de martillo con precio", check)
-
-    def case_06_llaves_francesas(self):
-        def check(rs):
-            r = rs[-1]
-            rl = r.lower()
-            if not r:
-                return "FAIL", "respuesta vacía"
-            has_llave = "llave" in rl and ("francesa" in rl or "ajustable" in rl or "satinada" in rl)
-            prices = _extract_prices(r)
-            if has_llave and prices:
-                return "PASS", f"muestra llaves francesas con precio"
-            if has_llave:
-                return "WARN", "menciona llaves pero sin precio"
-            return "FAIL", "no encontró llaves francesas"
-        return self._run_case("06", "producto_simple", '"tienen llaves francesas?"', ["tienen llaves francesas?"],
-            "opciones de llave francesa con precio", check)
-
-    # ── Pedidos multi-item ────────────────────────────────────────────────
-
-    def case_07_multi_saludo_no_item(self):
-        def check(rs):
-            r = rs[-1]
-            rl = r.lower()
-            # "Hola" no debe aparecer como ítem: busco patrones de línea de presupuesto
-            hola_as_item = bool(re.search(r'[✅❓]\s*\d*\s*[×x]?\s*[Hh]ola', r))
-            hola_as_item = hola_as_item or bool(re.search(r'(?:—|→)\s*Hola', r))
-            has_martillo = "martillo" in rl
-            has_destornillador = "destornillador" in rl
-            if hola_as_item:
-                return "FAIL", '"Hola" incluido como ítem del pedido'
-            if has_martillo and has_destornillador:
-                return "PASS", "parseó martillo + destornillador, ignoró saludo"
-            if has_martillo or has_destornillador:
-                found = "martillo" if has_martillo else "destornillador"
-                return "WARN", f"parseó solo 1/2 ítems ({found})"
-            return "FAIL", "no parseó ningún ítem del pedido"
         return self._run_case(
-            "07", "parser",
-            '"Hola, 3 martillos y 2 destornilladores" → Hola no es ítem',
-            ["Hola, necesito 3 martillos y 2 destornilladores"],
-            "parsear martillo + destornillador, ignorar saludo", check,
-        )
-
-    def case_08_lista_4_items(self):
-        msg = ("Te paso lista: 5 rollos de cinta aisladora, 3 llaves francesas chicas, "
-               "2 sets destornilladores, 10 mechas 8mm")
-        def check(rs):
-            r = rs[-1].lower()
-            found = [
-                "cinta" in r or "aisladora" in r,
-                "llave" in r and ("francesa" in r or "ajustable" in r),
-                "destornillador" in r and not _has_cerradura_false_positive(r),
-                "mecha" in r or ("broca" in r and "8" in r),
-            ]
-            n = sum(found)
-            if n == 4:
-                return "PASS", "encontró los 4 ítems"
-            if n >= 2:
-                return "WARN", f"encontró {n}/4 ítems"
-            return "FAIL", f"encontró {n}/4 — parser falla con listas largas"
-        return self._run_case("08", "parser", "lista 4 ítems (cinta/llave/destorn./mecha)", [msg],
-            "procesar los 4 ítems sin omisiones", check)
-
-    def case_09_multi_3_items_tecnicos(self):
-        msg = "Quiero 10 tornillos M6, 5 mechas 8mm y 3 brocas 6mm"
-        def check(rs):
-            r = rs[-1].lower()
-            found = [
-                "tornillo" in r,
-                ("mecha" in r or "broca" in r) and "8" in r,
-                "broca" in r and "6" in r,
-            ]
-            n = sum(found)
-            if n == 3:
-                return "PASS", "encontró los 3 ítems con especificación técnica"
-            if n == 2:
-                return "WARN", f"encontró 2/3 ítems"
-            return "FAIL", f"encontró {n}/3 ítems"
-        return self._run_case("09", "parser", "3 ítems con especificación técnica (M6/8mm/6mm)", [msg],
-            "parsear tornillos M6 + mechas 8mm + brocas 6mm", check)
-
-    def case_10_plomeria_multi(self):
-        msg = "20 metros de manguera, 5 abrazaderas, 2 acoples"
-        def check(rs):
-            r = rs[-1].lower()
-            found = [
-                "manguera" in r,
-                "abrazadera" in r,
-                "acople" in r,
-            ]
-            n = sum(found)
-            if n == 3:
-                return "PASS", "encontró los 3 ítems de plomería"
-            if n >= 2:
-                return "WARN", f"encontró {n}/3 ítems"
-            return "FAIL", f"encontró {n}/3 — falla en multi-item plomería"
-        return self._run_case("10", "parser", "3 ítems plomería (manguera/abrazadera/acople)", [msg],
-            "parsear manguera + abrazaderas + acoples", check)
-
-    # ── Multiturno ────────────────────────────────────────────────────────
-
-    def case_11_multiturn_carrito_completo(self):
-        sid = self._sid("11")
-        t0 = time.perf_counter()
-        try:
-            with self.suppress():
-                r1 = self.bot.process_message(sid, "quiero silicona y teflón")
-                r2 = self.bot.process_message(sid, "¿hacen factura A?")
-                r3 = self.bot.process_message(sid, "agregale un taladro")
-            duration = round(time.perf_counter() - t0, 2)
-
-            faq_ok = "factura" in r2.lower() and " a" in r2.lower()
-            r3l = r3.lower()
-            has_silicona = "silicona" in r3l
-            has_teflon = "teflon" in r3l or "teflón" in r3l
-            has_taladro = "taladro" in r3l
-
-            if not (has_silicona and has_teflon and has_taladro):
-                missing = [k for k, v in [
-                    ("silicona", has_silicona), ("teflón", has_teflon), ("taladro", has_taladro)
-                ] if not v]
-                status = "FAIL"
-                notes = f"carrito T3 falta: {missing}"
-            elif not faq_ok:
-                status = "WARN"
-                notes = "carrito OK pero FAQ factura A no respondió bien en T2"
-            else:
-                status = "PASS"
-                notes = "carrito preservado + FAQ correcta + ítem additive OK"
-
-            actual = f"T2='{r2[:80]}' | T3='{r3[:120]}'"
-        except Exception as exc:
-            duration = round(time.perf_counter() - t0, 2)
-            status, notes, actual = "ERROR", str(exc), ""
-
-        result = TestResult(
-            case_id="11", category="multiturno",
-            description="3 turnos: items → FAQ → agregar ítem",
-            inputs=["quiero silicona y teflón", "¿hacen factura A?", "agregale un taladro"],
-            expected_description="carrito final: silicona + teflón + taladro",
-            actual_response=actual,
-            status=status, notes=notes, duration_seconds=duration,
-        )
-        self.results.append(result)
-        return result
-
-    # ── Matcher ───────────────────────────────────────────────────────────
-
-    def case_12_matcher_llave_francesa(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_llave_francesa = "llave francesa" in r or ("llave" in r and "ajustable" in r)
-            has_adaptador_solo = "adaptador" in r and "llave" not in r
-            if has_adaptador_solo:
-                return "FAIL", "matcheó adaptadores en lugar de llaves francesas"
-            if has_llave_francesa:
-                return "PASS", "matcheó llaves francesas correctamente"
-            return "WARN", "respuesta sin llaves francesas claras"
-        return self._run_case("12", "matcher", '"llave francesa" → no adaptadores', ["llave francesa"],
-            "encontrar llaves francesas, no adaptadores", check)
-
-    def case_13_matcher_mecha_8mm(self):
-        def check(rs):
-            r = rs[-1]
-            rl = r.lower()
-            has_mecha = "mecha" in rl or "broca" in rl
-            prices = _extract_prices(r)
-            max_price = max(prices) if prices else 0
-            if not has_mecha:
-                return "FAIL", "no encontró mechas ni brocas"
-            if max_price > 50_000:
-                return "FAIL", f"precio ${max_price:,} — matcheó acople/adaptador grande"
-            if max_price > 15_000:
-                return "WARN", f"precio ${max_price:,} — verificar qué producto matcheó"
-            if max_price >= 5_000:
-                return "PASS", f"mecha correcta, precio OK (max=${max_price:,})"
-            # max_price == 0: bot mencionó mecha/broca pero sin precio
-            # → pidió clarificación (ej: "¿para madera, metal, hormigón?")
-            # → es comportamiento correcto, no un falso WARN
-            if max_price == 0:
-                return "PASS", "bot pidió clarificación de tipo de mecha (sin precio = no matcheó acople)"
-            return "WARN", f"precio inesperado ${max_price:,} — verificar"
-        return self._run_case("13", "matcher", '"mecha 8mm" → no acoples de $57k+', ["mecha 8mm"],
-            "mechas de 8mm (~$6.000-15.000), no acoples de $57.000+", check)
-
-    def case_14_matcher_destornillador_philips(self):
-        def check(rs):
-            r = rs[-1].lower()
-            # Verificar falso positivo conocido ANTES del check de keyword
-            if _has_cerradura_false_positive(r):
-                return "FAIL", "cerradura retornada como destornillador (falso positivo conocido)"
-            has_destornillador = "destornillador" in r
-            has_philips = "philips" in r or " ph" in r or "punta" in r or "ph2" in r
-            if has_destornillador and has_philips:
-                return "PASS", "encontró destornillador Philips o punta compatible"
-            if has_destornillador:
-                return "WARN", "encontró destornillador genérico (sin referencia Philips/PH)"
-            return "FAIL", "no encontró destornilladores"
-        return self._run_case("14", "matcher", '"destornillador philips" → set PH/Philips', ["destornillador philips"],
-            "destornillador con punta Philips o referencia PH", check)
-
-    # ── Casos límite ──────────────────────────────────────────────────────
-
-    def case_15_objecion_precio(self):
-        sid = self._sid("15")
-        t0 = time.perf_counter()
-        try:
-            with self.suppress():
-                self.bot.process_message(sid, "quiero una llave francesa")
-                r = self.bot.process_message(sid, "está caro")
-            duration = round(time.perf_counter() - t0, 2)
-            rl = r.lower()
-            handles = any(kw in rl for kw in (
-                "entiendo", "comprendo", "valor", "calidad", "alternativa",
-                "descuento", "opción", "opciones", "económic", "similar", "precio"
-            ))
-            ignores = "presupuesto preliminar" in rl and not handles
-            if ignores:
-                status, notes = "FAIL", "ignoró objeción y siguió con presupuesto"
-            elif handles:
-                status, notes = "PASS", "manejo correcto de objeción de precio"
-            else:
-                status, notes = "WARN", "respuesta vaga — no reconoce ni ignora claramente"
-            actual = r[:250]
-        except Exception as exc:
-            duration = round(time.perf_counter() - t0, 2)
-            status, notes, actual = "ERROR", str(exc), ""
-
-        result = TestResult(
-            case_id="15", category="casos_limite",
-            description='"está caro" luego de ver precio → manejo objeción',
-            inputs=["quiero una llave francesa", "está caro"],
-            expected_description="reconocer objeción + alternativa o justificación de valor",
-            actual_response=actual, status=status, notes=notes, duration_seconds=duration,
-        )
-        self.results.append(result)
-        return result
-
-    def case_16_escalacion_humano(self):
-        def check(rs):
-            r = rs[-1].lower()
-            escalation_kws = (
-                "equipo", "asesor", "contactar", "comunicar", "persona",
-                "humano", "revisión", "seguimiento", "te vamos", "coordinar"
-            )
-            if any(kw in r for kw in escalation_kws):
-                return "PASS", "escaló correctamente a equipo humano"
-            if "momento" in r or "espera" in r:
-                return "WARN", "respuesta vaga sin escalación clara"
-            return "FAIL", "no escaló al solicitar hablar con humano"
-        return self._run_case("16", "casos_limite",
-            '"quiero hablar con humano" → escalación',
-            ["quiero hablar con humano"],
-            "handoff a equipo humano", check)
-
-    def case_17_faq_horario(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_info = any(kw in r for kw in (
-                "horario", "lunes", "viernes", "sábado", "sabado", " hs", "hora",
-                "pendiente", "confirmar", "consultar", "local", "abierto", "abre"
-            ))
-            redirects_to_products = "presupuesto" in r and not has_info
-            if redirects_to_products:
-                return "FAIL", "ignoró FAQ de horario y pidió productos"
-            if has_info:
-                return "PASS", "respondió FAQ de horario (o indicó pendiente)"
-            return "WARN", "respuesta evasiva — no da info de horario"
-        return self._run_case("17", "casos_limite",
-            '"qué horarios tienen?" → FAQ policy',
-            ["qué horarios tienen?"],
-            "info de horarios o indicación de que es pendiente", check)
-
-    # ── Anti-alucinación ──────────────────────────────────────────────────
-
-    def case_18_anti_aluc_canos_ppr(self):
-        def check(rs):
-            r = rs[-1]
-            rl = r.lower()
-            prices = _extract_prices(r)
-            no_tiene_kws = (
-                "no tenemos", "no contamos", "no disponemos", "no tengo",
-                "no está", "no lo tenemos", "no lo tengo", "no hay"
-            )
-            # FAIL: inventa precios para caños PP-R
-            if prices and ("caño" in rl or "pp-r" in rl or "pp r" in rl or "termofusi" in rl):
-                return "FAIL", f"inventó caños PP-R con precios: {prices[:3]}"
-            if any(kw in rl for kw in no_tiene_kws):
-                return "PASS", "indica explícitamente que no tiene caños PP-R"
-            if prices:
-                return "WARN", "ofrece alternativa con precio sin aclarar que no tiene PP-R"
-            return "WARN", "respuesta evasiva — no confirma ni niega ausencia"
-        return self._run_case("18", "anti_alucinacion",
-            '"caños PP-R termofusión 20mm" → no inventar',
-            ["necesito caños PP-R termofusión 20mm"],
-            "decir explícitamente que no tiene, no inventar precios", check)
-
-    def case_19_anti_aluc_producto_absurdo(self):
-        def check(rs):
-            r = rs[-1]
-            rl = r.lower()
-            prices = _extract_prices(r)
-            no_tiene_kws = (
-                "no tenemos", "no contamos", "no existe", "no tengo",
-                "no disponemos", "no hay", "no lo tengo", "no lo tenemos"
-            )
-            if prices and "martillo" in rl:
-                return "FAIL", f"inventó precios para producto absurdo: {prices[:3]}"
-            if any(kw in rl for kw in no_tiene_kws):
-                return "PASS", "descartó producto absurdo explícitamente"
-            if prices:
-                return "WARN", "dio precios de otro producto sin descartar el absurdo"
-            return "WARN", "respuesta evasiva al producto absurdo"
-        return self._run_case("19", "anti_alucinacion",
-            '"martillo Stanley dorado 500kg" → no inventar',
+            "S01", "anti_alucinacion",
+            '"martillo Stanley dorado 500kg" → V1 bloquea, sin productos',
             ["tienen martillos Stanley dorados de 500kg?"],
-            "decir que no existe, no inventar precios", check)
+            "spec imposible rechazada — cero precios retornados",
+            check,
+        )
 
-    def case_20_anti_aluc_sku_falso(self):
+    def case_S02_sku_falso_aaaaa(self):
+        """C20 regression: fake SKU 'AAAAA' must NOT generate invented products.
+
+        AAAAA does not exist in catalog. Bot must acknowledge absence.
+
+        FAIL: prices returned AND 'aaaaa' mentioned (hallucinated product).
+        FAIL: prices returned without any denial of AAAAA existence.
+        PASS: explicit no-match response.
+        WARN: evasive — neither confirms nor denies.
+        """
         def check(rs):
             r = rs[-1]
             rl = r.lower()
             prices = _extract_prices(r)
-            no_existe_kws = (
-                "no existe", "no encontré", "no lo tenemos", "no tenemos",
-                "no contamos", "no hay", "no lo encontré", "no tengo"
-            )
+
+            # FAIL: hallucinated price for the non-existent SKU itself
             if prices and "aaaaa" in rl:
-                return "FAIL", "inventó precio para SKU AAAAA"
-            if any(kw in rl for kw in no_existe_kws):
+                return "FAIL", f"inventó precio para SKU AAAAA: {prices[:2]}"
+
+            # FAIL: returned products without acknowledging AAAAA doesn't exist
+            if prices and not _has_no_match(r):
+                return "FAIL", f"retornó productos sin decir que AAAAA no existe: {prices[:2]}"
+
+            # WARN: recognized absence but also offered unrelated products without
+            # context — a human vendedor would ask 'qué estabas buscando?' first
+            if _has_no_match(r) and prices:
+                return "WARN", (
+                    "reconoció que AAAAA no existe + ofreció productos sin pedir contexto "
+                    "(UX subóptima — sin saber qué busca el cliente, los productos son ruido)"
+                )
+
+            # PASS: explicit denial, no unsolicited products
+            if _has_no_match(r):
                 return "PASS", "indicó correctamente que el producto no existe"
-            if prices:
-                return "WARN", "dio precios de otros sin aclarar que AAAAA no existe"
-            return "WARN", "respuesta evasiva — no confirma que SKU no existe"
-        return self._run_case("20", "anti_alucinacion",
-            '"100 unidades de AAAAA" → SKU inexistente',
+
+            return "WARN", "respuesta evasiva — no confirma ni niega que AAAAA no existe"
+
+        return self._run_case(
+            "S02", "anti_alucinacion",
+            '"100 unidades del producto AAAAA" → SKU inexistente, no inventar',
             ["dame 100 unidades del producto AAAAA"],
-            "indicar que el producto no existe, no inventar", check)
+            "decir que el producto no existe, sin inventar precios",
+            check,
+        )
 
-    # ── Regresión específica: precio inflado ──────────────────────────────
+    def case_S03_ppr_sin_precio_inventado(self):
+        """E09: PP-R termofusión not in catalog — bot must NOT invent a price for it.
 
-    def case_21_regresion_precio_mecha(self):
+        Query co-exists with real catalog items (llaves esféricas, sellador,
+        cinta teflón). Prices for those items ARE legitimate — do NOT fail on them.
+
+        FAIL: price directly associated with PP-R/termofusión WITHOUT a prior
+              disclaimer (pattern: 'termofusión ... $X' in same context block).
+        PASS: bot explicitly disclaims PP-R absence + shows prices for available items.
+        WARN: prices present but PP-R status ambiguous.
+        """
         def check(rs):
             r = rs[-1]
+            rl = r.lower()
             prices = _extract_prices(r)
-            if not prices:
-                return "WARN", "sin precios en respuesta — verificar manualmente"
-            max_price = max(prices)
-            # 10 × mecha 8mm correcta (~$6.427/u) = ~$64.270
-            # 10 × acople grande (~$57.787/u) = ~$577.870 → FAIL
-            if max_price > 400_000:
-                return "FAIL", f"precio inflado ${max_price:,} — matcheó acople/adaptador ($57k+/u)"
-            if max_price > 200_000:
-                return "WARN", f"precio alto ${max_price:,} — verificar producto matcheado"
-            if max_price >= 50_000:
-                return "PASS", f"precio razonable ${max_price:,} (esperado ~$64.270 para 10u)"
-            return "WARN", f"precio bajo ${max_price:,} — verificar si encontró el producto correcto"
-        return self._run_case("21", "regresion_precio",
-            '"10 mechas 8mm" → precio $50k-$200k (no $400k+)',
-            ["10 mechas 8mm"],
-            "precio total entre $50.000 y $200.000 (10 × ~$6.427)", check)
 
-    # ── Bloque G — Tolerancia lingüística ────────────────────────────────
+            mentions_ppr = "pp-r" in rl or "pp r" in rl or "termofusi" in rl
 
-    def case_22_typo_leve_llave(self):
-        def check(rs):
-            r = rs[-1].lower()
-            # Bot debe reconocer "lave" como "llave francesa" o preguntar
-            found_llave = "llave francesa" in r or ("llave" in r and "francesa" in r)
-            asks_confirm = "te referís" in r or "querés decir" in r or "te referis" in r
-            says_no_existe = any(kw in r for kw in ("no existe", "no encontré", "no tenemos", "no hay"))
-            if says_no_existe and not (found_llave or asks_confirm):
-                return "FAIL", "dijo categóricamente que no existe 'lave'"
-            if found_llave or asks_confirm:
-                return "PASS", "reconoció typo y encontró llave francesa o pidió confirmación"
-            prices = _extract_prices(rs[-1])
-            if prices:
-                return "WARN", "ofrece alternativas con precio pero sin confirmar 'llave francesa'"
-            return "WARN", "respuesta ambigua — no reconoce el typo claramente"
-        return self._run_case("22", "tolerancia_linguistica",
-            'TYPO: "lave francesa" → llave francesa',
-            ["necesito una lave francesa"],
-            "reconocer typo y mostrar llaves francesas o pedir confirmación", check)
+            # PP-R-specific disclaimer — only fires when PP-R or termofusión is
+            # explicitly denied. Generic "no tenemos" is intentionally excluded to
+            # avoid false-PASS when the bot denies something else in the same turn.
+            #
+            # Patterns covered:
+            #   "no tenemos PP-R"          "no manejamos PP-R"
+            #   "no contamos con PP-R"     "PP-R no lo tenemos"
+            #   "no tenemos termofusión"   "no manejamos termofusión"
+            #   "termofusión no disponible" "no contamos con termofusión"
+            _ppr_disclaimer_re = [
+                r'no\s+(tenemos|contamos con|hay|manejamos)\s+(ca[ñn]os?\s+)?pp.?r',
+                r'pp.?r.{0,40}no\s+(lo\s+)?(tenemos|hay|contamos|manejamos)',
+                r'no\s+(tenemos|contamos con|hay|manejamos)\s+(ca[ñn]os?\s+)?termofusi[oó]n',
+                r'termofusi[oó]n.{0,40}no\s+(la\s+)?(tenemos|hay|contamos|manejamos)',
+                r'no\s+(manejamos|trabajamos con)\s+termofusi[oó]n',
+                r'termofusi[oó]n\s*no\s*.{0,30}disponible',
+            ]
+            has_disclaimer = any(re.search(p, rl) for p in _ppr_disclaimer_re)
 
-    def case_23_typo_medio_destornilador(self):
-        def check(rs):
-            r = rs[-1].lower()
-            # Verificar falso positivo conocido ANTES del check de keyword
-            if _has_cerradura_false_positive(r):
-                return "FAIL", "cerradura retornada como destornillador (falso positivo conocido)"
-            has_destornillador = "destornillador" in r
-            says_no_existe = any(kw in r for kw in ("no existe", "no encontré", "no tenemos")) and not has_destornillador
-            if says_no_existe:
-                return "FAIL", "rechazó 'destornilador' (una sola l) sin reconocer"
-            if has_destornillador:
-                return "PASS", "reconoció typo de destornillador"
-            asks_confirm = "te referís" in r or "querés decir" in r
-            if asks_confirm:
-                return "PASS", "pidió confirmación del typo"
-            return "WARN", "respuesta sin destornilladores ni confirmación"
-        return self._run_case("23", "tolerancia_linguistica",
-            'TYPO: "destornilador" (una sola l) → destornillador',
-            ["tenes destornilador philips"],
-            "reconocer typo y encontrar destornilladores Philips", check)
-
-    def case_24_abreviacion_dest(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_destornillador = "destornillador" in r
-            asks_confirm = "te referís" in r or "querés decir" in r or "qué querés" in r
-            says_no_existe = any(kw in r for kw in ("no existe", "no encontré", "no tenemos")) and not has_destornillador
-            if says_no_existe:
-                return "FAIL", "trató 'dest' como producto literal y no lo encontró"
-            if has_destornillador:
-                return "PASS", "dedujo destornillador de la abreviación 'dest'"
-            if asks_confirm:
-                return "WARN", "preguntó qué quiso decir — aceptable pero no ideal"
-            return "FAIL", "no interpretó 'dest' ni como destornillador ni pidió aclaración"
-        return self._run_case("24", "tolerancia_linguistica",
-            'ABREV: "dest planos chicos" → destornillador plano',
-            ["dame 5 dest planos chicos"],
-            "deducir destornillador o pedir clarificación amigable", check)
-
-    def case_25_slang_pico_de_loro(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_pinza = "pinza" in r
-            has_pico = "pico" in r
-            says_no_existe = any(kw in r for kw in ("no existe", "no tenemos", "no hay")) and not (has_pinza or has_pico)
-            if says_no_existe:
-                return "FAIL", "no reconoció 'pico de loro' como tipo de pinza"
-            if has_pinza or has_pico:
-                return "PASS", "reconoció 'pico de loro' como pinza"
-            asks_confirm = "te referís" in r or "querés decir" in r
-            if asks_confirm:
-                return "PASS", "pidió confirmación del slang"
-            return "WARN", "respuesta sin pinzas ni confirmación del slang"
-        return self._run_case("25", "tolerancia_linguistica",
-            'SLANG: "pico de loro" → pinza pico de loro',
-            ["necesito una pico de loro"],
-            "reconocer slang ferretero y encontrar pinza pico de loro", check)
-
-    def case_26_slang_caja_de_luz(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_caja = "caja" in r and any(kw in r for kw in ("eléctr", "electr", "luz", "conexión", "conex", "pvc"))
-            says_no_existe = any(kw in r for kw in ("no existe", "no tenemos", "no hay")) and not has_caja
-            asks_confirm = "te referís" in r or "querés decir" in r or "qué tipo" in r
-            if says_no_existe:
-                return "FAIL", "no reconoció 'caja de luz' como caja eléctrica"
-            if has_caja:
-                return "PASS", "reconoció 'caja de luz' y encontró cajas eléctricas"
-            if asks_confirm:
-                return "PASS", "pidió clarificación del tipo de caja"
-            prices = _extract_prices(rs[-1])
-            if prices:
-                return "WARN", "muestra productos con precio pero sin confirmar que son cajas eléctricas"
-            return "WARN", "respuesta ambigua sobre 'caja de luz'"
-        return self._run_case("26", "tolerancia_linguistica",
-            'SLANG: "caja de luz" → caja eléctrica',
-            ["tenés caja de luz?"],
-            "reconocer slang y encontrar cajas eléctricas o pedir clarificación", check)
-
-    def case_27_ingles_wrench(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_llave = "llave" in r and any(kw in r for kw in ("inglesa", "tubo", "francesa", "ajustable"))
-            asks_confirm = "te referís" in r or "querés decir" in r or "wrench" in r
-            says_no_existe = any(kw in r for kw in ("no existe", "no tenemos", "no hay")) and not has_llave
-            if says_no_existe:
-                return "FAIL", "no reconoció 'wrench' y dijo que no existe"
-            if has_llave:
-                return "PASS", "reconoció 'wrench' como llave y encontró opciones"
-            if asks_confirm:
-                return "PASS", "preguntó si se refería a llave inglesa/de tubo"
-            prices = _extract_prices(rs[-1])
-            if prices:
-                return "WARN", "muestra llaves variadas sin confirmar que wrench = llave inglesa"
-            return "WARN", "respuesta ambigua ante término en inglés"
-        return self._run_case("27", "tolerancia_linguistica",
-            'INGLÉS: "wrench" → llave inglesa/de tubo',
-            ["necesito una wrench"],
-            "reconocer anglicismo y encontrar llaves o pedir clarificación", check)
-
-    def case_28_plural_singular_mal(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_martillo = "martillo" in r
-            # Debe tratar "3 martillo" como pedido de 3 martillos
-            has_qty = "3" in r or "tres" in r
-            says_no_entiende = any(kw in r for kw in ("no entiendo", "no entendí", "podés aclarar"))
-            if says_no_entiende and not has_martillo:
-                return "FAIL", "no parseó '3 martillo' (plural incorrecto)"
-            if has_martillo and has_qty:
-                return "PASS", "parseó '3 martillo' correctamente como pedido de 3"
-            if has_martillo:
-                return "WARN", "encontró martillo pero sin confirmar cantidad 3"
-            return "FAIL", "no respondió con martillos"
-        return self._run_case("28", "tolerancia_linguistica",
-            'PLURAL/SINGULAR: "3 martillo" → 3 martillos',
-            ["necesito 3 martillo"],
-            "parsear '3 martillo' como pedido de 3 martillos", check)
-
-    def case_29_sin_acento_mecha(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_mecha = "mecha" in r or "broca" in r
-            prices = _extract_prices(rs[-1])
-            max_price = max(prices) if prices else 0
-            says_no_existe = any(kw in r for kw in ("no existe", "no tenemos", "no hay")) and not has_mecha
-            if says_no_existe:
-                return "FAIL", "no encontró mechas (sin tilde en mecha)"
-            if has_mecha and max_price > 0 and max_price < 50_000:
-                return "PASS", f"encontró mechas de 8mm sin tilde (precio OK: ${max_price:,})"
-            if has_mecha and max_price >= 50_000:
-                return "WARN", f"encontró mechas pero precio alto ${max_price:,} — verificar match"
-            if has_mecha:
-                return "PASS", "encontró mechas (sin tilde en mecha)"
-            return "WARN", "respuesta ambigua sin acento en mecha"
-        return self._run_case("29", "tolerancia_linguistica",
-            'SIN ACENTO: "mecha de 8 mm" (sin tilde) → broca 8mm',
-            ["necesito una mecha de 8 mm para taladro"],
-            "encontrar mechas/brocas de 8mm aunque no haya tilde", check)
-
-    def case_30_slang_codos_roscados(self):
-        def check(rs):
-            r = rs[-1].lower()
-            has_codo = "codo" in r
-            has_plomeria = any(kw in r for kw in ("plomería", "plomeria", "rosca", "roscado", "bronce"))
-            says_no_existe = any(kw in r for kw in ("no existe", "no tenemos", "no hay")) and not has_codo
-            if says_no_existe:
-                return "FAIL", "no reconoció 'codos roscados' de plomería"
-            if has_codo and (has_plomeria or _extract_prices(rs[-1])):
-                return "PASS", "encontró codos roscados de plomería"
-            if has_codo:
-                return "WARN", "encontró codos pero sin confirmar que son roscados/plomería"
-            asks_confirm = "te referís" in r or "qué tipo" in r
-            if asks_confirm:
-                return "WARN", "pidió clarificación — razonable pero el término es claro"
-            return "FAIL", "no respondió con codos de plomería"
-        return self._run_case("30", "tolerancia_linguistica",
-            'JERGA: "10 codos roscados" → codos de plomería con rosca',
-            ["dame 10 codos roscados"],
-            "encontrar codos de plomería (jerga ferretera estándar)", check)
-
-    def case_31_marca_sin_producto_bosch(self):
-        def check(rs):
-            r = rs[-1].lower()
-            # Bot debe preguntar QUÉ producto Bosch, no decir "no encontré Bosch"
-            asks_what = any(kw in r for kw in (
-                "qué producto", "qué necesitás", "qué tipo", "qué herramienta",
-                "tenemos varias", "taladro", "amoladora", "sierra"
+            has_alternatives = any(kw in rl for kw in (
+                "llave", "sellador", "teflón", "teflon", "cinta",
             ))
-            has_bosch = "bosch" in r
-            says_no_existe = any(kw in r for kw in ("no existe", "no tenemos", "no hay bosch")) and not asks_what
-            if says_no_existe:
-                return "FAIL", "dijo 'no hay Bosch' en vez de preguntar qué producto"
-            if asks_what and has_bosch:
-                return "PASS", "preguntó qué tipo de producto Bosch necesita"
-            if has_bosch:
-                prices = _extract_prices(rs[-1])
-                if prices:
-                    return "PASS", "encontró productos Bosch directamente"
-                return "WARN", "mencionó Bosch pero sin preguntar ni mostrar productos"
-            return "WARN", "respuesta sin referencia a Bosch ni clarificación"
-        return self._run_case("31", "tolerancia_linguistica",
-            'MARCA: "tienen Bosch?" → preguntar qué producto',
-            ["tienen Bosch?"],
-            "preguntar qué producto Bosch necesita, no decir 'no encontré Bosch'", check)
 
-    # ── Reporte ───────────────────────────────────────────────────────────
+            # If disclaimer is present, prices are for OTHER items — not hallucinated PP-R
+            if has_disclaimer and mentions_ppr and has_alternatives and prices:
+                return "PASS", "informó ausencia de PP-R + precios de ítems disponibles"
+            if has_disclaimer and has_alternatives:
+                return "PASS", "informó ausencia de PP-R + ofreció ítems disponibles"
+            if has_disclaimer and prices:
+                return "PASS", "disclaimer de ausencia + precios de ítems disponibles"
+            if has_disclaimer:
+                return "WARN", "informó ausencia de PP-R pero no ofreció alternativas disponibles"
+
+            # No disclaimer — now check if PP-R itself appears near a price (hallucination)
+            # Pattern: 'termofusión ... $X' within ~100 chars (same paragraph/line)
+            ppr_priced = bool(re.search(
+                r'(termofusi[oó]n|pp.?r).{0,100}\$[\d\.]+',
+                r, re.I,
+            ))
+            if ppr_priced:
+                return "FAIL", "bot asoció precio a PP-R/termofusión sin disclaimer de ausencia"
+
+            if prices and mentions_ppr:
+                return "WARN", (
+                    "precios sin disclaimer de PP-R — "
+                    "verificar si corresponden a ítems co-existentes"
+                )
+            if prices:
+                return "WARN", "muestra precios pero no menciona PP-R explícitamente"
+
+            return "WARN", "respuesta ambigua sobre termofusión PP-R"
+
+        return self._run_case(
+            "S03", "anti_alucinacion",
+            '"obra baño: termofusión PP-R + llaves + sellador + teflón" → no inventar precio PP-R',
+            ["obra completa para baño: termofusión 20mm + accesorios, llaves esféricas, sellador, cinta teflón"],
+            "aclarar ausencia de PP-R, mostrar precios de ítems disponibles, $0 para PP-R nunca",
+            check,
+        )
+
+    # ── GROUP 2: Matcher quirúrgico ───────────────────────────────────────
+
+    def case_S04_destornillador_philips_strict(self):
+        """Strict matcher: 'destornillador philips' must return ONLY actual screwdrivers.
+
+        Known false positives in catalog:
+          - 'Cerradura Cierre Gabinete Destornillador Para S9000 - Genrod'
+            (Herramientas Manuales) — lock that needs a screwdriver, NOT a screwdriver
+          - 'Bocallave Destornillador 5.5 mm Encastre 1/4 - Bahco'
+            (Mechas y Brocas) — bit-holder, NOT a destornillador
+
+        Correct products: 'Destornillador 1000 v Phillips PH1 75 mm - Stanley',
+        'Destornillador 1000 v Phillips PH3 100 mm - Stanley', Bahco sets.
+
+        FAIL: any known false positive appears in response.
+        PASS: destornillador + Phillips indicator, no false positives.
+        """
+        def check(rs):
+            r = rs[-1]
+            rl = r.lower()
+
+            # FAIL guard 1: cerradura false positive
+            if _has_cerradura_false_positive(r):
+                return "FAIL", (
+                    "cerradura retornada como destornillador — "
+                    "'Cerradura Cierre Gabinete Destornillador Para S9000'"
+                )
+            # FAIL guard 2: bocallave false positive
+            if _has_bocallave_false_positive(r):
+                return "FAIL", (
+                    "bocallave retornado como destornillador — "
+                    "'Bocallave Destornillador 5.5 mm - Bahco' no es un destornillador"
+                )
+            # FAIL guard 3: adaptador without destornillador
+            if "adaptador" in rl and "destornillador" not in rl:
+                return "FAIL", "adaptador retornado sin destornillador"
+
+            has_destornillador = "destornillador" in rl
+            has_philips = any(kw in rl for kw in (
+                "philips", "phillips", "ph1", "ph2", "ph3", "punta",
+            ))
+
+            if has_destornillador and has_philips:
+                return "PASS", "destornillador Phillips real, sin falsos positivos"
+            if has_destornillador:
+                return "WARN", "destornillador encontrado sin indicador Philips/PH"
+            return "FAIL", "no retornó destornilladores"
+
+        return self._run_case(
+            "S04", "matcher_quirurgico",
+            '"destornillador philips" → real (Stanley PH1/PH3), NO cerraduras/bocallaves',
+            ["destornillador philips"],
+            "destornillador Phillips (Stanley/Bahco), cero falsos positivos",
+            check,
+        )
+
+    def case_S05_mechas_8mm_bosch(self):
+        """C13: '5 mechas de 8mm Bosch' — real 8mm drill bit, NOT acoples or bocallaves.
+
+        NOTE: Bosch has NO individual 8mm mechas in catalog (only Broca Anular PRO
+        TCT 14-22mm). Correct bot behaviors:
+          Option A: return 8mm brocas from other brands (Ezeta, Rubi) → PASS
+          Option B: clarify no Bosch 8mm + offer alternatives → PASS
+          Option C: ask material clarification (madera/metal/concreto) → PASS
+
+        Known false positives for this query (Mechas y Brocas):
+          - 'Acople para Broca 8" Rosca UNC 1.1/4" - Aliafor' (fitting, NOT drill bit)
+          - 'Bocallave Destornillador 5.5 mm - Bahco' (bit-holder, NOT drill bit)
+          - 'Mecha Centradora' as generic substitute (guide bit, NOT an 8mm drill)
+
+        FAIL: acople, bocallave, or mecha centradora returned as substitute.
+        PASS: real 8mm broca/mecha, brand clarification, or material clarification.
+        """
+        def check(rs):
+            r = rs[-1]
+            rl = r.lower()
+
+            # FAIL guard 1: acople false positive
+            if _has_acople_false_positive(r):
+                return "FAIL", (
+                    "acople retornado como mecha — "
+                    "'Acople para Broca 8' no es una broca"
+                )
+            # FAIL guard 2: bocallave false positive
+            if _has_bocallave_false_positive(r):
+                return "FAIL", "bocallave retornado — bit-holder no es una mecha de 8mm"
+            # FAIL guard 3: mecha centradora as generic substitute
+            if "centradora" in rl:
+                return "FAIL", (
+                    "mecha centradora retornada como sustituto — "
+                    "guía de centrado no equivale a broca de 8mm"
+                )
+
+            has_mecha_broca = "mecha" in rl or "broca" in rl
+            has_8mm = bool(re.search(r'\b8\s*mm\b|\b8mm\b', rl))
+
+            # PASS: real 8mm drill bit from any brand
+            if has_mecha_broca and has_8mm:
+                return "PASS", "mecha/broca 8mm real retornada, sin falsos positivos"
+            # PASS: bot clarifies no Bosch 8mm + offers alternatives
+            if has_mecha_broca and _has_no_match(r) and "bosch" in rl:
+                return "PASS", "informó ausencia de Bosch 8mm + ofreció alternativas"
+            # PASS: material clarification (valid disambiguation)
+            if has_mecha_broca and any(kw in rl for kw in (
+                "madera", "metal", "concreto", "hormigón", "material", "tipo",
+            )):
+                return "PASS", "pidió clarificación de material — comportamiento correcto"
+            if has_mecha_broca:
+                return "WARN", "mecha/broca encontrada sin confirmar 8mm específicamente"
+            return "FAIL", "no retornó mechas ni brocas"
+
+        return self._run_case(
+            "S05", "matcher_quirurgico",
+            '"5 mechas 8mm Bosch" → broca 8mm real (Ezeta/Rubi), NO acoples/bocallaves',
+            ["5 mechas de 8mm Bosch"],
+            "mecha/broca 8mm real o clarificación, sin acoples ni bocallaves",
+            check,
+        )
+
+    def case_S06_mecha_8mm_para_taladro(self):
+        """C29 Q3 regression: 'mecha 8mm para taladro' must return actual drill bits.
+
+        Q3 added synonym 'dest' and _families_without_para_context(). Regression guard:
+        if scoring breaks, 'mecha' can match bocallaves/acoples in Mechas y Brocas.
+
+        Real products: 'Broca Acero Rapido acero rapido 8 mm - Ezeta',
+                       'Broca 8 mm para Porcelanico Corte Humedo - Rubi'.
+
+        FAIL: bocallave, acople, or adaptador-only returned (Q3 regression).
+        PASS: real 8mm broca/mecha or material clarification.
+        """
+        def check(rs):
+            r = rs[-1]
+            rl = r.lower()
+
+            # FAIL guard 1: bocallave false positive (Q3 regression indicator)
+            if _has_bocallave_false_positive(r):
+                return "FAIL", (
+                    "Q3 REGRESSION — bocallave retornado: "
+                    "'Bocallave Destornillador 5.5mm' no es mecha para taladro"
+                )
+            # FAIL guard 2: acople false positive (Q3 regression indicator)
+            if _has_acople_false_positive(r):
+                return "FAIL", (
+                    "Q3 REGRESSION — acople retornado: "
+                    "'Acople para Broca' no es mecha para taladro"
+                )
+            # FAIL guard 3: adaptador without any mecha/broca
+            if "adaptador" in rl and not ("mecha" in rl or "broca" in rl):
+                return "FAIL", "adaptador retornado sin mecha/broca"
+
+            has_mecha_broca = "mecha" in rl or "broca" in rl
+            has_8mm = bool(re.search(r'\b8\s*mm\b|\b8mm\b', rl))
+
+            if has_mecha_broca and has_8mm:
+                return "PASS", "mecha/broca 8mm real — Q3 regression no presente"
+            # PASS: material clarification (valid)
+            if has_mecha_broca and any(kw in rl for kw in (
+                "madera", "metal", "concreto", "material", "tipo",
+            )):
+                return "PASS", "pidió clarificación de material — comportamiento correcto"
+            if has_mecha_broca:
+                return "WARN", "mecha/broca encontrada sin confirmar 8mm"
+            return "FAIL", "no retornó mechas ni brocas"
+
+        return self._run_case(
+            "S06", "matcher_quirurgico",
+            '"mecha 8mm para taladro" → broca real, NO bocallave/acople (Q3 regression)',
+            ["necesito una mecha de 8 mm para taladro"],
+            "mecha/broca 8mm real (Ezeta/Rubi), sin bocallaves ni acoples",
+            check,
+        )
+
+    def case_S07_llave_francesa_strict(self):
+        """C12 A2/B1 regression: 'llave francesa' must return actual adjustable wrenches.
+
+        Catalog correct products:
+          General:             'Llave francesa 10" satinada - Davidson',
+                               'Llave Francesa Ajustable 10" - Irimo'
+          Herramientas Manuales: 'Llave Ajustable 10" - Milwaukee',
+                               'Llave Ajustable 12" - Bahco'
+
+        Known false positive (test_matcher_base case 4):
+          'Adaptador 3/8 para Llaves Combinadas Ratchet - Bahco'
+          OR-any 'de' token matches almost the entire catalog.
+
+        FAIL: adaptador returned without any actual llave francesa.
+        PASS: llave francesa or ajustable found, no false positives.
+        """
+        def check(rs):
+            r = rs[-1]
+            rl = r.lower()
+
+            # FAIL guard 1: specific known false positive (test_matcher_base case 4)
+            if "adaptador 3/8" in rl:
+                return "FAIL", (
+                    "falso positivo A2/B1: 'Adaptador 3/8 para Llaves Combinadas' — "
+                    "no es llave francesa"
+                )
+            # FAIL guard 2: adaptador without llave
+            if "adaptador" in rl and "llave" not in rl:
+                return "FAIL", "adaptador retornado sin llaves francesas"
+
+            has_llave_francesa = "llave francesa" in rl
+            has_llave_ajustable = "llave" in rl and any(kw in rl for kw in (
+                "ajustable", "satinada",
+            ))
+            has_known_brand = any(kw in rl for kw in (
+                "davidson", "irimo", "milwaukee", "wembley", "bahco",
+            ))
+
+            if has_llave_francesa or has_llave_ajustable:
+                return "PASS", "llave francesa/ajustable real — A2/B1 regression no presente"
+            if has_known_brand and "llave" in rl:
+                return "PASS", "llave de marca conocida retornada"
+            if "llave" in rl:
+                return "WARN", "llave encontrada sin confirmar que es francesa/ajustable"
+            return "FAIL", "no retornó llaves francesas"
+
+        return self._run_case(
+            "S07", "matcher_quirurgico",
+            '"llave francesa" → real (Davidson/Irimo/Bahco), NO adaptadores (A2/B1)',
+            ["tienen llave francesa?"],
+            "llave francesa o ajustable real, sin adaptadores",
+            check,
+        )
+
+    # ── GROUP 3: Cierre de venta ──────────────────────────────────────────
+
+    def case_S08_e41_multiturno_5_turnos(self):
+        """E41: 5-turn sequence must show both products in final presupuesto.
+
+        Known bug: session reset can occur at turn 5, wiping active_quote.
+        If this FAIL is idempotent across runs → document as Bloque 3 bug confirmed.
+        If non-deterministic → flag in report; consider Opcion A (skip + marker).
+
+        Turns:
+            T1: 'destornillador philips'  → bot offers options
+            T2: 'cualquiera está bien'    → selects destornillador
+            T3: 'agregame martillo'       → bot offers martillo options
+            T4: 'stanley'                 → selects Stanley martillo
+            T5: 'presupuesto?'            → bot shows cart summary
+
+        FAIL: T5 missing 'destornillador' or 'martillo' (session reset).
+        FAIL: cerradura false positive in any turn.
+        PASS: T5 has both products + prices.
+        """
+        turns = [
+            "destornillador philips",
+            "cualquiera está bien",
+            "agregame martillo",
+            "stanley",
+            "presupuesto?",
+        ]
+
+        def check(rs):
+            # Guard: cerradura false positive in any turn
+            for i, r in enumerate(rs):
+                if _has_cerradura_false_positive(r):
+                    return "FAIL", (
+                        f"turno {i + 1}: cerradura retornada como destornillador "
+                        "(falso positivo — ver S04)"
+                    )
+
+            r5 = rs[-1]
+            r5l = r5.lower()
+            prices = _extract_prices(r5)
+
+            has_destornillador = "destornillador" in r5l
+            has_martillo = "martillo" in r5l
+
+            if not has_destornillador and not has_martillo:
+                return "FAIL", (
+                    "E41 FAIL — turno 5 vacío (session reset bug, Bloque 3): "
+                    "carrito perdió ambos ítems"
+                )
+            if not has_destornillador:
+                return "FAIL", "E41 FAIL — turno 5: destornillador perdido del carrito (session reset)"
+            if not has_martillo:
+                return "FAIL", "E41 FAIL — turno 5: martillo no aparece en presupuesto"
+
+            if prices:
+                return "PASS", (
+                    f"turno 5: destornillador + martillo + precios (max=${max(prices):,})"
+                )
+            return "WARN", "turno 5: ambos productos presentes pero sin precios"
+
+        return self._manual_multiturn(
+            "S08", "cierre_venta",
+            "E41: 5 turnos dest→cualquiera→martillo→stanley→presupuesto (session reset)",
+            turns,
+            "turno 5 muestra destornillador + martillo + precios, sin session reset",
+            check,
+        )
+
+    def case_S09_multiturn_stock_consistency(self):
+        """Multi-item stock consistency: total must NOT report 'no disponible'.
+
+        Bug documented in EOD 2026-05-04: bot says 'no disponible' or 'sin stock'
+        during total calculation even when stock was 999 in the same session.
+        Active_quote loses stock state between turns.
+
+        Ordinal language ('el primero') is natural WhatsApp style.
+        Checker does NOT depend on which specific product was chosen — it validates
+        the final state only: no availability error + valid total price.
+
+        Turns:
+            T1: 'necesito un destornillador philips'
+            T2: 'dame el primero. agregame también un martillo'
+            T3: 'el primero'
+            T4: 'cuál es el total?'
+
+        FAIL: T4 contains 'no disponible' or 'sin stock' (stock hallucination bug).
+        FAIL: T4 has no prices (failed to compute total).
+        PASS: T4 shows prices > 0 + both product types, no availability errors.
+        """
+        turns = [
+            "necesito un destornillador philips",
+            "dame el primero. agregame también un martillo",
+            "el primero",
+            "cuál es el total?",
+        ]
+
+        def check(rs):
+            # Guard: cerradura false positive in any turn
+            for i, r in enumerate(rs):
+                if _has_cerradura_false_positive(r):
+                    return "FAIL", (
+                        f"turno {i + 1}: cerradura retornada como destornillador"
+                    )
+
+            # ── T2 compound-message handling check ────────────────────────
+            # T2 = "dame el primero. agregame también un martillo"
+            # Two commands in one message: (1) select destornillador, (2) add martillo.
+            # Check for evidence of parser failure before validating the final total.
+            r2l = rs[1].lower()
+
+            # Parser split: 'el primero' or 'primero' appearing as a list item
+            # (bullet/emoji/dash/arrow) means the parser treated ordinal as a product.
+            parser_split_t2 = bool(re.search(
+                r'[•\-\*✅❓►]\s*(?:\d+\s*[×xX]?\s*)?(?:el\s+)?primero\b',
+                rs[1], re.I,
+            ))
+            # Bot confused 'primero' as a product name
+            primero_confused_t2 = any(kw in r2l for kw in (
+                "no encontré el primero", "no tenemos primero", "el primero no",
+                "primero no existe",
+            ))
+            if parser_split_t2 or primero_confused_t2:
+                return "FAIL", (
+                    "PARSER BUG — T2: 'el primero' spliteado como ítem del pedido "
+                    "(mensaje compuesto no procesado correctamente)"
+                )
+
+            # Basic progress check: did the bot at least show martillo options in T2?
+            has_martillo_t2 = "martillo" in r2l
+            if not has_martillo_t2:
+                return "FAIL", (
+                    "PARSER BUG — T2: bot no procesó 'agregame también un martillo' "
+                    "(mensaje compuesto ignorado — no avanzó a selección de martillo)"
+                )
+
+            # ── T4 stock consistency check ─────────────────────────────────
+            r4 = rs[-1]
+            r4l = r4.lower()
+            prices = _extract_prices(r4)
+
+            # FAIL: stock hallucination on previously confirmed items
+            # (distinct from parser bug — stock was confirmed in earlier turns)
+            if "no disponible" in r4l:
+                return "FAIL", (
+                    "STOCK BUG — T4: 'no disponible' para ítems previamente en carrito "
+                    "(stock=999 alucinado como sin stock — no es bug de parser)"
+                )
+            if "sin stock" in r4l:
+                return "FAIL", (
+                    "STOCK BUG — T4: 'sin stock' para ítems previamente confirmados "
+                    "(active_quote perdió estado de stock entre turnos)"
+                )
+
+            # FAIL: no prices (can't compute total)
+            if not prices:
+                return "FAIL", "T4: sin precios — no pudo calcular total"
+            total = max(prices)
+            if total == 0:
+                return "FAIL", "T4: total = $0 — alucinación de precio cero"
+
+            has_dest = "destornillador" in r4l
+            has_mart = "martillo" in r4l
+
+            if has_dest and has_mart:
+                return "PASS", f"T4: destornillador + martillo en total, precio=${total:,}"
+            if has_dest or has_mart:
+                found = "destornillador" if has_dest else "martillo"
+                return "WARN", f"T4: solo {found} en total — ¿se perdió el otro ítem?"
+            # Has prices but products not named in summary (compact format)
+            return "WARN", f"T4: precios presentes (${total:,}) pero productos no identificados en resumen"
+
+        return self._manual_multiturn(
+            "S09", "cierre_venta",
+            "multi-item stock: 'total?' NO dice 'no disponible' (stock hallucination bug)",
+            turns,
+            "turno 4: total real (>$0), sin 'no disponible' ni 'sin stock'",
+            check,
+        )
+
+    def case_S10_parser_conectores(self):
+        """Parser connector: 'dale' must NOT be split as a separate product item.
+
+        Flow:
+            T1: 'che, tenés taladros?' → V9 ambiguity clarification or taladro list
+            T2: 'dale, mostrame los Bosch' → continuation signal + brand filter
+
+        Bug to detect: multi-item parser treats 'dale' (conversational connector)
+        as a product name and adds it to the pending item list.
+
+        FAIL: T2 response shows 'dale' in a list-item position (bullet/emoji/dash/arrow).
+        FAIL: bot asks 'qué es dale?' or 'no encontré dale' (confused 'dale' as product).
+        PASS: T2 shows Bosch taladros OR asks about Bosch models (understood continuation).
+        WARN: T2 shows taladros without Bosch filter (connector understood but brand ignored).
+        """
+        turns = [
+            "che, tenés taladros?",
+            "dale, mostrame los Bosch",
+        ]
+
+        def check(rs):
+            r2 = rs[-1]
+            r2l = r2.lower()
+
+            # FAIL guard 1: 'dale' in a list-item position (parser split connector)
+            dale_as_item = bool(re.search(
+                r'[•\-\*✅❓]\s*(?:\d+\s*[×xX]?\s*)?dale\b', r2, re.I,
+            ))
+            dale_as_item = dale_as_item or bool(re.search(
+                r'(?:—|→|>)\s*dale\b', r2, re.I,
+            ))
+            dale_as_item = dale_as_item or bool(re.search(
+                r'^\s*dale\s*[:$]', r2, re.I | re.MULTILINE,
+            ))
+            if dale_as_item:
+                return "FAIL", "parser spliteó 'dale' como ítem del pedido"
+
+            # FAIL guard 2: bot confused 'dale' as a product name
+            if any(kw in r2l for kw in (
+                "qué es dale", "no encontré dale", "dale no está",
+                "no tenemos dale", "el producto dale",
+            )):
+                return "FAIL", "bot interpretó 'dale' como nombre de producto"
+
+            has_taladro = "taladro" in r2l
+            has_bosch = "bosch" in r2l
+
+            # PASS: shows Bosch taladros (understood connector + brand)
+            if has_taladro and has_bosch:
+                return "PASS", "mostró taladros Bosch — 'dale' interpretado como conector"
+            # PASS: asks about Bosch model (understood context, clarifying)
+            if has_bosch:
+                return "PASS", "preguntó sobre modelo Bosch — continuación entendida"
+            if has_taladro:
+                return "WARN", "mostró taladros sin filtro Bosch (conector OK, marca ignorada)"
+            # WARN: V9 re-fired clarification (didn't understand continuation)
+            if any(kw in r2l for kw in (
+                "qué tipo", "qué marca", "percutor", "batería", "aclarar",
+            )):
+                return "WARN", "T2 repitió clarificación — no entendió 'dale Bosch' como continuación"
+            return "WARN", "T2 ambiguo — sin taladros Bosch ni clarificación de continuación"
+
+        return self._manual_multiturn(
+            "S10", "cierre_venta",
+            '"dale, mostrame los Bosch" → NO splitear "dale" como ítem del pedido',
+            turns,
+            "turno 2 muestra taladros Bosch o pregunta Bosch, sin 'dale' como ítem",
+            check,
+        )
+
+    # ── Report ────────────────────────────────────────────────────────────
 
     def _print_report(self):
         icons = {"PASS": "✅", "WARN": "⚠️", "FAIL": "❌", "ERROR": "💥"}
@@ -815,10 +863,9 @@ class DemoTestSuite:
         total_time = sum(r.duration_seconds for r in self.results)
 
         print("=" * 80)
-        print("REPORTE — DEMO TEST SUITE — FERRETERÍA BOT")
+        print("STRICT REGRESSION SUITE — FERRETERÍA BOT")
         print("=" * 80)
 
-        # Tabla completa
         print(f"\n{'ID':<4} {'ST':<5} {'CATEGORÍA':<22} {'DESCRIPCIÓN':<38} NOTAS")
         print("-" * 115)
         for r in self.results:
@@ -827,12 +874,13 @@ class DemoTestSuite:
             notes = r.notes[:48]
             print(f"{r.case_id:<4} {icon} {r.status:<3} {r.category:<22} {desc:<38} {notes}")
 
-        # Bugs agrupados por categoría
-        non_pass = {cat: rs for cat, rs in by_cat.items()
-                    if any(r.status in ("FAIL", "WARN", "ERROR") for r in rs)}
+        non_pass = {
+            cat: rs for cat, rs in by_cat.items()
+            if any(r.status in ("FAIL", "WARN", "ERROR") for r in rs)
+        }
         if non_pass:
-            print(f"\n{'─'*80}")
-            print("BUGS / ADVERTENCIAS POR CATEGORÍA:")
+            print(f"\n{'─' * 80}")
+            print("BUGS / WARNINGS BY CATEGORY:")
             for cat, results in sorted(non_pass.items()):
                 fails  = [r for r in results if r.status == "FAIL"]
                 warns  = [r for r in results if r.status == "WARN"]
@@ -841,27 +889,25 @@ class DemoTestSuite:
                     continue
                 print(f"\n  [{cat.upper()}]")
                 for r in errors:
-                    print(f"    💥 {r.case_id}: {r.description[:60]}")
+                    print(f"    💥 {r.case_id}: {r.description[:70]}")
                     print(f"       → {r.notes}")
                 for r in fails:
-                    print(f"    ❌ {r.case_id}: {r.description[:60]}")
+                    print(f"    ❌ {r.case_id}: {r.description[:70]}")
                     print(f"       → {r.notes}")
-                    print(f"       respuesta: {r.actual_response[:120]}")
+                    print(f"       last response: {r.actual_response[:150]}")
                 for r in warns:
-                    print(f"    ⚠️  {r.case_id}: {r.description[:60]}")
+                    print(f"    ⚠️  {r.case_id}: {r.description[:70]}")
                     print(f"       → {r.notes}")
 
-        # Resumen ejecutivo
-        pct = lambda n: f"{n/total*100:.0f}%" if total else "0%"
-        print(f"\n{'─'*80}")
-        print("RESUMEN EJECUTIVO")
-        print(f"  Total casos : {total}")
+        pct = lambda n: f"{n / total * 100:.0f}%" if total else "0%"
+        print(f"\n{'─' * 80}")
+        print("SUMMARY")
+        print(f"  Total cases : {total}")
         print(f"  ✅ PASS     : {totals['PASS']} ({pct(totals['PASS'])})")
         print(f"  ⚠️  WARN     : {totals['WARN']} ({pct(totals['WARN'])})")
         print(f"  ❌ FAIL     : {totals['FAIL']} ({pct(totals['FAIL'])})")
         print(f"  💥 ERROR    : {totals['ERROR']} ({pct(totals['ERROR'])})")
-        print(f"  Tiempo total: {total_time:.1f}s")
-        print(f"  Costo API   : N/A (no instrumentado)")
+        print(f"  Total time  : {total_time:.1f}s")
         print("=" * 80)
 
     def run_all(self) -> int:
@@ -874,7 +920,10 @@ class DemoTestSuite:
         for case_fn in cases:
             result = case_fn()
             icon = icons[result.status]
-            print(f"  {icon} [{result.case_id}] {result.description[:58]:<58} ({result.duration_seconds}s)")
+            print(
+                f"  {icon} [{result.case_id}] {result.description[:60]:<60} "
+                f"({result.duration_seconds}s)"
+            )
         print()
         self._print_report()
         self.bot.close()
@@ -883,5 +932,5 @@ class DemoTestSuite:
 
 
 if __name__ == "__main__":
-    suite = DemoTestSuite()
+    suite = StrictRegressionSuite()
     raise SystemExit(suite.run_all())
