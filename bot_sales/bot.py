@@ -638,20 +638,6 @@ class SalesBot:
             record_latency_bucket(turn_event.latency_ms)
             return result
 
-        # Conversational messages (greetings, personal info, vague short phrases) must
-        # bypass the sales intelligence entirely and go straight to the LLM.
-        # The pre-route already guards these with return None, but without this check
-        # _run_sales_intelligence runs anyway and returns "missing fields" questionnaires.
-        if self._is_ferreteria_runtime() and self._should_bypass_sales_intelligence(user_message):
-            response_text = self._chat_with_functions(session_id)
-            result = self._append_assistant_turn(session_id, response_text)
-            turn_event.handler = "bypass_sales_intel"
-            turn_event.state_after = StateStore.load(self.sessions.get(session_id, {})).state
-            turn_event.log()
-            record_turn(turn_event.interpreted_intent, turn_event.handler, turn_event.state_after)
-            record_latency_bucket(turn_event.latency_ms)
-            return result
-
         sales_contract = self._run_sales_intelligence(session_id, user_message)
         self.sessions[session_id]["sales_intelligence_v1"] = self._build_sales_intelligence_meta(sales_contract)
         sales_response = self._handle_sales_contract_reply(session_id, sales_contract)
@@ -781,10 +767,14 @@ class SalesBot:
         # _try_ferreteria_pre_route first so deterministic handlers apply correctly.
         if interpretation.intent == "quote_modify" and not interpretation.is_low_confidence():
             _open_q = sess.get("active_quote")
+            _is_clarification_via_llm = (
+                interpretation.quote_reference.references_existing_quote
+                and bool(_open_q)
+            )
             _is_deterministic = (
                 fq.looks_like_additive(user_message)
                 or fq.looks_like_reset(user_message)
-                or (_open_q and fq.looks_like_clarification(user_message, _open_q))
+                or _is_clarification_via_llm
             )
             if not _is_deterministic:
                 self._trim_context(session_id)
@@ -871,10 +861,15 @@ class SalesBot:
         sess = self.sessions.setdefault(session_id, {})
         # Load V2 state at the start of each turn for this route
         state_v2 = StateStore.load(sess)
-        sales_preferences = self._update_sales_preferences(session_id, normalized)
         quote_state: Optional[str] = sess.get("quote_state")
         open_quote: Optional[List] = sess.get("active_quote")
         knowledge = self._knowledge()
+
+        # ── 0. TurnInterpreter intent (from _try_ferreteria_intent_route) ─────
+        # Small-talk, FAQ, escalate, and non-quote intents are handled by their
+        # specialist handlers before pre_route runs. Only quote_* and product_search
+        # intents (plus unknown) fall through here.
+        intent = sess.get("last_turn_interpretation", {}).get("intent", "unknown")
 
         def _done(response: str, route_source: str = "deterministic", **meta: Any) -> str:
             # Persist offered products so TurnInterpreter can resolve "el primero" etc.
@@ -895,53 +890,6 @@ class SalesBot:
             # Sync V2 state back after each deterministic route completes
             StateStore.save(sess, state_v2)
             return response
-
-        # ── 0. Intent-based pre-routing ──────────────────────────────────────
-        # Use LLM classification to distinguish between quoting and non-quoting
-        intent_result = sess.get("last_intent", {})
-        intent = intent_result.get("intent", "QUOTATION")
-
-        # ── 0.1. FAQ Handling ────────────────────────────────────────────────
-        # FAQ questions are now answered by the LLM using the full FAQ context
-        # returned by consultar_faq() via function calling — no pre-route shortcircuit.
-        # Returning None here lets the message fall through to _chat_with_functions.
-        if intent == "FAQ":
-            return None
-
-        # ── 0.2. Conversational bypass ───────────────────────────────────────
-        # GREETING_CHAT, CUSTOMER_INFO are handled in process_message bypass,
-        # but we double check here if we should yield to the main LLM flow.
-        bypass_intents = {"GREETING_CHAT", "CUSTOMER_INFO", "HANDOFF_REQUEST"}
-        if intent in bypass_intents:
-            return None  # Let Carlos handle it
-
-        # ── 0.3. Heuristic fallbacks for short/vague messages ────────────────
-        if not open_quote and intent == "GREETING_CHAT":
-            return None
-
-        # Even if not explicitly GREETING_CHAT, if it's very short and not a product...
-        words = [w for w in normalized.split() if w]
-        if not open_quote and len(words) <= 3:
-            catalog_hint = self._looks_like_product_request(normalized)
-            if not catalog_hint:
-                return None  # Hand back to general LLM (Carlos)
-
-        if not open_quote:
-            if self._looks_like_price_objection(normalized):
-                return _done(
-                    "Dale. Para bajar costo sin errarle, decime que producto estas mirando y si priorizas precio, rendimiento o marca.",
-                    "deterministic",
-                )
-            if self._looks_like_comparison_request(normalized):
-                return _done(
-                    "Comparemoslo bien. Decime que producto queres revisar y que te importa mas: precio, duracion o marca.",
-                    "deterministic",
-                )
-            if self._looks_like_recommendation_request(normalized):
-                return _done(
-                    "Te recomiendo mejor si me decis que producto estas evaluando y si es para hogar, obra o uso seguido.",
-                    "deterministic",
-                )
 
         # ── 0.5. Acceptance ──────────────────────────────────────────────────
         if open_quote and fq.looks_like_acceptance(text, knowledge=knowledge, chatgpt_client=self.chatgpt):
@@ -987,31 +935,6 @@ class SalesBot:
             open_quote = None
             state_v2.transition("idle")
             state_v2.acceptance_pending = False
-
-        # ── 1.7. Consultative sales guidance on open quote ───────────────────
-        if open_quote and quote_state == "open":
-            consultative_mode = None
-            if self._looks_like_price_objection(normalized):
-                consultative_mode = "price"
-            elif self._looks_like_comparison_request(normalized):
-                consultative_mode = "comparison"
-            elif self._looks_like_recommendation_request(normalized):
-                consultative_mode = "recommendation"
-
-            if consultative_mode:
-                reply = fq.generate_sales_guidance_response(
-                    open_quote,
-                    mode=consultative_mode,
-                    sales_preferences=sales_preferences,
-                )
-                self._persist_quote_state(
-                    session_id,
-                    response_text=reply,
-                    user_message=user_message,
-                    event_type=f"sales_guidance_{consultative_mode}",
-                    event_payload={"mode": consultative_mode},
-                )
-                return _done(reply, "deterministic")
 
         # ── 2. Pending merge-vs-replace decision resolution ──────────────────
         pending_decision = sess.get("pending_decision")
@@ -1238,7 +1161,8 @@ class SalesBot:
                         return None
 
         # ── 4. Clarification (with identity targeting) ───────────────────────
-        if open_quote and fq.looks_like_clarification(text, open_quote):
+        _refs_existing = sess.get("last_turn_interpretation", {}).get("quote_reference", {}).get("references_existing_quote", False)
+        if open_quote and _refs_existing:
             disambig = fq.needs_disambiguation(text, open_quote)
             if disambig:
                 # Store the pending candidates by line_id so next reply resolves correctly
@@ -1338,9 +1262,6 @@ class SalesBot:
             return _done(reply, "deterministic")
 
         # ── 6. Single-item / category / product-first paths ──────────────────
-        if self._looks_like_project_request(normalized):
-            return _done(fq.BROAD_REQUEST_REPLY, "fallback")
-
         generic_category_browse_terms = {
             "herramientas electricas",
             "herramienta electrica",
@@ -1375,22 +1296,34 @@ class SalesBot:
                     products=_prods,
                 )
 
-        if self._looks_like_product_request(normalized):
-            # Level 1: detect impossible specs before any catalog lookup.
-            from bot_sales.services.search_validator import validate_query_specs, validate_search_match
-            _l1_valid, _l1_reason = validate_query_specs(text)
-            if not _l1_valid:
-                logging.info(
-                    "search_validator.blocked_pre_route session=%s reason=%s",
-                    session_id, _l1_reason,
-                )
-                return _done(
-                    "No tenemos ese producto en el catálogo. "
-                    "Las especificaciones indicadas no coinciden con ningún artículo disponible. "
-                    "Si querés, podemos buscar algo similar con especificaciones estándar.",
-                    "deterministic",
-                )
+        # If TurnInterpreter found no specific product terms, the message is a
+        # broad/project-scope request (e.g. "presupuesto para un baño").
+        # Ask for specific products/rubros instead of attempting a catalog lookup.
+        _ti_product_terms = (
+            sess.get("last_turn_interpretation", {}).get("entities", {}).get("product_terms") or []
+        )
+        if intent == "product_search" and not _ti_product_terms:
+            return _done(fq.BROAD_REQUEST_REPLY, "deterministic")
 
+        # V1 physical spec guardrail — runs before intent gate.
+        # Impossible specs (e.g. "martillo 500kg") must be explicitly rejected
+        # regardless of TI's intent classification; TI may return "unknown" for
+        # absurd requests and the spec validator would otherwise be skipped.
+        from bot_sales.services.search_validator import validate_query_specs, validate_search_match
+        _l1_valid, _l1_reason = validate_query_specs(text)
+        if not _l1_valid:
+            logging.info(
+                "search_validator.blocked_pre_route session=%s reason=%s",
+                session_id, _l1_reason,
+            )
+            return _done(
+                "No tenemos ese producto en el catálogo. "
+                "Las especificaciones indicadas no coinciden con ningún artículo disponible. "
+                "Si querés, podemos buscar algo similar con especificaciones estándar.",
+                "deterministic",
+            )
+
+        if intent == "product_search":
             parsed_single = self._parse_quote_items(user_message)
             if len(parsed_single) == 1:
                 resolved_single = self._resolve_quote_item(parsed_single[0])
@@ -1479,22 +1412,23 @@ class SalesBot:
                     "fallback",
                 )
 
-        category = self._detect_ferreteria_browse_category(normalized)
-        if category:
-            result = self.logic.buscar_por_categoria(category)
-            if result.get("status") == "found":
-                _prods = result.get("products", [])
-                return _done(
-                    self._format_ferreteria_products_reply(
-                        _prods,
-                        heading=f"Te paso opciones de **{category}** con stock:",
-                        category_hint=category,
-                        query_hint=normalized,
-                    ),
-                    "deterministic",
-                    products=_prods,
-                )
-            return _done(f"No veo stock activo en **{category}** ahora. Decime uso, medida o presupuesto y te propongo alternativa.", "deterministic")
+        if intent == "product_search":
+            category = self._detect_ferreteria_browse_category(normalized)
+            if category:
+                result = self.logic.buscar_por_categoria(category)
+                if result.get("status") == "found":
+                    _prods = result.get("products", [])
+                    return _done(
+                        self._format_ferreteria_products_reply(
+                            _prods,
+                            heading=f"Te paso opciones de **{category}** con stock:",
+                            category_hint=category,
+                            query_hint=normalized,
+                        ),
+                        "deterministic",
+                        products=_prods,
+                    )
+                return _done(f"No veo stock activo en **{category}** ahora. Decime uso, medida o presupuesto y te propongo alternativa.", "deterministic")
 
         # ── 7. Session guard ─────────────────────────────────────────────────
         if open_quote and len(text.split()) <= 6 and not re.search(r"[,/+]|\by\b|\be\b", text, re.I):
@@ -1640,113 +1574,6 @@ class SalesBot:
                 seen.add(item)
         return comps[:3]
 
-    def _looks_like_project_request(self, normalized_message: str) -> bool:
-        project_terms = (
-            "presupuesto",
-            "obra",
-            "bano",
-            "bano",
-            "cocina",
-            "instalacion",
-            "instalacion",
-            "arreglar",
-            "reparacion",
-            "reparar",
-            "ambiente",
-        )
-        if not any(term in normalized_message for term in project_terms):
-            return False
-        return not any(token in normalized_message for token in ("taladro", "silicona", "teflon", "tornillo", "tarugo", "pintura", "rodillo"))
-
-    _CONVERSATIONAL_BYPASS_RE = re.compile(
-        r"^\s*(hola|hey|hi|saludos|buenos?\s*(dias?|tardes?|noches?)|qu[eé]\s*tal|"
-        r"c[oó]mo\s*(est[aá]s?|and[aá]s?)|gracias|perfecto|ok|dale|genial|"
-        r"me\s+llamo|mi\s+nombre|soy\s+\w+|trabajo\s+en|mi\s+empresa|"
-        r"estoy\s+en|vivo\s+en|somos\s+de|vengo\s+de|mi\s+rubro)\b",
-        re.IGNORECASE,
-    )
-
-    def _should_bypass_sales_intelligence(self, user_message: str) -> bool:
-        """Return True when the message is conversational/vague and should go straight to LLM."""
-        text = (user_message or "").strip()
-        if self._CONVERSATIONAL_BYPASS_RE.match(text):
-            return True
-        normalized = self._normalize_lookup_text(text)
-        sess_open_quote = None  # no session context here; conservative check
-        words = [w for w in normalized.split() if w]
-        if len(words) <= 3 and not self._looks_like_product_request(normalized):
-            return True
-        return False
-
-    def _looks_like_product_request(self, normalized_message: str) -> bool:
-        product_terms = (
-            # Intents
-            "busco",
-            "necesito",
-            "quiero",
-            "tenes",
-            "tienen",
-            # Herramientas eléctricas
-            "taladro",
-            "amoladora",
-            "atornillador",
-            "sierra caladora",
-            "lijadora",
-            "herramienta electrica",
-            "herramientas electricas",
-            "herramienta",
-            "herramientas",
-            # Herramientas manuales
-            "martillo",
-            "destornillador",
-            "llave",
-            "alicate",
-            "pinza",
-            # Tornillería y fijaciones
-            "tornillo",
-            "tarugo",
-            "fijacion",
-            "anclaje",
-            "taco fisher",
-            "taco",
-            # Mechas y brocas
-            "mecha",
-            "broca",
-            # Discos y hojas
-            "disco de corte",
-            "disco",
-            "hoja de sierra",
-            # Lijas y abrasivos
-            "lija",
-            "papel lija",
-            # Cintas y adhesivos
-            "cinta",
-            "adhesivo",
-            # Pinturas y acabados
-            "pintura",
-            "rodillo",
-            "sellador",
-            "esmalte",
-            "latex",
-            "pintureria",
-            # Electricidad
-            "cable",
-            "tomacorriente",
-            "electricidad",
-            # Plomería
-            "silicona",
-            "teflon",
-            "caño",
-            "cano",
-            "plomeria",
-            "conexion",
-            # Seguridad
-            "guante",
-            "casco",
-            "seguridad",
-        )
-        return any(term in normalized_message for term in product_terms)
-
     @staticmethod
     def _consultative_browse_cta(query_hint: str = "", category_hint: str = "") -> str:
         hint = f"{query_hint} {category_hint}".strip().lower()
@@ -1785,80 +1612,6 @@ class SalesBot:
         lines.append("")
         lines.append(cls._consultative_browse_cta(query_hint=query_hint, category_hint=category_hint))
         return "\n".join(lines)
-
-    def _update_sales_preferences(self, session_id: str, normalized_message: str) -> Dict[str, Any]:
-        sess = self.sessions.setdefault(session_id, {})
-        preferences = dict(sess.get("sales_preferences") or {})
-
-        if any(token in normalized_message for token in ("hogar", "casa", "domestico", "casero")):
-            preferences["use_case"] = "hogar"
-        elif any(token in normalized_message for token in ("obra", "albanil", "albañil", "construccion", "mantenimiento")):
-            preferences["use_case"] = "obra"
-        elif any(token in normalized_message for token in ("taller", "profesional", "laburo", "uso seguido", "todos los dias")):
-            preferences["use_case"] = "profesional"
-
-        if any(token in normalized_message for token in ("barato", "economico", "económico", "mas barato", "más barato", "cuidar numero", "cuidar presupuesto")):
-            preferences["decision_style"] = "price"
-        elif any(token in normalized_message for token in ("mejor", "bueno", "durable", "calidad", "rendimiento", "premium")):
-            preferences["decision_style"] = "quality"
-
-        budget_match = re.search(r"(?:hasta|maximo|máximo|tope)\s*\$?\s*([\d\.,]+)", normalized_message)
-        if budget_match:
-            try:
-                preferences["budget_cap"] = int(budget_match.group(1).replace(".", "").replace(",", ""))
-            except ValueError:
-                pass
-
-        sess["sales_preferences"] = preferences
-        return preferences
-
-    @staticmethod
-    def _looks_like_price_objection(normalized_message: str) -> bool:
-        patterns = (
-            "mas barato",
-            "más barato",
-            "barato",
-            "economico",
-            "económico",
-            "caro",
-            "bajar presupuesto",
-            "bajarlo",
-            "cuidar el numero",
-            "cuidar el presupuesto",
-        )
-        return any(pattern in normalized_message for pattern in patterns)
-
-    @staticmethod
-    def _looks_like_recommendation_request(normalized_message: str) -> bool:
-        patterns = (
-            "cual me recomendas",
-            "cuál me recomendás",
-            "que me recomendas",
-            "qué me recomendás",
-            "que conviene",
-            "qué conviene",
-            "cual conviene",
-            "cuál conviene",
-            "vos cual",
-            "vos cuál",
-            "cual eligirias",
-            "cuál elegirías",
-        )
-        return any(pattern in normalized_message for pattern in patterns)
-
-    @staticmethod
-    def _looks_like_comparison_request(normalized_message: str) -> bool:
-        patterns = (
-            "compar",
-            "diferencia",
-            "versus",
-            "vs",
-            "cual es mejor",
-            "cuál es mejor",
-            "que cambia",
-            "qué cambia",
-        )
-        return any(pattern in normalized_message for pattern in patterns)
 
     @staticmethod
     def _looks_like_escalation_request(user_message: str) -> bool:
