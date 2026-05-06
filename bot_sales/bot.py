@@ -1774,17 +1774,22 @@ class SalesBot:
         re.MULTILINE,
     )
     _L1_BULLET_RE = re.compile(r"^\s*[-•*>]\s+\S", re.MULTILINE)
+    # Inline numbered list: 2+ markers like "1) ... 2) ..." all on one line (no \n needed)
+    _L1_INLINE_RE = re.compile(r"(?<!\d)\d+[.)]\s+\S")
 
     @staticmethod
     def _is_structured_list(text: str) -> bool:
         """Return True if text looks like a structured item list (numbered or bulleted)."""
-        if "\n" not in text:
-            return False
-        numeral_matches = SalesBot._L1_NUMERAL_RE.findall(text)
-        if len(numeral_matches) >= 2:
-            return True
-        bullet_matches = SalesBot._L1_BULLET_RE.findall(text)
-        return len(bullet_matches) >= 2
+        if "\n" in text:
+            numeral_matches = SalesBot._L1_NUMERAL_RE.findall(text)
+            if len(numeral_matches) >= 2:
+                return True
+            bullet_matches = SalesBot._L1_BULLET_RE.findall(text)
+            if len(bullet_matches) >= 2:
+                return True
+        # Inline format: "1) tornillos 2) mechas 3) amoladora" — no newlines needed
+        inline_matches = SalesBot._L1_INLINE_RE.findall(text)
+        return len(inline_matches) >= 2
 
     @staticmethod
     def _normalize_list_to_items(text: str, chatgpt_client: "ChatGPTClient") -> str:
