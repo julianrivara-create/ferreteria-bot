@@ -381,6 +381,15 @@ intent="quote_modify" solo es válido cuando current_state="quote_drafting" o
 "awaiting_clarification". Si current_state="idle", no hay carrito que modificar:
 - "dame el primero" en idle → product_search (el cliente elige de algo que aún no tiene)
 - "dame el primero" en quote_drafting → quote_modify (elige del carrito activo)
+
+CRÍTICO — awaiting_clarification: Cuando current_state="awaiting_clarification", el cliente
+está respondiendo una pregunta de aclaración sobre un ítem ambiguo. En ese contexto,
+frases de selección o conformidad son SIEMPRE quote_modify, NUNCA quote_accept:
+- "cualquiera", "cualquiera está bien", "me da igual", "el que tengas" → quote_modify
+- "el primero", "ese", "ese me va" → quote_modify
+- "sí", "dale" → quote_modify (elige opción del ítem, NO acepta el presupuesto entero)
+Solo usar quote_accept si el cliente dice explícitamente que acepta el presupuesto completo
+("me llevo todo", "cerramos", "mandalo", "hacé el pedido").
 """
 
 
