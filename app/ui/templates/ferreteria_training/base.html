@@ -283,9 +283,10 @@
       .bubble {
         border-radius: var(--r-xl); padding: 12px 16px;
         border: 1px solid var(--border); background: var(--surface);
-        font-size: 13.5px; line-height: 1.55; white-space: pre-wrap;
+        font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; color: var(--ink);
       }
-      .bubble.user { background: #F0F9FF; border-color: #BAE6FD; margin-left: 40px; }
+      .bubble.user { background: #F0F9FF; border-color: #BAE6FD; margin-left: 40px; color: var(--ink); }
+      [data-theme="dark"] .bubble.user { background: #0D1F2D; border-color: #1E3A52; }
       .bubble.assistant { background: var(--surface); margin-right: 40px; }
       .bubble .meta {
         display: flex; flex-wrap: wrap; gap: 6px;
