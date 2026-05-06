@@ -404,8 +404,7 @@ class SalesFlowManager:
                 title=f"Handoff comercial {entities.get('model') or entities.get('product_family') or 'lead'}",
             )
         elif missing_fields:
-            questions = self._questions_for_missing(missing_fields[:2])
-            reply_text = "Para cotizarte exacto y avanzar hoy: " + " ".join(questions)
+            reply_text = "¿Me podés repetir qué necesitás? Quiero asegurarme de armarte bien el pedido."
             cta = CTA(type="ASK_TWO_FIELDS", text="Respondeme esos datos y te paso opción A/B cerrada.")
             next_task = None
         else:
