@@ -1486,7 +1486,7 @@ def _resolved_snapshot_lines(open_items: List[QuoteItem], *, limit: int = 3) -> 
         name = product.get("model") or product.get("name") or product.get("sku", "Producto")
         qty = int(item.get("qty") or 1)
         qty_prefix = f"{qty} x " if qty > 1 else ""
-        snapshot.append(f"- **{qty_prefix}{name}** | {_format_price(item.get('subtotal') or item.get('unit_price'))}")
+        snapshot.append(f"- {qty_prefix}{name} | {_format_price(item.get('subtotal') or item.get('unit_price'))}")
         if len(snapshot) >= limit:
             break
     return snapshot
@@ -1604,18 +1604,18 @@ def generate_sales_guidance_response(
             primary_fits = _budget_fits(primary_price_val, budget_cap)
             if budget_cap is not None and alt_fits and not primary_fits:
                 lines.append(
-                    f"Con tu tope de {_format_budget(budget_cap)}, la opcion que entra es **{alt_name}** ({alt_price})."
+                    f"Con tu tope de {_format_budget(budget_cap)}, la opcion que entra es {alt_name} ({alt_price})."
                 )
                 lines.append("Si queres, te actualizo el presupuesto con esa variante.")
             else:
                 lines.append(
-                    f"Si queres bajar presupuesto, la primera variante a revisar seria **{alt_name}** ({alt_price}) "
-                    f"en lugar de **{primary_name}** ({primary_price})."
+                    f"Si queres bajar presupuesto, la primera variante a revisar seria {alt_name} ({alt_price}) "
+                    f"en lugar de {primary_name} ({primary_price})."
                 )
                 lines.append("Si queres, te actualizo el presupuesto con esa variante.")
         else:
             lines.append(
-                f"Sobre **{primary_name}** ({primary_price}), hoy no te voy a inventar una alternativa mas barata si no la tengo clara."
+                f"Sobre {primary_name} ({primary_price}), hoy no te voy a inventar una alternativa mas barata si no la tengo clara."
             )
             if budget_cap is None:
                 lines.append(
@@ -1637,19 +1637,19 @@ def generate_sales_guidance_response(
             return "\n".join(lines).strip()
         if alt and alt_name:
             if decision_style == "price":
-                lines.append(f"- Priorizando precio: **{alt_name}** ({alt_price})")
-                lines.append(f"- Si el rendimiento es lo primero: **{primary_name}** ({primary_price})")
+                lines.append(f"- Priorizando precio: {alt_name} ({alt_price})")
+                lines.append(f"- Si el rendimiento es lo primero: {primary_name} ({primary_price})")
             elif decision_style == "quality":
-                lines.append(f"- Priorizando rendimiento: **{primary_name}** ({primary_price})")
-                lines.append(f"- Si queres cuidar mas el numero: **{alt_name}** ({alt_price})")
+                lines.append(f"- Priorizando rendimiento: {primary_name} ({primary_price})")
+                lines.append(f"- Si queres cuidar mas el numero: {alt_name} ({alt_price})")
             else:
-                lines.append(f"- Para mirar una variante mas accesible: **{alt_name}** ({alt_price})")
-                lines.append(f"- Para seguir con la base ya armada: **{primary_name}** ({primary_price})")
+                lines.append(f"- Para mirar una variante mas accesible: {alt_name} ({alt_price})")
+                lines.append(f"- Para seguir con la base ya armada: {primary_name} ({primary_price})")
             if budget_cap is not None:
                 fits = _budget_fits(alt_price_val, budget_cap) or _budget_fits(primary_price_val, budget_cap)
                 if fits:
                     winner = alt_name if _budget_fits(alt_price_val, budget_cap) else primary_name
-                    lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la que entra es **{winner}**.")
+                    lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la que entra es {winner}.")
             lines.append("Si queres, te actualizo el presupuesto con la opcion que elijas.")
         else:
             lines.append(
@@ -1683,20 +1683,20 @@ def generate_sales_guidance_response(
     # Single item recommendation — apply decision_style and budget_cap
     if decision_style == "price" and alt and alt_name:
         # User prefers price → lead with the cheaper option
-        lines.append(f"Si priorizas precio, arrancaria con **{alt_name}** ({alt_price}).")
+        lines.append(f"Si priorizas precio, arrancaria con {alt_name} ({alt_price}).")
         if use_phrase:
             lines.append(f"Cumple bien {use_phrase} sin pasarte de presupuesto.")
-        lines.append(f"Si despues el rendimiento importa mas, **{primary_name}** ({primary_price}) es el siguiente escalon.")
+        lines.append(f"Si despues el rendimiento importa mas, {primary_name} ({primary_price}) es el siguiente escalon.")
     elif decision_style == "quality":
         # User prefers quality → lead with the primary (best) option
-        lines.append(f"Priorizando rendimiento, yo me quedaria con **{primary_name}** ({primary_price}).")
+        lines.append(f"Priorizando rendimiento, yo me quedaria con {primary_name} ({primary_price}).")
         if use_phrase:
             lines.append(f"Para {use_phrase.replace('para ', '')} es el que mejor aguanta el uso.")
         if alt and alt_name:
-            lines.append(f"Si el presupuesto aprieta, **{alt_name}** ({alt_price}) es la alternativa.")
+            lines.append(f"Si el presupuesto aprieta, {alt_name} ({alt_price}) es la alternativa.")
     elif budget_cap is not None and alt and alt_name and _budget_fits(alt_price_val, budget_cap) and not _budget_fits(primary_price_val, budget_cap):
         # Has budget cap and only the alt fits → recommend the alt
-        lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la opcion que te recomiendo es **{alt_name}** ({alt_price}).")
+        lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la opcion que te recomiendo es {alt_name} ({alt_price}).")
         if use_phrase:
             lines.append(f"Cumple bien {use_phrase}.")
     else:
@@ -1704,10 +1704,10 @@ def generate_sales_guidance_response(
             lines.append(f"Como punto de partida, me gusta {use_phrase}.")
         else:
             lines.append(
-                f"Como base, **{primary_name}** ({primary_price}) me parece una opcion logica para avanzar sin vueltas."
+                f"Como base, {primary_name} ({primary_price}) me parece una opcion logica para avanzar sin vueltas."
             )
         if alt and alt_name:
-            lines.append(f"Si queres comparar o cuidar mas el numero, tambien revisaria **{alt_name}** ({alt_price}).")
+            lines.append(f"Si queres comparar o cuidar mas el numero, tambien revisaria {alt_name} ({alt_price}).")
     if not use_phrase:
         lines.append("Si me decis si es para hogar, obra o uso mas seguido, te digo cual conviene mas.")
     return "\n".join(lines).strip()
