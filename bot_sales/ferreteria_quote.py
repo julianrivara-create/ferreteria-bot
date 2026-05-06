@@ -733,7 +733,7 @@ _WORD_NUMBERS: Dict[str, int] = {
 
 _QTY_RE = re.compile(
     r"^(?P<qty>\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+"
-    r"(?P<unit>lata|latas|rollo|rollos|caja|cajas|metros?|m|bolsa|bolsas|kg|kilo|kilos|par|pares|u)?\s*"
+    r"(?P<unit>lata|latas|rollo|rollos|caja|cajas|metros?|m(?!\w)|bolsa|bolsas|kg|kilo|kilos|par|pares|u(?!\w))?\s*"
     r"(?:de\s+)?(?P<rest>.+)$",
     re.IGNORECASE,
 )
