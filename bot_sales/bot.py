@@ -252,7 +252,7 @@ class SalesBot:
         return "cli"
 
     def _load_active_quote_from_store(self, session_id: str) -> None:
-        if not self.quote_service:
+        if not self.quote_service or self.sandbox_mode:
             return
         loaded = self.quote_service.load_active_quote(session_id)
         sess = self.sessions.setdefault(session_id, {})
@@ -744,10 +744,32 @@ class SalesBot:
                 interpretation.quote_reference.references_existing_quote
                 and bool(_open_q)
             )
+            # When there are pending items and the message contains material/spec
+            # dimensions (signal: user is answering a clarification question, not
+            # selecting a brand or option), force the deterministic path so Phase
+            # 3.5 resolves the pending item instead of routing to the LLM which
+            # may treat "para madera" as a new product search.
+            # Restricted to messages WITH dimensions to avoid capturing brand
+            # selections like "stanley" or option picks like "la opcion A" — those
+            # are handled correctly by the LLM or Phase 4 / B22a respectively.
+            _has_pending_items = bool(_open_q and any(
+                it.get("status") in ("ambiguous", "unresolved", "blocked_by_missing_info")
+                for it in _open_q
+            ))
+            _clarif_classified = (
+                classify_followup_message(user_message, _open_q)
+                if _has_pending_items else {}
+            )
+            _is_clarif_response = (
+                _has_pending_items
+                and _clarif_classified.get("kind") == "followup"
+                and bool(_clarif_classified.get("dimensions"))
+            )
             _is_deterministic = (
                 fq.looks_like_additive(user_message)
                 or fq.looks_like_reset(user_message)
                 or _is_clarification_via_llm
+                or _is_clarif_response
             )
             if not _is_deterministic:
                 self._trim_context(session_id)
@@ -1104,6 +1126,34 @@ class SalesBot:
                             event_payload={"reason": assessment.get("reason")},
                         )
                         return None
+                    # Prevent fallthrough to product_search: when the followup message
+                    # didn't target any pending line AND TurnInterpreter did NOT flag
+                    # references_existing_quote (so Phase 4 won't handle it either),
+                    # re-ask the clarification instead of treating the message as a
+                    # new product query (which would overwrite the active quote).
+                    # When references_existing_quote=True, fall through to Phase 4
+                    # so apply_clarification can resolve the pending item.
+                    _ti_refs_existing = sess.get("last_turn_interpretation", {}).get(
+                        "quote_reference", {}
+                    ).get("references_existing_quote", False)
+                    if assessment.get("continue_clarifying") and not _ti_refs_existing:
+                        state_v2.transition("awaiting_clarification")
+                        comps = self._get_suggestions(updated, knowledge=knowledge)
+                        reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
+                        prompt = str(assessment.get("prompt") or "").strip()
+                        if prompt:
+                            reply = f"{reply}\n\n{prompt}"
+                        self._persist_quote_state(
+                            session_id,
+                            response_text=reply,
+                            user_message=user_message,
+                            event_type="line_clarification_needed",
+                            event_payload={
+                                "message": text,
+                                "reason": assessment.get("reason"),
+                            },
+                        )
+                        return _done(reply, "deterministic")
 
                 if followup.get("status") in {"updated", "no_progress"}:
                     updated = list(followup.get("items") or open_quote)
