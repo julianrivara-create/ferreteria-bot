@@ -47,6 +47,22 @@ from .config import (
     MAX_CONTEXT_MESSAGES
 )
 
+# F1: Additive-phrase detector for compound clarification + additive turns.
+# Same alternation as ferreteria_quote._ADDITIVE_RE but without the ^ anchor,
+# so re.search() can locate the phrase anywhere inside a message string.
+_ADDITIVE_INLINE_RE = re.compile(
+    r"(?:agrega|agregame|agregale|suma|sumale|sumame|súmame|sumar|"
+    r"añadi|añadile|tambien\s+necesito|tambien\s+quiero|"
+    r"tambien\s+te\s+pido|te\s+pido\s+tambi[eé]n|tambi[eé]n\s+dame|"
+    r"agregale\s+tambi[eé]n|sumale\s+(?:tambi[eé]n\s+)?|"
+    r"agrega\s+tambien|y\s+tambien|y\s+ademas)\b",
+    re.IGNORECASE,
+)
+
+# Trailing noise characters to strip from the clarification prefix before
+# the additive marker (e.g. "la opcion A, " → "la opcion A").
+_CLARIF_TRAIL_CHARS = " .,;y"
+
 _ESCALATION_REQUEST_KEYWORDS = (
     "hablar con humano", "hablar con persona", "hablar con alguien",
     "atender humano", "atendeme un humano", "atendeme alguien",
@@ -1161,6 +1177,28 @@ class SalesBot:
                     sess["quote_state"] = "open"
                     state_v2.transition("quote_drafting")
                     if followup.get("status") == "updated":
+                        # ── F1 (section 3.5): compound clarification + additive ──────
+                        # classify_followup_message routes ≤8-word messages here before
+                        # section 4, so the F1 guard in section 4 is unreachable for
+                        # typical compound messages like "la opcion a. te pido también
+                        # un martillo". Process the additive part inline.
+                        _s35_additive_m = _ADDITIVE_INLINE_RE.search(text)
+                        if _s35_additive_m and _s35_additive_m.start() > 0:
+                            _s35_additive_part = text[_s35_additive_m.start():].strip()
+                            _s35_add_stripped = fq._ADDITIVE_RE.sub(
+                                "", _s35_additive_part.strip()
+                            ).strip()
+                            if re.match(r"^(?:un|una)\s+", _s35_add_stripped, re.IGNORECASE):
+                                _s35_additive_call = "también " + _s35_add_stripped
+                            else:
+                                _s35_additive_call = _s35_additive_part
+                            _s35_with_additive = fq.apply_additive(
+                                _s35_additive_call, updated, self.logic, knowledge=knowledge,
+                            )
+                            if len(_s35_with_additive) > len(updated):
+                                updated = _s35_with_additive
+                                sess["active_quote"] = updated
+                        # ────────────────────────────────────────────────────────────
                         sess.pop("pending_clarification_target", None)
                         comps = self._get_suggestions(updated, knowledge=knowledge)
                         reply = fq.generate_updated_quote_response(updated, complementary=comps or None)
@@ -1168,7 +1206,10 @@ class SalesBot:
                             session_id,
                             response_text=reply,
                             user_message=user_message,
-                            event_type="line_updated",
+                            event_type="compound_clarif_additive"
+                            if _s35_additive_m and _s35_additive_m.start() > 0
+                            and len(updated) > len(list(followup.get("items") or open_quote))
+                            else "line_updated",
                             event_payload={
                                 "message": text,
                                 "line_ids": followup.get("target_line_ids") or [],
@@ -1228,6 +1269,110 @@ class SalesBot:
                 ]
                 state_v2.transition("awaiting_clarification")
                 return _done(disambig, "deterministic")
+
+            # ── 4.0 F1: compound clarification + additive (long-message path) ───
+            # Reached only when classify_followup_message returned kind="none"
+            # (typically >8-word messages) so section 3.5 did not intercept.
+            # Short compound messages (≤8 words) are handled in section 3.5 above.
+            _f1_pending = [
+                it for it in open_quote
+                if it.get("status") in ("ambiguous", "unresolved", "blocked_by_missing_info")
+            ]
+            if _f1_pending:
+                _f1_additive_m = _ADDITIVE_INLINE_RE.search(text)
+                if _f1_additive_m and _f1_additive_m.start() > 0:
+                    _f1_clarif_part = text[:_f1_additive_m.start()].rstrip(_CLARIF_TRAIL_CHARS).strip()
+                    _f1_additive_part = text[_f1_additive_m.start():].strip()
+                    if _f1_clarif_part:
+                        # Option-selection clarifications ("la opcion A", "la B", "el primero")
+                        # must pick from the already-offered products list, NOT re-search the
+                        # catalog. apply_clarification() does a catalog re-search which doesn't
+                        # resolve an ambiguous item when the clarif text is an option letter.
+                        _f1_opt_idx = fq.detect_option_selection(_f1_clarif_part)
+                        if _f1_opt_idx is not None:
+                            _f1_target = _f1_pending[0]
+                            _f1_target_id = _f1_target.get("line_id")
+                            _candidates = _f1_target.get("products") or []
+                            if _f1_opt_idx < len(_candidates):
+                                _chosen = _candidates[_f1_opt_idx]
+                                _qty = _f1_target.get("qty", 1)
+                                _uprice, _sub = fq._compute_subtotal(_chosen, _qty)
+                                _f1_resolved = dict(_f1_target)
+                                _f1_resolved.update({
+                                    "status": "resolved",
+                                    "products": [_chosen],
+                                    "qty": _qty,
+                                    "unit_price": _uprice,
+                                    "subtotal": _sub,
+                                    "clarification": None,
+                                    "notes": None,
+                                    "issue_type": None,
+                                })
+                                _f1_clarif_updated = [
+                                    _f1_resolved if it.get("line_id") == _f1_target_id else it
+                                    for it in open_quote
+                                ]
+                                _f1_improved = True
+                            else:
+                                _f1_clarif_updated = list(open_quote)
+                                _f1_improved = False
+                        else:
+                            # Dimension/attribute clarification — re-search catalog
+                            _f1_clarif_updated = fq.apply_clarification(
+                                _f1_clarif_part,
+                                open_quote,
+                                self.logic,
+                                target_line_id=None,
+                                knowledge=knowledge,
+                            )
+                            _f1_improved = any(
+                                it.get("status") == "resolved"
+                                and not any(
+                                    orig.get("line_id") == it.get("line_id")
+                                    and orig.get("status") == "resolved"
+                                    for orig in open_quote
+                                )
+                                for it in _f1_clarif_updated
+                            )
+
+                        if _f1_improved:
+                            # _QTY_RE has a bare "m" unit token that misparsed "un martillo"
+                            # as unit='m' + rest='artillo'. When the stripped additive text
+                            # starts with "un/una", prepend "también" so _ADDITIVE_RE.sub
+                            # leaves it intact and parse_quote_items sees "tambien un X".
+                            _f1_add_stripped = fq._ADDITIVE_RE.sub(
+                                "", _f1_additive_part.strip()
+                            ).strip()
+                            if re.match(r"^(?:un|una)\s+", _f1_add_stripped, re.IGNORECASE):
+                                _f1_additive_call = "también " + _f1_add_stripped
+                            else:
+                                _f1_additive_call = _f1_additive_part
+                            _f1_updated = fq.apply_additive(
+                                _f1_additive_call,
+                                _f1_clarif_updated,
+                                self.logic,
+                                knowledge=knowledge,
+                            )
+                            sess["active_quote"] = _f1_updated
+                            sess["quote_state"] = "open"
+                            sess.pop("pending_clarification_target", None)
+                            state_v2.transition("quote_drafting")
+                            comps = self._get_suggestions(_f1_updated, knowledge=knowledge)
+                            reply = fq.generate_updated_quote_response(
+                                _f1_updated, complementary=comps or None
+                            )
+                            self._persist_quote_state(
+                                session_id,
+                                response_text=reply,
+                                user_message=user_message,
+                                event_type="compound_clarif_additive",
+                                event_payload={
+                                    "clarif_part": _f1_clarif_part,
+                                    "additive_part": _f1_additive_part,
+                                },
+                            )
+                            return _done(reply, "deterministic")
+                        # else: clarification didn't improve anything → fall through
 
             # Pass the stored target if disambiguation already ran
             target_line_id = None
