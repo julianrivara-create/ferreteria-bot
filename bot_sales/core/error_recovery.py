@@ -57,7 +57,7 @@ class ErrorRecovery:
             'technical_error': [
                 "Tuve un problema técnico. ¿Intentás de nuevo?",
                 "Algo salió mal de mi lado. Probá en un minuto.",
-                "🔧 Error temporal. ¿Reiniciamos?"
+                "Error temporal. ¿Reiniciamos?"
             ]
         }
         
@@ -112,15 +112,15 @@ class ErrorRecovery:
             Help text
         """
         return """
-🤖 **Cómo puedo ayudarte:**
+¿En qué te puedo ayudar?
 
-📱 **Buscar productos**: "Busco zapatillas negras talle 42"
-💰 **Ver precios**: "Cuánto sale este modelo?"
-📦 **Consultar stock**: "Tenés disponible en azul?"
-🚚 **Info de envío**: "Cuánto demora el envío?"
-💳 **Formas de pago**: "Puedo pagar en cuotas?"
+- Buscar productos: "Busco zapatillas negras talle 42"
+- Ver precios: "Cuánto sale este modelo?"
+- Consultar stock: "Tenés disponible en azul?"
+- Info de envío: "Cuánto demora el envío?"
+- Formas de pago: "Puedo pagar en cuotas?"
 
-Escribí lo que necesitás y te ayudo! 😊
+Escribí lo que necesitás y te ayudo.
 """
     
     @staticmethod
@@ -163,7 +163,7 @@ Escribí lo que necesitás y te ayudo! 😊
         elapsed_minutes = (time.time() - last_message_time) / 60
         
         if elapsed_minutes > timeout_minutes:
-            return f"⏰ Han pasado {int(elapsed_minutes)} minutos. ¿Seguimos? Escribí 'sí' para continuar o 'reset' para empezar de nuevo."
+            return f"Han pasado {int(elapsed_minutes)} minutos. ¿Seguimos? Escribí 'sí' para continuar o 'reset' para empezar de nuevo."
         
         return None
 

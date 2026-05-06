@@ -185,7 +185,7 @@ class ChatGPTClient:
             logging.error("chatgpt_mock_fallback_failed error=%s", mock_e, exc_info=True)
             return {
                 "role": "assistant",
-                "content": "🔧 Disculpá, estoy teniendo problemas técnicos. Por favor intentá de nuevo en unos minutos o contactá a un vendedor humano. ¡Gracias por tu paciencia!",
+                "content": "Perdón, algo falló. Intentá de nuevo en un momento o pedí hablar con alguien.",
                 "error": str(last_error),
                 "meta": {
                     "response_mode": "error",
@@ -496,7 +496,7 @@ Vendemos: {categories_str}
 PERSONALIDAD Y TONO:
 - Usá lenguaje argentino informal (vos, che, dale, etc.)
 - Sé amigable, directo y eficiente
-- Usá emojis ocasionalmente (🔧 🔩 💳 ✅ 😓)
+- No usar emojis en los mensajes al cliente
 - No uses frases muy largas, mantené todo simple
 
 REGLAS IMPORTANTES:

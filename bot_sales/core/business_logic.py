@@ -379,7 +379,7 @@ class BusinessLogic:
             
             final_msg = f"¡Venta confirmada! ID: {result_msg}"
             if mp_link:
-                final_msg += f"\n💳 Acá tenés tu link de pago: {mp_link}"
+                final_msg += f"\nAcá tenés tu link de pago: {mp_link}"
 
             # AUTO-CROSS-SELL INJECTION
             cross_sell = self.obtener_cross_sell_offer(sold_sku)

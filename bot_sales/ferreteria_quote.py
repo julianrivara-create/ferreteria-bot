@@ -1289,7 +1289,7 @@ def generate_acceptance_response(active_quote: List[QuoteItem], knowledge: Optio
     ]
     if stale_items:
         base += (
-            f"\n\n⚠️ _Algunos precios son referenciales (cotizados hace más de "
+            f"\n\n_Algunos precios son referenciales (cotizados hace más de "
             f"{STALE_PRICE_THRESHOLD_MINUTES} min) y se verifican con catálogo "
             f"actualizado al momento de la revisión._"
         )
@@ -1396,9 +1396,9 @@ def generate_quote_response(
                 grand_total += unit_price * qty
             else:
                 price_part = "precio a confirmar"
-            lines.append(f"✅ {qty} × {name} — {price_part}")
+            lines.append(f"{qty} × {name} — {price_part}")
             if pack_note:
-                lines.append(f"   ↳ ⚠️ {pack_note}")
+                lines.append(f"   ↳ Atención: {pack_note}")
             # Show one alternative if available
             if len(products) > 1:
                 alt = products[1]
@@ -1411,7 +1411,7 @@ def generate_quote_response(
                     )
 
         elif status == "ambiguous" and products:
-            lines.append(f"❓ {original} — ¿cuál de estos?")
+            lines.append(f"• {original} — ¿cuál de estos?")
             for j, p in enumerate(products[:3], start=1):
                 pname = p.get("model") or p.get("name") or ""
                 pprice = _parse_price(p)
@@ -1424,12 +1424,12 @@ def generate_quote_response(
 
         elif status == "blocked_by_missing_info":
             detail = clarif or "necesito más detalle"
-            lines.append(f"⚠️ {original} — {detail}")
+            lines.append(f"• {original} — {detail}")
             if clarif:
                 pending_questions.append(f"• {original}: {clarif}")
 
         else:  # unresolved
-            lines.append(f"❌ {original} — no lo encontré en el catálogo")
+            lines.append(f"• {original} — no lo encontré en el catálogo")
 
     # Separator + total
     lines.append("")
@@ -1448,7 +1448,7 @@ def generate_quote_response(
     if any_stale:
         lines.append("")
         lines.append(
-            f"⚠️ _Precios marcados se cotizaron hace más de "
+            f"_Precios marcados se cotizaron hace más de "
             f"{STALE_PRICE_THRESHOLD_MINUTES} min y son referenciales. "
             f"Se verifican con catálogo actualizado al confirmar._"
         )
@@ -1459,7 +1459,7 @@ def generate_quote_response(
         lines.append("Necesito confirmar:")
         lines.extend(pending_questions)
         lines.append("")
-        lines.append("Respondé y te actualizo el total. 🛠️")
+        lines.append("Respondé y te actualizo el total.")
     elif grand_total > 0:
         lines.append("")
         lines.append("Válido 24hs · ¿Confirmás?")

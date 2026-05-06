@@ -277,17 +277,17 @@ def warm_faq_cache(cache: ResponseCache):
     Llamar al inicio de la app
     """
     faqs = {
-        "cómo es el envío": "📦 Opciones de envío:\n• CABA: Gratis en moto (24-48hs)\n• AMBA: Consultar costo (48-72hs)\n• Interior: Por Correo/Andreani (3-5 días)\n• Retiro en local: Coordinamos horario",
-        
-        "tienen garantía": "✅ Garantía oficial:\n• 1 año de garantía del fabricante\n• Servicio técnico autorizado\n• En caso de falla, coordinamos el service",
-        
-        "formas de pago": "💳 Formas de pago:\n• Transferencia bancaria\n• Efectivo (en retiro)\n• MercadoPago (link de pago)\n• Tarjeta: 3/6/12 cuotas con MercadoPago",
-        
-        "cuánto tarda el envío": "⏰ Tiempos de entrega:\n• CABA: 24-48hs\n• AMBA: 48-72hs\n• Interior: 3-5 días hábiles\n• Retiro inmediato coordinando horario",
-        
-        "hacen factura": "✅ Sí, hacemos factura A o B según necesites. Solo avisanos al confirmar el pedido.",
-        
-        "stock disponible": "Consultame por el modelo específico que te interesa y te chequeo el stock en tiempo real! 📱",
+        "cómo es el envío": "Opciones de envío:\n• CABA: Gratis en moto (24-48hs)\n• AMBA: Consultar costo (48-72hs)\n• Interior: Por Correo/Andreani (3-5 días)\n• Retiro en local: Coordinamos horario",
+
+        "tienen garantía": "Garantía oficial:\n• 1 año de garantía del fabricante\n• Servicio técnico autorizado\n• En caso de falla, coordinamos el service",
+
+        "formas de pago": "Formas de pago:\n• Transferencia bancaria\n• Efectivo (en retiro)\n• MercadoPago (link de pago)\n• Tarjeta: 3/6/12 cuotas con MercadoPago",
+
+        "cuánto tarda el envío": "Tiempos de entrega:\n• CABA: 24-48hs\n• AMBA: 48-72hs\n• Interior: 3-5 días hábiles\n• Retiro inmediato coordinando horario",
+
+        "hacen factura": "Sí, hacemos factura A o B según necesites. Solo avisanos al confirmar el pedido.",
+
+        "stock disponible": "Consultame por el modelo específico que te interesa y te chequeo el stock en tiempo real.",
     }
     
     cache.warm_cache(faqs, category='faq', ttl=0)  # TTL 0 = infinito
