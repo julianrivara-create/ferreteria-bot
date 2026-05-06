@@ -119,7 +119,7 @@ class RecommendationEngine:
         if not recommendations:
             return ""
             
-        msg = "💡 También te puede interesar:\n"
+        msg = "También te puede interesar:\n"
         for p in recommendations:
             price = f"${p['price_ars']:,}".replace(",", ".")
             msg += f"• {p['model']} a {price}\n"

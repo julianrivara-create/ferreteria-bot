@@ -164,11 +164,11 @@ class UniversalLLMClient:
         elif any(word in user_msg_lower for word in ['stock', 'hay', 'tienen']):
             content = "Por el momento no puedo verificar el stock en tiempo real. ¿Querés que un humano te contacte?"
         else:
-            content = "Disculpa, estoy teniendo dificultades técnicas momentáneas. 🛠️\n¿Podrías escribirme 'asesor' para que te atienda una persona?"
-        
+            content = "Algo salió mal por un momento. Escribí 'asesor' si querés que te atienda alguien."
+
         return {
             "role": "assistant",
-            "content": content + "\n\n⚠️ NOTA: Bot en modo MOCK (sin LLM backend configurado)"
+            "content": content + "\n\nNOTA: Bot en modo MOCK (sin LLM backend configurado)"
         }
     
     def get_backend_info(self) -> Dict[str, Any]:

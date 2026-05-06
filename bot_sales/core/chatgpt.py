@@ -185,7 +185,7 @@ class ChatGPTClient:
             logging.error("chatgpt_mock_fallback_failed error=%s", mock_e, exc_info=True)
             return {
                 "role": "assistant",
-                "content": "🔧 Disculpá, estoy teniendo problemas técnicos. Por favor intentá de nuevo en unos minutos o contactá a un vendedor humano. ¡Gracias por tu paciencia!",
+                "content": "Perdón, algo falló. Intentá de nuevo en un momento o pedí hablar con alguien.",
                 "error": str(last_error),
                 "meta": {
                     "response_mode": "error",
@@ -239,8 +239,8 @@ class ChatGPTClient:
                     return {
                         "role": "assistant",
                         "content": (
-                            f"Listo, te reserve **{product_name}**.\n\n"
-                            f"La reserva dura **{expires} minutos**.\n"
+                            f"Listo, te reserve {product_name}.\n\n"
+                            f"La reserva dura {expires} minutos.\n"
                             "Decime tu zona y como queres pagar para seguir."
                         ),
                     }
@@ -255,7 +255,7 @@ class ChatGPTClient:
                     price = offer.get("discounted_price_formatted") or "precio promo disponible"
                     return {
                         "role": "assistant",
-                        "content": f"Tengo una oferta relacionada: **{name}** a **{price}**. Si queres, te la agrego.",
+                        "content": f"Tengo una oferta relacionada: {name} a {price}. Si queres, te la agrego.",
                     }
 
                 if payload.get("status") == "not_found":
@@ -456,7 +456,7 @@ class ChatGPTClient:
             category = product.get("category", "")
             available = product.get("available") or product.get("stock_qty") or product.get("stock") or 0
             price = self._format_mock_price(product)
-            detail_parts = [f"**{name}**", price]
+            detail_parts = [name, price]
             if category:
                 detail_parts.append(category)
             detail_parts.append(f"stock: {available}")
@@ -496,7 +496,7 @@ Vendemos: {categories_str}
 PERSONALIDAD Y TONO:
 - Usá lenguaje argentino informal (vos, che, dale, etc.)
 - Sé amigable, directo y eficiente
-- Usá emojis ocasionalmente (🔧 🔩 💳 ✅ 😓)
+- No usar emojis en los mensajes al cliente
 - No uses frases muy largas, mantené todo simple
 
 REGLAS IMPORTANTES:

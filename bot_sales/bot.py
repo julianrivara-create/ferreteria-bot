@@ -1292,7 +1292,7 @@ class SalesBot:
                 return _done(
                     self._format_ferreteria_products_reply(
                         _prods,
-                        heading=f"Te paso opciones de **{short_category}** con stock:",
+                        heading=f"Te paso opciones de {short_category} con stock:",
                         category_hint=short_category,
                         query_hint=normalized,
                     ),
@@ -1425,14 +1425,14 @@ class SalesBot:
                     return _done(
                         self._format_ferreteria_products_reply(
                             _prods,
-                            heading=f"Te paso opciones de **{category}** con stock:",
+                            heading=f"Te paso opciones de {category} con stock:",
                             category_hint=category,
                             query_hint=normalized,
                         ),
                         "deterministic",
                         products=_prods,
                     )
-                return _done(f"No veo stock activo en **{category}** ahora. Decime uso, medida o presupuesto y te propongo alternativa.", "deterministic")
+                return _done(f"No veo stock activo en {category} ahora. Decime uso, medida o presupuesto y te propongo alternativa.", "deterministic")
 
         # ── 7. Session guard ─────────────────────────────────────────────────
         if open_quote and len(text.split()) <= 6 and not re.search(r"[,/+]|\by\b|\be\b", text, re.I):
@@ -1608,7 +1608,7 @@ class SalesBot:
             category = product.get("category", "")
             price = product.get("price_formatted") or "precio a confirmar"
             stock = product.get("available") or product.get("stock_qty") or product.get("stock") or 0
-            detail = [f"**{name}**", price, f"stock: {stock}"]
+            detail = [name, price, f"stock: {stock}"]
             if category:
                 detail.insert(2, category)
             lines.append("- " + " | ".join(str(part) for part in detail if part))

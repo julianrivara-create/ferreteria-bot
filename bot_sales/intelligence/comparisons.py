@@ -135,20 +135,20 @@ class ProductComparator:
             price_diff_pct = diffs['price']['difference_pct']
             if price_diff_pct > 20:
                 cheaper = 'product1' if diffs['price']['cheaper'] == 'p1' else 'product2'
-                recommendations.append(f"✅ {p1['model'] if cheaper == 'product1' else p2['model']} tiene mejor precio ({price_diff_pct}% más barato)")
+                recommendations.append(f"{p1['model'] if cheaper == 'product1' else p2['model']} tiene mejor precio ({price_diff_pct}% más barato)")
         
         # Más moderno
         if 'generation' in diffs:
             newer = 'product1' if diffs['generation']['newer'] == 'p1' else 'product2'
             model_newer = p1['model'] if newer == 'product1' else p2['model']
-            recommendations.append(f"🆕 {model_newer} es más nuevo")
+            recommendations.append(f"{model_newer} es más nuevo")
         
         # Más storage
         if 'storage' in diffs:
             more_storage = 'product1' if diffs['storage']['winner'] == 'p1' else 'product2'
             model_storage = p1['model'] if more_storage == 'product1' else p2['model']
             storage = p1['storage_gb'] if more_storage == 'product1' else p2['storage_gb']
-            recommendations.append(f"💾 {model_storage} tiene más capacidad ({storage}GB)")
+            recommendations.append(f"{model_storage} tiene más capacidad ({storage}GB)")
         
         if not recommendations:
             return "Ambos productos son muy similares. Elegí según tu preferencia de color o disponibilidad."
@@ -160,7 +160,7 @@ class ProductComparator:
         Formatea tabla de comparación para mostrar al usuario
         """
         lines = []
-        lines.append(f"📊 COMPARACIÓN\n")
+        lines.append(f"COMPARACIÓN\n")
         lines.append(f"{'Feature':<15} | {p1.get('model', ''):<20} | {p2.get('model', ''):<20}")
         lines.append("-" * 60)
         

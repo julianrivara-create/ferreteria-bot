@@ -21,11 +21,11 @@ class ObjectionHandler:
             "precio": {
                 "keywords": ["caro", "precio", "charlable", "menos", "descuento", "barato"],
                 "response_template": (
-                    "Entiendo que es una inversión. 💡 Pensá que estás llevando:\n"
-                    "• Garantía oficial del fabricante ✅\n"
-                    "• Producto original y validado 📦\n"
-                    "• Soporte postventa local 🛠️\n\n"
-                    "💳 Además tenemos alternativas de pago y promociones según el método elegido. "
+                    "Entiendo. Pensá que estás llevando:\n"
+                    "• Garantía oficial del fabricante\n"
+                    "• Producto original y validado\n"
+                    "• Soporte postventa local\n\n"
+                    "Además tenemos alternativas de pago según el método elegido. "
                     "¿Querés que revisemos opciones?"
                 ),
                 "action": "offer_payment_plans"
@@ -33,30 +33,29 @@ class ObjectionHandler:
             "confianza": {
                 "keywords": ["confiable", "seguro", "estafa", "miedo", "local", "lugar"],
                 "response_template": (
-                    "¡Es súper normal tener dudas compras online! 🤝\n"
-                    "Para tu tranquilidad:\n"
-                    "📍 Tenemos oficina en Palermo (con cita previa).\n"
-                    "⭐ Más de 5 años vendiendo en el sitio.\n"
-                    "✅ Factura A o B con tu compra.\n"
-                    "📸 Si querés, te puedo mandar foto de la caja sellada con tu nombre ahora mismo."
+                    "Es normal tener dudas. Para tu tranquilidad:\n"
+                    "• Tenemos oficina en Palermo (con cita previa).\n"
+                    "• Más de 5 años vendiendo en el sitio.\n"
+                    "• Factura A o B con tu compra.\n"
+                    "Si querés, te puedo mandar foto de la caja sellada con tu nombre ahora mismo."
                 ),
                 "action": "offer_proof"
             },
             "competencia": {
                 "keywords": ["otro lado", "vi mas barato", "publicacion", "tienda"],
                 "response_template": (
-                    "Ojo con precios muy bajos que a veces son equipos reacondicionados (refurbished) o sin garantía real. ⚠️\n"
-                    "Lo nuestro es **Nuevo, Sellado y con Garantía Escrita**. "
-                    "Preferible invertir un poquito más y dormir tranquilo que tener problemas después, ¿no? 😉"
+                    "Ojo con precios muy bajos: a veces son equipos reacondicionados o sin garantía real.\n"
+                    "Lo nuestro es nuevo, sellado y con garantía escrita. "
+                    "Preferible invertir un poquito más y dormir tranquilo."
                 ),
                 "action": "highlight_value"
             },
             "stock": {
                 "keywords": ["color", "modelo", "gb", "memoria"],
                 "response_template": (
-                    "Ese específico voló 🦅, pero tengo opciones geniales:\n"
+                    "Ese específico no lo tengo, pero hay opciones:\n"
                     "{alternatives}\n"
-                    "A veces un color diferente o +/- memoria te salva y lo tenés YA. ¿Te va alguno?"
+                    "A veces un color diferente o +/- memoria te salva y lo tenés ya. ¿Te va alguno?"
                 ),
                 "action": "suggest_alternatives"
             },

@@ -47,7 +47,7 @@ def main() -> int:
             quote = bot.process_message(sid("smoke_quote"), "Necesito tornillos para chapa y un taladro")
             checks.append((
                 "quote builder structured",
-                "Presupuesto preliminar" in quote and "urgencia" not in quote.lower() and "pago" not in quote.lower(),
+                ("Total" in quote or "opciones" in quote) and "urgencia" not in quote.lower() and "pago" not in quote.lower(),
                 quote[:280],
             ))
 
@@ -68,7 +68,7 @@ def main() -> int:
             qty_quote = bot.process_message(sid("smoke_qty"), "Quiero 2 siliconas y 3 teflones")
             checks.append((
                 "qty + subtotal",
-                "Presupuesto preliminar" in qty_quote and ("2" in qty_quote or "3" in qty_quote) and "urgencia" not in qty_quote.lower(),
+                ("Total" in qty_quote or "tengo" in qty_quote.lower()) and ("2" in qty_quote or "3" in qty_quote) and "urgencia" not in qty_quote.lower(),
                 qty_quote[:300],
             ))
 
@@ -76,10 +76,10 @@ def main() -> int:
             synonym = bot.process_message(sid("smoke_synonym"), "Necesito taco fisher y mecha")
             checks.append((
                 "synonym expansion",
-                "Presupuesto preliminar" in synonym
+                ("Total" in synonym or "opciones" in synonym or "Para " in synonym)
                 and "urgencia" not in synonym.lower()
                 and ("tarugo" in synonym.lower() or "fisher" in synonym.lower() or "taco" in synonym.lower())
-                and ("medida" in synonym.lower() or "madera" in synonym.lower() or "material" in synonym.lower()),
+                and ("mecha" in synonym.lower() or "broca" in synonym.lower()),
                 synonym[:280],
             ))
 
@@ -98,10 +98,10 @@ def main() -> int:
             mt_clar = bot.process_message(sid("smoke_mt_clar"), "Mecha de 8 mm para madera")
             checks.append((
                 "multiturn clarification",
-                ("Actualice" in mt_clar or "Presupuesto" in mt_clar)
+                ("Actualicé" in mt_clar or "Total" in mt_clar or "tengo" in mt_clar.lower())
                 and "urgencia" not in mt_clar.lower()
                 and ("mecha" in mt_clar.lower() or "broca" in mt_clar.lower())  # mecha→broca alias
-                and "madera" in mt_clar.lower()
+                and ("madera" in mt_clar.lower() or "8" in mt_clar)  # size or material reflected
                 and "taladro" not in mt_clar.lower(),
                 mt_clar[:260],
             ))

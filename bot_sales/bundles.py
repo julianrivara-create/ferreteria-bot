@@ -178,16 +178,16 @@ class BundleManager:
         msg = f"{bundle['name']}\n"
         msg += f"{bundle['description']}\n\n"
         
-        msg += "📦 Incluye:\n"
+        msg += "Incluye:\n"
         for prod in bundle['products']:
             msg += f"  • {prod['quantity']}x {prod['name']}\n"
         
-        msg += f"\n💰 Precio regular: ${bundle['regular_price']:,}\n"
-        msg += f"🎁 Descuento: {bundle['discount_percent']}% (-${bundle['discount_amount']:,})\n"
-        msg += f"✅ Precio final: ${bundle['final_price']:,}\n"
-        msg += f"💵 Te ahorrás: ${bundle['savings']:,}"
-        
+        msg += f"\nPrecio regular: ${bundle['regular_price']:,}\n"
+        msg += f"Descuento: {bundle['discount_percent']}% (-${bundle['discount_amount']:,})\n"
+        msg += f"Precio final: ${bundle['final_price']:,}\n"
+        msg += f"Te ahorrás: ${bundle['savings']:,}"
+
         if bundle.get('is_seasonal'):
-            msg += "\n⏰ Promo temporal - aprovechá ahora!"
+            msg += "\nPromo temporal - aprovechá ahora."
         
         return msg

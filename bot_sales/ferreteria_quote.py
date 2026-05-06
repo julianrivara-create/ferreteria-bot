@@ -1289,7 +1289,7 @@ def generate_acceptance_response(active_quote: List[QuoteItem], knowledge: Optio
     ]
     if stale_items:
         base += (
-            f"\n\n⚠️ _Algunos precios son referenciales (cotizados hace más de "
+            f"\n\n_Algunos precios son referenciales (cotizados hace más de "
             f"{STALE_PRICE_THRESHOLD_MINUTES} min) y se verifican con catálogo "
             f"actualizado al momento de la revisión._"
         )
@@ -1360,14 +1360,43 @@ def _quote_next_step_line(items: List[QuoteItem]) -> str:
     return "Si queres, te lo dejo asi o lo ajusto por precio, uso o marca."
 
 
+# Strips user-input noise from ambiguous block headers (display only — QuoteItem unchanged).
+_HEADER_CLEANUP_RE = re.compile(
+    r"^(?:"
+    r"la\s+opci[oó]n\s+[a-z]\s+del?\s+"   # "la opcion a del / la opción b de "
+    r"|lo\s+del?\s+"                         # "lo del / lo de "
+    r"|tambi[eé]n\s+te\s+pido\s+"           # "también te pido "
+    r"|tambi[eé]n\s+"                        # "también "
+    r"|te\s+pido\s+"                         # "te pido "
+    r"|quiero\s+"                            # "quiero "
+    r"|necesito\s+"                          # "necesito "
+    r"|busco\s+"                             # "busco "
+    r"|dame\s+"                              # "dame "
+    r")+",
+    re.IGNORECASE,
+)
+_HEADER_ARTICLE_RE = re.compile(
+    r"^(?:el|la|los|las|un|una)\s+",
+    re.IGNORECASE,
+)
+
+
+def _clean_header_label(text: str) -> str:
+    cleaned = _HEADER_CLEANUP_RE.sub("", text.strip())
+    cleaned = _HEADER_ARTICLE_RE.sub("", cleaned.strip())
+    return cleaned.strip() or text.strip()
+
+
 def generate_quote_response(
     resolved_items: List[QuoteItem],
     complementary: Optional[List[str]] = None,
-    header: str = "*Presupuesto preliminar:*",
+    is_update: bool = False,
 ) -> str:
-    """Compact quote format: one line per item, clear total at the bottom."""
-    lines: List[str] = [header, ""]
-    pending_questions: List[str] = []
+    """Conversational WhatsApp quote format."""
+    resolved_lines: List[str] = []
+    ambiguous_data: List[tuple] = []   # (original_lower, products_list)
+    blocked_questions: List[str] = []
+    unresolved_lines: List[str] = []
     grand_total: float = 0.0
     any_stale = False
 
@@ -1396,82 +1425,127 @@ def generate_quote_response(
                 grand_total += unit_price * qty
             else:
                 price_part = "precio a confirmar"
-            lines.append(f"✅ {qty} × {name} — {price_part}")
+            resolved_lines.append(f"{qty} × {name} — {price_part}")
             if pack_note:
-                lines.append(f"   ↳ ⚠️ {pack_note}")
-            # Show one alternative if available
+                resolved_lines.append(f"   ↳ Atención: {pack_note}")
             if len(products) > 1:
                 alt = products[1]
                 alt_name = alt.get("model") or alt.get("name") or ""
                 alt_price = _parse_price(alt)
                 if alt_name and alt_name != name:
-                    lines.append(
+                    resolved_lines.append(
                         f"   ↳ También: {alt_name}"
                         + (f" · {_format_price(alt_price)}" if alt_price else "")
                     )
 
         elif status == "ambiguous" and products:
-            lines.append(f"❓ {original} — ¿cuál de estos?")
-            for j, p in enumerate(products[:3], start=1):
-                pname = p.get("model") or p.get("name") or ""
-                pprice = _parse_price(p)
-                lines.append(
-                    f"   {chr(64 + j)}) {pname}"
-                    + (f" · {_format_price(pprice)}" if pprice else "")
-                )
-            if clarif:
-                pending_questions.append(f"• {original}: {clarif}")
+            header_label = _clean_header_label(original.lower())
+            ambiguous_data.append((header_label, products[:3]))
 
         elif status == "blocked_by_missing_info":
-            detail = clarif or "necesito más detalle"
-            lines.append(f"⚠️ {original} — {detail}")
             if clarif:
-                pending_questions.append(f"• {original}: {clarif}")
+                blocked_questions.append(
+                    f"Para {original.lower()} necesito que me digas {clarif}"
+                )
+            else:
+                blocked_questions.append(
+                    f"Decime más sobre {original.lower()} y te lo cotizo"
+                )
 
         else:  # unresolved
-            lines.append(f"❌ {original} — no lo encontré en el catálogo")
+            unresolved_lines.append(f"{original} — no lo encontré en el catálogo")
 
-    # Separator + total
-    lines.append("")
-    lines.append("──────────────────")
-    resolved_count = sum(1 for it in resolved_items if it["status"] == "resolved")
-    total_count    = len(resolved_items)
-    if grand_total > 0:
-        label = (
-            f"*Total parcial ({resolved_count}/{total_count})*"
-            if resolved_count < total_count
-            else "*Total*"
-        )
-        lines.append(f"{label}: {_format_price(grand_total)}")
+    has_resolved  = bool(resolved_lines)
+    has_ambiguous = bool(ambiguous_data)
+    has_blocked   = bool(blocked_questions)
+    n_amb         = len(ambiguous_data)
 
-    # Stale price footnote
+    parts: List[str] = []
+
+    # Resolved items section
+    if has_resolved:
+        opener = "Actualicé esto:" if is_update else "Te armé esto:"
+        parts.append(opener)
+        parts.append("")
+        parts.extend(resolved_lines)
+        parts.extend(unresolved_lines)
+
+    # Ambiguous items section
+    if has_ambiguous:
+        if has_resolved:
+            parts.append("")
+        for i, (orig_lower, prods) in enumerate(ambiguous_data):
+            n_opts = len(prods)
+            n_word = "opción" if n_opts == 1 else "opciones"
+            if has_resolved:
+                label = f"Para {orig_lower} tengo {n_opts} {n_word}"
+            elif n_amb == 1:
+                label = f"Tengo {n_opts} {n_word} de {orig_lower}"
+            else:
+                label = f"Para {orig_lower} tengo"
+            parts.append(f"{label}:")
+            for j, p in enumerate(prods, start=1):
+                pname  = p.get("model") or p.get("name") or ""
+                pprice = _parse_price(p)
+                parts.append(
+                    f"{chr(64 + j)}) {pname}"
+                    + (f" · {_format_price(pprice)}" if pprice else "")
+                )
+            if i < n_amb - 1:
+                parts.append("")
+
+    # Stale footnote
     if any_stale:
-        lines.append("")
-        lines.append(
-            f"⚠️ _Precios marcados se cotizaron hace más de "
+        parts.append("")
+        parts.append(
+            f"_Precios marcados se cotizaron hace más de "
             f"{STALE_PRICE_THRESHOLD_MINUTES} min y son referenciales. "
             f"Se verifican con catálogo actualizado al confirmar._"
         )
 
-    # Pending questions
-    if pending_questions:
-        lines.append("")
-        lines.append("Necesito confirmar:")
-        lines.extend(pending_questions)
-        lines.append("")
-        lines.append("Respondé y te actualizo el total. 🛠️")
-    elif grand_total > 0:
-        lines.append("")
-        lines.append("Válido 24hs · ¿Confirmás?")
+    # Total
+    if grand_total > 0:
+        parts.append("")
+        resolved_count = sum(1 for it in resolved_items if it["status"] == "resolved")
+        total_count    = len(resolved_items)
+        label_total = (
+            f"*Total parcial ({resolved_count}/{total_count})*"
+            if resolved_count < total_count
+            else "*Total*"
+        )
+        parts.append(f"{label_total}: {_format_price(grand_total)}")
+
+    # Blocked questions always shown when present
+    if has_blocked:
+        parts.append("")
+        for q in blocked_questions:
+            parts.append(q)
+
+    # Closing line (only when there are no pending blocked questions)
+    if has_ambiguous and not has_blocked:
+        parts.append("")
+        if has_resolved:
+            parts.append("Decime con cuál vas y te paso el total final.")
+        elif n_amb == 1:
+            parts.append("¿Con cuál te quedás?")
+        else:
+            parts.append("Decime con cuál te quedás de cada uno.")
+    elif not has_ambiguous and not has_blocked and grand_total > 0:
+        parts.append("")
+        parts.append("Válido 24hs · ¿Confirmás?")
+
+    # Unresolved-only fallback (no resolved/ambiguous/blocked context)
+    if not has_resolved and not has_ambiguous and not has_blocked and unresolved_lines:
+        parts.extend(unresolved_lines)
 
     # Complementary suggestions
     if complementary:
-        lines.append("")
-        lines.append("También suelen llevar:")
+        parts.append("")
+        parts.append("También suelen llevar:")
         for c in complementary:
-            lines.append(f"  • {c}")
+            parts.append(f"  • {c}")
 
-    return "\n".join(lines).strip()
+    return "\n".join(parts).strip()
 
 
 def _resolved_snapshot_lines(open_items: List[QuoteItem], *, limit: int = 3) -> List[str]:
@@ -1486,7 +1560,7 @@ def _resolved_snapshot_lines(open_items: List[QuoteItem], *, limit: int = 3) -> 
         name = product.get("model") or product.get("name") or product.get("sku", "Producto")
         qty = int(item.get("qty") or 1)
         qty_prefix = f"{qty} x " if qty > 1 else ""
-        snapshot.append(f"- **{qty_prefix}{name}** | {_format_price(item.get('subtotal') or item.get('unit_price'))}")
+        snapshot.append(f"- {qty_prefix}{name} | {_format_price(item.get('subtotal') or item.get('unit_price'))}")
         if len(snapshot) >= limit:
             break
     return snapshot
@@ -1604,18 +1678,18 @@ def generate_sales_guidance_response(
             primary_fits = _budget_fits(primary_price_val, budget_cap)
             if budget_cap is not None and alt_fits and not primary_fits:
                 lines.append(
-                    f"Con tu tope de {_format_budget(budget_cap)}, la opcion que entra es **{alt_name}** ({alt_price})."
+                    f"Con tu tope de {_format_budget(budget_cap)}, la opcion que entra es {alt_name} ({alt_price})."
                 )
                 lines.append("Si queres, te actualizo el presupuesto con esa variante.")
             else:
                 lines.append(
-                    f"Si queres bajar presupuesto, la primera variante a revisar seria **{alt_name}** ({alt_price}) "
-                    f"en lugar de **{primary_name}** ({primary_price})."
+                    f"Si queres bajar presupuesto, la primera variante a revisar seria {alt_name} ({alt_price}) "
+                    f"en lugar de {primary_name} ({primary_price})."
                 )
                 lines.append("Si queres, te actualizo el presupuesto con esa variante.")
         else:
             lines.append(
-                f"Sobre **{primary_name}** ({primary_price}), hoy no te voy a inventar una alternativa mas barata si no la tengo clara."
+                f"Sobre {primary_name} ({primary_price}), hoy no te voy a inventar una alternativa mas barata si no la tengo clara."
             )
             if budget_cap is None:
                 lines.append(
@@ -1637,19 +1711,19 @@ def generate_sales_guidance_response(
             return "\n".join(lines).strip()
         if alt and alt_name:
             if decision_style == "price":
-                lines.append(f"- Priorizando precio: **{alt_name}** ({alt_price})")
-                lines.append(f"- Si el rendimiento es lo primero: **{primary_name}** ({primary_price})")
+                lines.append(f"- Priorizando precio: {alt_name} ({alt_price})")
+                lines.append(f"- Si el rendimiento es lo primero: {primary_name} ({primary_price})")
             elif decision_style == "quality":
-                lines.append(f"- Priorizando rendimiento: **{primary_name}** ({primary_price})")
-                lines.append(f"- Si queres cuidar mas el numero: **{alt_name}** ({alt_price})")
+                lines.append(f"- Priorizando rendimiento: {primary_name} ({primary_price})")
+                lines.append(f"- Si queres cuidar mas el numero: {alt_name} ({alt_price})")
             else:
-                lines.append(f"- Para mirar una variante mas accesible: **{alt_name}** ({alt_price})")
-                lines.append(f"- Para seguir con la base ya armada: **{primary_name}** ({primary_price})")
+                lines.append(f"- Para mirar una variante mas accesible: {alt_name} ({alt_price})")
+                lines.append(f"- Para seguir con la base ya armada: {primary_name} ({primary_price})")
             if budget_cap is not None:
                 fits = _budget_fits(alt_price_val, budget_cap) or _budget_fits(primary_price_val, budget_cap)
                 if fits:
                     winner = alt_name if _budget_fits(alt_price_val, budget_cap) else primary_name
-                    lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la que entra es **{winner}**.")
+                    lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la que entra es {winner}.")
             lines.append("Si queres, te actualizo el presupuesto con la opcion que elijas.")
         else:
             lines.append(
@@ -1683,20 +1757,20 @@ def generate_sales_guidance_response(
     # Single item recommendation — apply decision_style and budget_cap
     if decision_style == "price" and alt and alt_name:
         # User prefers price → lead with the cheaper option
-        lines.append(f"Si priorizas precio, arrancaria con **{alt_name}** ({alt_price}).")
+        lines.append(f"Si priorizas precio, arrancaria con {alt_name} ({alt_price}).")
         if use_phrase:
             lines.append(f"Cumple bien {use_phrase} sin pasarte de presupuesto.")
-        lines.append(f"Si despues el rendimiento importa mas, **{primary_name}** ({primary_price}) es el siguiente escalon.")
+        lines.append(f"Si despues el rendimiento importa mas, {primary_name} ({primary_price}) es el siguiente escalon.")
     elif decision_style == "quality":
         # User prefers quality → lead with the primary (best) option
-        lines.append(f"Priorizando rendimiento, yo me quedaria con **{primary_name}** ({primary_price}).")
+        lines.append(f"Priorizando rendimiento, yo me quedaria con {primary_name} ({primary_price}).")
         if use_phrase:
             lines.append(f"Para {use_phrase.replace('para ', '')} es el que mejor aguanta el uso.")
         if alt and alt_name:
-            lines.append(f"Si el presupuesto aprieta, **{alt_name}** ({alt_price}) es la alternativa.")
+            lines.append(f"Si el presupuesto aprieta, {alt_name} ({alt_price}) es la alternativa.")
     elif budget_cap is not None and alt and alt_name and _budget_fits(alt_price_val, budget_cap) and not _budget_fits(primary_price_val, budget_cap):
         # Has budget cap and only the alt fits → recommend the alt
-        lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la opcion que te recomiendo es **{alt_name}** ({alt_price}).")
+        lines.append(f"Con tu tope de {_format_budget(budget_cap)}, la opcion que te recomiendo es {alt_name} ({alt_price}).")
         if use_phrase:
             lines.append(f"Cumple bien {use_phrase}.")
     else:
@@ -1704,10 +1778,10 @@ def generate_sales_guidance_response(
             lines.append(f"Como punto de partida, me gusta {use_phrase}.")
         else:
             lines.append(
-                f"Como base, **{primary_name}** ({primary_price}) me parece una opcion logica para avanzar sin vueltas."
+                f"Como base, {primary_name} ({primary_price}) me parece una opcion logica para avanzar sin vueltas."
             )
         if alt and alt_name:
-            lines.append(f"Si queres comparar o cuidar mas el numero, tambien revisaria **{alt_name}** ({alt_price}).")
+            lines.append(f"Si queres comparar o cuidar mas el numero, tambien revisaria {alt_name} ({alt_price}).")
     if not use_phrase:
         lines.append("Si me decis si es para hogar, obra o uso mas seguido, te digo cual conviene mas.")
     return "\n".join(lines).strip()
@@ -2081,7 +2155,7 @@ def generate_updated_quote_response(
     return generate_quote_response(
         resolved_items,
         complementary=complementary,
-        header="*Actualice el presupuesto preliminar:*",
+        is_update=True,
     )
 
 
