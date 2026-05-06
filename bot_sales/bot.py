@@ -252,7 +252,7 @@ class SalesBot:
         return "cli"
 
     def _load_active_quote_from_store(self, session_id: str) -> None:
-        if not self.quote_service:
+        if not self.quote_service or self.sandbox_mode:
             return
         loaded = self.quote_service.load_active_quote(session_id)
         sess = self.sessions.setdefault(session_id, {})

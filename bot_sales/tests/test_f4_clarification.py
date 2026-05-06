@@ -4,7 +4,9 @@ F4 Bug fix — regression tests for detect_option_selection and looks_like_addit
 These tests guard the regex changes introduced to make clarification responses
 deterministic: extended option-selection phrases and additional additive verb forms.
 """
+import json
 import pytest
+from unittest.mock import MagicMock, patch
 import bot_sales.ferreteria_quote as fq
 
 
@@ -169,3 +171,104 @@ class TestF4LooksLikeAdditive:
 
     def test_clarification_answer_returns_False(self):
         assert fq.looks_like_additive("Para madera, por favor") is False
+
+
+class TestSandboxStatePreservation:
+    """D5 — guard that _load_active_quote_from_store skips in sandbox mode.
+
+    Root cause: in training mode each turn gets a fresh SalesBot with an empty
+    temp DB.  The old code queried the store, got None, and popped active_quote
+    from the session — clobbering the state that TrainingSessionService had just
+    injected via JSON round-trip.
+    """
+
+    def _make_sandbox_bot(self):
+        from bot_sales.bot import SalesBot
+        with patch.object(SalesBot, "__init__", lambda s, *a, **kw: None):
+            bot = SalesBot.__new__(SalesBot)
+        bot.sandbox_mode = True
+        bot.tenant_id = "ferreteria"
+        bot.sessions = {}
+        bot.quote_service = MagicMock()
+        bot.quote_service.load_active_quote.return_value = None  # empty temp DB
+        return bot
+
+    def test_load_active_quote_skipped_in_sandbox(self):
+        """sandbox_mode=True → active_quote injected in session must survive."""
+        bot = self._make_sandbox_bot()
+        sid = "test_sandbox_session"
+        injected_items = [{"sku": "DST-001", "description": "Dest. Phillips", "qty": 1, "status": "awaiting_clarification"}]
+        bot.sessions[sid] = {"active_quote": injected_items, "quote_state": "open"}
+
+        bot._load_active_quote_from_store(sid)
+
+        assert bot.sessions[sid].get("active_quote") == injected_items, (
+            "_load_active_quote_from_store must not pop active_quote when sandbox_mode=True"
+        )
+        bot.quote_service.load_active_quote.assert_not_called()
+
+    def test_load_active_quote_skipped_preserves_quote_state(self):
+        """Both active_quote and quote_state survive the sandbox guard."""
+        bot = self._make_sandbox_bot()
+        sid = "test_sandbox_session_2"
+        bot.sessions[sid] = {
+            "active_quote": [{"sku": "X"}],
+            "quote_state": "open",
+        }
+
+        bot._load_active_quote_from_store(sid)
+
+        assert bot.sessions[sid].get("quote_state") == "open"
+
+    def test_training_flow_state_survives_json_round_trip(self):
+        """JSON-serialise → deserialise of session state must preserve active_quote.
+
+        Mimics what TrainingSessionService does between turns: serialise the
+        session dict to JSON after T1, then re-inject it into a fresh bot for T2.
+        The key assertion is that active_quote is intact after re-injection and
+        after _load_active_quote_from_store runs (which it does in process_message).
+        """
+        from bot_sales.bot import SalesBot
+
+        original_state = {
+            "active_quote": [
+                {
+                    "sku": "DST-001",
+                    "description": "Destornillador Phillips",
+                    "qty": 1,
+                    "unit_price": 1500.0,
+                    "subtotal": 1500.0,
+                    "status": "awaiting_clarification",
+                    "products": [
+                        {"sku": "DST-A", "description": "Opt A", "unit_price": 1200.0},
+                        {"sku": "DST-B", "description": "Opt B", "unit_price": 1500.0},
+                    ],
+                }
+            ],
+            "quote_state": "open",
+            "last_offered_products": None,
+        }
+
+        # T1 → T2 JSON round-trip (what TrainingSessionService does)
+        state_json = json.dumps(original_state, ensure_ascii=False)
+        rehydrated = json.loads(state_json)
+
+        # Build fresh bot (sandbox) and inject rehydrated state
+        with patch.object(SalesBot, "__init__", lambda s, *a, **kw: None):
+            bot = SalesBot.__new__(SalesBot)
+        bot.sandbox_mode = True
+        bot.tenant_id = "ferreteria"
+        bot.sessions = {}
+        bot.quote_service = MagicMock()
+        bot.quote_service.load_active_quote.return_value = None
+
+        sid = "training_round_trip_session"
+        bot.sessions[sid] = rehydrated
+
+        # This is called at the top of process_message for ferreteria
+        bot._load_active_quote_from_store(sid)
+
+        aq = bot.sessions[sid].get("active_quote")
+        assert aq is not None and len(aq) == 1, "active_quote must survive JSON round-trip + sandbox guard"
+        assert aq[0]["status"] == "awaiting_clarification"
+        assert len(aq[0].get("products", [])) == 2
