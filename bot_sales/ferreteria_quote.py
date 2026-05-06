@@ -1363,11 +1363,13 @@ def _quote_next_step_line(items: List[QuoteItem]) -> str:
 def generate_quote_response(
     resolved_items: List[QuoteItem],
     complementary: Optional[List[str]] = None,
-    header: str = "*Presupuesto preliminar:*",
+    is_update: bool = False,
 ) -> str:
-    """Compact quote format: one line per item, clear total at the bottom."""
-    lines: List[str] = [header, ""]
-    pending_questions: List[str] = []
+    """Conversational WhatsApp quote format."""
+    resolved_lines: List[str] = []
+    ambiguous_data: List[tuple] = []   # (original_lower, products_list)
+    blocked_questions: List[str] = []
+    unresolved_lines: List[str] = []
     grand_total: float = 0.0
     any_stale = False
 
@@ -1396,82 +1398,126 @@ def generate_quote_response(
                 grand_total += unit_price * qty
             else:
                 price_part = "precio a confirmar"
-            lines.append(f"{qty} × {name} — {price_part}")
+            resolved_lines.append(f"{qty} × {name} — {price_part}")
             if pack_note:
-                lines.append(f"   ↳ Atención: {pack_note}")
-            # Show one alternative if available
+                resolved_lines.append(f"   ↳ Atención: {pack_note}")
             if len(products) > 1:
                 alt = products[1]
                 alt_name = alt.get("model") or alt.get("name") or ""
                 alt_price = _parse_price(alt)
                 if alt_name and alt_name != name:
-                    lines.append(
+                    resolved_lines.append(
                         f"   ↳ También: {alt_name}"
                         + (f" · {_format_price(alt_price)}" if alt_price else "")
                     )
 
         elif status == "ambiguous" and products:
-            lines.append(f"• {original} — ¿cuál de estos?")
-            for j, p in enumerate(products[:3], start=1):
-                pname = p.get("model") or p.get("name") or ""
-                pprice = _parse_price(p)
-                lines.append(
-                    f"   {chr(64 + j)}) {pname}"
-                    + (f" · {_format_price(pprice)}" if pprice else "")
-                )
-            if clarif:
-                pending_questions.append(f"• {original}: {clarif}")
+            ambiguous_data.append((original.lower(), products[:3]))
 
         elif status == "blocked_by_missing_info":
-            detail = clarif or "necesito más detalle"
-            lines.append(f"• {original} — {detail}")
             if clarif:
-                pending_questions.append(f"• {original}: {clarif}")
+                blocked_questions.append(
+                    f"Para {original.lower()} necesito que me digas {clarif}"
+                )
+            else:
+                blocked_questions.append(
+                    f"Decime más sobre {original.lower()} y te lo cotizo"
+                )
 
         else:  # unresolved
-            lines.append(f"• {original} — no lo encontré en el catálogo")
+            unresolved_lines.append(f"{original} — no lo encontré en el catálogo")
 
-    # Separator + total
-    lines.append("")
-    lines.append("──────────────────")
-    resolved_count = sum(1 for it in resolved_items if it["status"] == "resolved")
-    total_count    = len(resolved_items)
-    if grand_total > 0:
-        label = (
-            f"*Total parcial ({resolved_count}/{total_count})*"
-            if resolved_count < total_count
-            else "*Total*"
-        )
-        lines.append(f"{label}: {_format_price(grand_total)}")
+    has_resolved  = bool(resolved_lines)
+    has_ambiguous = bool(ambiguous_data)
+    has_blocked   = bool(blocked_questions)
+    n_amb         = len(ambiguous_data)
 
-    # Stale price footnote
+    parts: List[str] = []
+
+    # Resolved items section
+    if has_resolved:
+        opener = "Actualicé esto:" if is_update else "Te armé esto:"
+        parts.append(opener)
+        parts.append("")
+        parts.extend(resolved_lines)
+        parts.extend(unresolved_lines)
+
+    # Ambiguous items section
+    if has_ambiguous:
+        if has_resolved:
+            parts.append("")
+        for i, (orig_lower, prods) in enumerate(ambiguous_data):
+            n_opts = len(prods)
+            n_word = "opción" if n_opts == 1 else "opciones"
+            if has_resolved:
+                label = f"Para {orig_lower} tengo {n_opts} {n_word}"
+            elif n_amb == 1:
+                label = f"Tengo {n_opts} {n_word} de {orig_lower}"
+            else:
+                label = f"Para {orig_lower} tengo"
+            parts.append(f"{label}:")
+            for j, p in enumerate(prods, start=1):
+                pname  = p.get("model") or p.get("name") or ""
+                pprice = _parse_price(p)
+                parts.append(
+                    f"{chr(64 + j)}) {pname}"
+                    + (f" · {_format_price(pprice)}" if pprice else "")
+                )
+            if i < n_amb - 1:
+                parts.append("")
+
+    # Stale footnote
     if any_stale:
-        lines.append("")
-        lines.append(
+        parts.append("")
+        parts.append(
             f"_Precios marcados se cotizaron hace más de "
             f"{STALE_PRICE_THRESHOLD_MINUTES} min y son referenciales. "
             f"Se verifican con catálogo actualizado al confirmar._"
         )
 
-    # Pending questions
-    if pending_questions:
-        lines.append("")
-        lines.append("Necesito confirmar:")
-        lines.extend(pending_questions)
-        lines.append("")
-        lines.append("Respondé y te actualizo el total.")
-    elif grand_total > 0:
-        lines.append("")
-        lines.append("Válido 24hs · ¿Confirmás?")
+    # Total
+    if grand_total > 0:
+        parts.append("")
+        resolved_count = sum(1 for it in resolved_items if it["status"] == "resolved")
+        total_count    = len(resolved_items)
+        label_total = (
+            f"*Total parcial ({resolved_count}/{total_count})*"
+            if resolved_count < total_count
+            else "*Total*"
+        )
+        parts.append(f"{label_total}: {_format_price(grand_total)}")
+
+    # Blocked questions always shown when present
+    if has_blocked:
+        parts.append("")
+        for q in blocked_questions:
+            parts.append(q)
+
+    # Closing line (only when there are no pending blocked questions)
+    if has_ambiguous and not has_blocked:
+        parts.append("")
+        if has_resolved:
+            parts.append("Decime con cuál vas y te paso el total final.")
+        elif n_amb == 1:
+            parts.append("¿Con cuál te quedás?")
+        else:
+            parts.append("Decime con cuál te quedás de cada uno.")
+    elif not has_ambiguous and not has_blocked and grand_total > 0:
+        parts.append("")
+        parts.append("Válido 24hs · ¿Confirmás?")
+
+    # Unresolved-only fallback (no resolved/ambiguous/blocked context)
+    if not has_resolved and not has_ambiguous and not has_blocked and unresolved_lines:
+        parts.extend(unresolved_lines)
 
     # Complementary suggestions
     if complementary:
-        lines.append("")
-        lines.append("También suelen llevar:")
+        parts.append("")
+        parts.append("También suelen llevar:")
         for c in complementary:
-            lines.append(f"  • {c}")
+            parts.append(f"  • {c}")
 
-    return "\n".join(lines).strip()
+    return "\n".join(parts).strip()
 
 
 def _resolved_snapshot_lines(open_items: List[QuoteItem], *, limit: int = 3) -> List[str]:
@@ -2081,7 +2127,7 @@ def generate_updated_quote_response(
     return generate_quote_response(
         resolved_items,
         complementary=complementary,
-        header="*Actualice el presupuesto preliminar:*",
+        is_update=True,
     )
 
 
