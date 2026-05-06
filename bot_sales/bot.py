@@ -1415,7 +1415,15 @@ class SalesBot:
             return _done(reply, "deterministic")
 
         # ── 5. New multi-item quote request ──────────────────────────────────
-        parsed_items = self._parse_quote_items(user_message)
+        # L1: if input is a structured list (numbered / bulleted), normalize to CSV first.
+        # _raw_for_parse is local — text is NOT mutated so all other logic is unaffected.
+        _raw_for_parse = user_message
+        if self._is_structured_list(text):
+            _normalized = self._normalize_list_to_items(text, self.chatgpt)
+            if _normalized and _normalized.strip():
+                _raw_for_parse = _normalized
+                logger.debug("L1 list_normalizer applied: %r → %r", text[:80], _raw_for_parse[:80])
+        parsed_items = self._parse_quote_items(_raw_for_parse)
         if len(parsed_items) >= 2:
             # P1: load knowledge once, resolve items in parallel (was sequential)
             _knowledge_snapshot = self._knowledge()
@@ -1729,6 +1737,48 @@ class SalesBot:
     # -- Quote Builder helpers (delegates to ferreteria_quote module) -----------
 
     _FILLER_WORDS = fq._FILLER_WORDS  # keep for backward compat if referenced elsewhere
+
+    # L1: structured-list detection patterns
+    _L1_NUMERAL_RE = re.compile(
+        r"^\s*(?:\d+[.):\-]|[ivxIVX]+[.):]|[a-zA-Z][.):])\s+\S",
+        re.MULTILINE,
+    )
+    _L1_BULLET_RE = re.compile(r"^\s*[-•*>]\s+\S", re.MULTILINE)
+
+    @staticmethod
+    def _is_structured_list(text: str) -> bool:
+        """Return True if text looks like a structured item list (numbered or bulleted)."""
+        if "\n" not in text:
+            return False
+        numeral_matches = SalesBot._L1_NUMERAL_RE.findall(text)
+        if len(numeral_matches) >= 2:
+            return True
+        bullet_matches = SalesBot._L1_BULLET_RE.findall(text)
+        return len(bullet_matches) >= 2
+
+    @staticmethod
+    def _normalize_list_to_items(text: str, chatgpt_client: "ChatGPTClient") -> str:
+        """Call LLM to convert a structured list into a CSV item string. Falls back to original text on error."""
+        prompt = (
+            "Tenés este mensaje de un cliente de ferretería:\n"
+            "---\n"
+            f"{text}\n"
+            "---\n"
+            "Extraé la lista de productos que pide y devolvé SOLO una lista separada por comas, "
+            "sin numerales, sin bullets, sin palabras de relleno. "
+            "Ejemplo de formato correcto: '3 mechas 6mm, 1 martillo, 2 metros manguera, 5 tornillos 3 pulgadas'\n"
+            "Si una cantidad no está especificada, asumir 1. "
+            "Solo productos, sin precios, sin marcas inventadas, sin nada más.\n"
+            "Responde SOLO con la lista, sin explicación."
+        )
+        try:
+            response = chatgpt_client.send_message(
+                [{"role": "user", "content": prompt}]
+            )
+            result = (response.get("content") or "").strip()
+            return result if result else text
+        except Exception:
+            return text
 
     def _parse_quote_items(self, message: str) -> List[Dict[str, Any]]:
         """Parse a customer message into a list of raw item dicts with qty info."""
