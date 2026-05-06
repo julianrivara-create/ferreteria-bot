@@ -51,6 +51,19 @@ class TestIsStructuredList:
         text = "necesito mechas 6mm"
         assert SalesBot._is_structured_list(text) is False
 
+    def test_inline_numbered_no_newlines(self):
+        text = "Necesito: 1) 50 tornillos 3 pulgadas 2) 5 mechas 6mm 3) 5 mechas 8mm 4) 1 amoladora"
+        assert SalesBot._is_structured_list(text) is True
+
+    def test_inline_numbered_real_whatsapp(self):
+        text = "Hola, presupuesto para obra. Necesito: 1) 50 tornillos autoperforantes 3 pulgadas 2) 5 mechas de 6mm 3) 5 mechas de 8mm 4) 2 mechas de 10mm 5) 1 amoladora chica"
+        assert SalesBot._is_structured_list(text) is True
+
+    def test_inline_single_numeral_is_false(self):
+        # Only 1 numeral marker — not a list
+        text = "necesito 1) un martillo y algo más"
+        assert SalesBot._is_structured_list(text) is False
+
     def test_long_list_obra(self):
         text = (
             "Hola, presupuesto para obra. Necesito:\n"

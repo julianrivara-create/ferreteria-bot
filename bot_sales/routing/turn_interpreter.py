@@ -119,6 +119,11 @@ class TurnInterpretation:
     # Example: "dame el primero, agregame martillo" →
     #   sub_commands=["dame el primero", "agregame martillo"]
     # Empty list when compound_message=false.
+    # L2 addition
+    items: Optional[List[str]] = None
+    # When the message is a product list (numbered, bulleted, or 4+ items), each item
+    # pre-extracted with its quantity. None when message is NOT a product list.
+    # Example: "1) 5 mechas 6mm\n2) 1 martillo" → ["5 mechas 6mm", "1 martillo"]
 
     def is_low_confidence(self) -> bool:
         return self.confidence < 0.55
@@ -137,6 +142,7 @@ class TurnInterpretation:
             "escalation_reason": self.escalation_reason,
             "referenced_offer_index": self.referenced_offer_index,
             "sub_commands": self.sub_commands,
+            "items": self.items,
         }
 
     @classmethod
@@ -173,6 +179,13 @@ class TurnInterpretation:
             sub_commands: List[str] = []
         else:
             sub_commands = [s for s in raw_sub if isinstance(s, str)][:5]
+        raw_items = d.get("items")
+        if isinstance(raw_items, list):
+            items: Optional[List[str]] = [s for s in raw_items if isinstance(s, str) and s.strip()][:20]
+            if not items:
+                items = None
+        else:
+            items = None
         return cls(
             intent=intent,
             confidence=confidence,
@@ -186,6 +199,7 @@ class TurnInterpretation:
             escalation_reason=escalation_reason,
             referenced_offer_index=raw_ref_idx,
             sub_commands=sub_commands,
+            items=items,
         )
 
     @classmethod
@@ -219,7 +233,8 @@ Dado un mensaje del cliente, devolvé SOLO JSON válido con esta estructura exac
   "compound_message": false,
   "sub_commands": [],
   "escalation_reason": "explicit_request|negotiation|frustration|null",
-  "referenced_offer_index": null
+  "referenced_offer_index": null,
+  "items": null
 }
 
 === REGLAS GENERALES ===
@@ -341,6 +356,25 @@ Mantener cobertura completa:
   cualquier confirmación clara cuando hay carrito activo.
 - quote_reject: "no no me sirve", "paso", "mejor no", "lo dejamos", "no gracias",
   cualquier rechazo claro.
+
+=== REGLA ITEMS — LISTAS DE PRODUCTOS ===
+Si el mensaje del cliente es una lista de productos (numerada, con bullets, o con 4+ items
+separados por comas o saltos de línea), devolvé el campo "items" como lista de strings,
+donde cada string es un item limpio con su cantidad.
+
+Cuándo poblar "items":
+- Lista numerada: "1) 5 mechas 6mm\n2) 1 martillo\n3) 2 metros manguera"
+- Lista con bullets: "- mecha 6mm\n- mecha 8mm\n- destornillador phillips"
+- Prosa con 4+ productos distintos: "necesito mechas 6, 8 y 10mm, un martillo y destornillador"
+
+Formato de cada item: qty + producto limpio. Si no hay cantidad explícita, asumir 1.
+Ejemplos correctos: "5 mechas 6mm", "1 martillo", "50 tornillos autoperforantes 3 pulgadas",
+"2 metros manguera 1/2 pulgada".
+
+Cuándo NO poblar "items" (dejar null):
+- Consultas de 1 solo producto: "necesito un martillo", "taladro Bosch"
+- Modificaciones de carrito: "dame el primero", "sacame el segundo"
+- Preguntas, saludos, consultas de política
 
 === REGLA QUOTE_MODIFY SOLO CON CARRITO ===
 intent="quote_modify" solo es válido cuando current_state="quote_drafting" o
