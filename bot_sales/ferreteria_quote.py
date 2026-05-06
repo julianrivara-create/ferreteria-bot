@@ -1800,7 +1800,8 @@ _RESET_PHRASES = frozenset({
 
 _ADDITIVE_RE = re.compile(
     r"^(?:agrega|agregame|agregale|suma|sumale|sumame|s\u00famame|sumar|a\u00f1adi|a\u00f1adile|tambien\s+necesito|"
-    r"tambien\s+quiero|agrega\s+tambien|y\s+tambien|y\s+ademas)\b",
+    r"tambien\s+quiero|tambien\s+te\s+pido|te\s+pido\s+tambi[e\u00e9]n|tambi[e\u00e9]n\s+dame|"
+    r"agregale\s+tambi[e\u00e9]n|sumale\s+(?:tambi[e\u00e9]n\s+)?|agrega\s+tambien|y\s+tambien|y\s+ademas)\b",
     re.IGNORECASE,
 )
 
@@ -1823,10 +1824,22 @@ def detect_option_selection(text: str) -> Optional[int]:
     Returns None if no clear selection is found.
     """
     norm = _normalize(text.strip())
-    # Option letters
+    # Option letters — single-word prefix: "A", "la A", "opcion B"
     m_letter = re.match(r"^\s*(?:la|el|opcion|opción)?\s*([a-e])(?:\)|\.|\s|,|$)", norm)
     if m_letter:
         return ord(m_letter.group(1)) - ord('a')
+
+    # Option letters — multi-word prefixes: "la opcion A", "me quedo con la B",
+    # "con la C", "quiero la A", "tomo la A", "dame la A", "voy con la A", "elijo la A"
+    m_phrase = re.search(
+        r"(?:la\s+opci[oó]n|con\s+la|me\s+quedo\s+con\s+la|"
+        r"quiero\s+la|tomo\s+la|dame\s+la|voy\s+con\s+la|elijo\s+la)"
+        r"\s+([a-e])\b",
+        norm,
+        re.IGNORECASE,
+    )
+    if m_phrase:
+        return ord(m_phrase.group(1).lower()) - ord('a')
 
     # Ordinals
     if any(p in norm for p in ("primero", "primera", "1ro", "1ra", "el 1")): return 0
