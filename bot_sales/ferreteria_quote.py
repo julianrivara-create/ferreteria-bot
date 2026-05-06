@@ -1360,6 +1360,33 @@ def _quote_next_step_line(items: List[QuoteItem]) -> str:
     return "Si queres, te lo dejo asi o lo ajusto por precio, uso o marca."
 
 
+# Strips user-input noise from ambiguous block headers (display only — QuoteItem unchanged).
+_HEADER_CLEANUP_RE = re.compile(
+    r"^(?:"
+    r"la\s+opci[oó]n\s+[a-z]\s+del?\s+"   # "la opcion a del / la opción b de "
+    r"|lo\s+del?\s+"                         # "lo del / lo de "
+    r"|tambi[eé]n\s+te\s+pido\s+"           # "también te pido "
+    r"|tambi[eé]n\s+"                        # "también "
+    r"|te\s+pido\s+"                         # "te pido "
+    r"|quiero\s+"                            # "quiero "
+    r"|necesito\s+"                          # "necesito "
+    r"|busco\s+"                             # "busco "
+    r"|dame\s+"                              # "dame "
+    r")+",
+    re.IGNORECASE,
+)
+_HEADER_ARTICLE_RE = re.compile(
+    r"^(?:el|la|los|las|un|una)\s+",
+    re.IGNORECASE,
+)
+
+
+def _clean_header_label(text: str) -> str:
+    cleaned = _HEADER_CLEANUP_RE.sub("", text.strip())
+    cleaned = _HEADER_ARTICLE_RE.sub("", cleaned.strip())
+    return cleaned.strip() or text.strip()
+
+
 def generate_quote_response(
     resolved_items: List[QuoteItem],
     complementary: Optional[List[str]] = None,
@@ -1412,7 +1439,8 @@ def generate_quote_response(
                     )
 
         elif status == "ambiguous" and products:
-            ambiguous_data.append((original.lower(), products[:3]))
+            header_label = _clean_header_label(original.lower())
+            ambiguous_data.append((header_label, products[:3]))
 
         elif status == "blocked_by_missing_info":
             if clarif:
