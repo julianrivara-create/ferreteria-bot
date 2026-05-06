@@ -91,7 +91,7 @@
           <form method="post">
             <input type="hidden" name="action" value="reset_session">
             <input type="hidden" name="session_id" value="{{ session.id }}">
-            <button type="submit" class="secondary">Reiniciar</button>
+            <button type="submit" class="accent-btn">↺ Nueva sesión</button>
           </form>
           <form method="post">
             <input type="hidden" name="action" value="close_session">
@@ -138,11 +138,13 @@
       </div>
 
       {% if session %}
-      <form method="post" style="margin-top:18px;">
+      <form method="post" style="margin-top:18px;" id="send-message-form">
         <input type="hidden" name="action" value="send_message">
         <input type="hidden" name="session_id" value="{{ session.id }}">
-        <textarea name="message" placeholder="Escribí como si fueras un cliente real. Ej: Necesito mecha para pared de 8 mm."></textarea>
-        <button type="submit" class="accent-btn">Enviar a la prueba</button>
+        <textarea id="message-input" name="message" rows="1"
+          placeholder="Escribí tu mensaje... (Shift+Enter para nueva línea)"
+          style="resize:none; overflow:hidden; min-height:38px; max-height:144px;"></textarea>
+        <button type="submit" class="accent-btn" style="margin-top:8px;">Enviar a la prueba</button>
       </form>
       {% endif %}
     </div>
@@ -305,6 +307,37 @@
     failureDetail.addEventListener('change', syncGuidance);
     syncFailureDetail();
     syncGuidance();
+  })();
+
+  // D1: textarea auto-resize + Enter=submit, Shift+Enter=newline
+  (function () {
+    const textarea = document.getElementById('message-input');
+    const form = document.getElementById('send-message-form');
+    if (!textarea || !form) return;
+
+    function autoResize() {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 144) + 'px';
+    }
+
+    textarea.addEventListener('input', autoResize);
+
+    textarea.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (textarea.value.trim()) {
+          form.submit();
+        }
+      }
+    });
+
+    // Reset height after form submit
+    form.addEventListener('submit', function () {
+      textarea.style.height = 'auto';
+    });
+
+    // Focus textarea on page load if session is active
+    textarea.focus();
   })();
 </script>
 {% endblock %}
