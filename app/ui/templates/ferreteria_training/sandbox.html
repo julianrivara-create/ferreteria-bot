@@ -321,6 +321,8 @@
     }
 
     textarea.addEventListener('input', autoResize);
+    // paste fires before the content lands in the DOM — defer resize by one tick
+    textarea.addEventListener('paste', function () { setTimeout(autoResize, 0); });
 
     textarea.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
