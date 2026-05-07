@@ -264,56 +264,6 @@ def _get_expected_families(normalized: str, knowledge: Optional[Dict[str, Any]] 
 
 
 # ---------------------------------------------------------------------------
-# Pack / unit detection
-# ---------------------------------------------------------------------------
-
-# Patterns that indicate a packaged SKU (not sold per individual unit)
-_PACK_RE = re.compile(
-    r"\bx\s*(\d{2,})\b"           # "x100", "x 50"
-    r"|caja\s+(?:de\s+)?\d+"      # "caja de 100"
-    r"|\bpack\b"
-    r"|\bbolsa\b"
-    r"|\bkit\b"
-    r"|\bset\b"
-    r"|\blote\b",
-    re.IGNORECASE,
-)
-
-
-def _detect_pack(product: Dict[str, Any]) -> Optional[str]:
-    """
-    If the product SKU/name is clearly a pack, return a human-readable
-    description of the pack (e.g. "caja x100").  Otherwise return None.
-    """
-    name = _normalize(
-        product.get("model") or product.get("name") or product.get("sku", "")
-    )
-    m = _PACK_RE.search(name)
-    if not m:
-        return None
-    return m.group(0).strip()
-
-
-def _pack_note(product: Dict[str, Any], requested_qty: int) -> Optional[str]:
-    """
-    Build a user-facing note when the SKU is a pack and the user asked
-    for individual units. Returns None when pack semantics are safe
-    (e.g. user asked for 0 or 1 which maps to buying one pack).
-    """
-    pack_desc = _detect_pack(product)
-    if not pack_desc:
-        return None
-    # If user explicitly asked for more than 1, warn them
-    if requested_qty > 1:
-        return (
-            f"Este artículo se vende en {pack_desc}. "
-            f"¿Te sirve esa presentación o necesitás otra?"
-        )
-    # Single-item request + pack SKU: warn transparently
-    return f"Este artículo se vende por {pack_desc}."
-
-
-# ---------------------------------------------------------------------------
 # Strict product scoring
 # ---------------------------------------------------------------------------
 
@@ -977,12 +927,7 @@ def resolve_quote_item(parsed: Dict[str, Any], logic: Any, knowledge: Optional[D
                 _log_unresolved(item, reason=f"variant_ambiguity score={best_score:.2f}")
                 return item
 
-            # High confidence — check pack semantics
-            pack = _pack_note(best_product, qty)
             unit_price, subtotal = _compute_subtotal(best_product, qty)
-            if pack:
-                # Pack/unit mismatch — cannot safely compute subtotal
-                subtotal = None
             return {
                 "line_id":      line_id,
                 "original":     raw,
@@ -995,7 +940,7 @@ def resolve_quote_item(parsed: Dict[str, Any], logic: Any, knowledge: Optional[D
                 "unit_price":   unit_price,
                 "price_captured_at": _now_iso() if unit_price is not None else None,
                 "subtotal":     subtotal,
-                "pack_note":    pack,
+                "pack_note":    None,
                 "clarification": None,
                 "notes":        None,
                 "complementary": [],
