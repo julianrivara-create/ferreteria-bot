@@ -1374,6 +1374,43 @@ class SalesBot:
                             return _done(reply, "deterministic")
                         # else: clarification didn't improve anything → fall through
 
+            # ── 4.1: additive intercept ─────────────────────────────────────
+            # Section 3 uses _ADDITIVE_RE with ^ anchor, so messages like
+            # "Si. Agregame 5 tornillos" (acceptance prefix + additive verb)
+            # slip past it. Catch them here before apply_clarification consumes
+            # the message and drops the explicit qty from the user.
+            _s4_additive_m = _ADDITIVE_INLINE_RE.search(text)
+            if _s4_additive_m:
+                _s4_additive_part = text[_s4_additive_m.start():].strip()
+                _s4_updated = fq.apply_additive(
+                    _s4_additive_part, open_quote, self.logic, knowledge=knowledge
+                )
+                if _s4_updated is not None and (
+                    len(_s4_updated) != len(open_quote)
+                    or any(
+                        a.get("qty") != b.get("qty")
+                        for a, b in zip(_s4_updated, open_quote)
+                    )
+                ):
+                    sess["active_quote"] = _s4_updated
+                    sess["quote_state"] = "open"
+                    sess.pop("pending_clarification_target", None)
+                    state_v2.transition("quote_drafting")
+                    comps = self._get_suggestions(_s4_updated, knowledge=knowledge)
+                    reply = fq.generate_updated_quote_response(
+                        _s4_updated, complementary=comps or None
+                    )
+                    self._persist_quote_state(
+                        session_id,
+                        response_text=reply,
+                        user_message=user_message,
+                        event_type="line_added",
+                        event_payload={"message": text, "additive_part": _s4_additive_part},
+                    )
+                    return _done(reply, "deterministic")
+                # else: apply_additive made no progress → fall through to apply_clarification
+            # ────────────────────────────────────────────────────────────────
+
             # Pass the stored target if disambiguation already ran
             target_line_id = None
             if pending_clarif_target:
