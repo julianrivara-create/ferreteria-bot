@@ -2023,9 +2023,19 @@ def apply_clarification(
         if qty_from_clarif:
             qty_override = qty_from_clarif
 
+    # DT-16b: when qty_override is set, search text must NOT include the clarification
+    # answer (a bare number like "100") — that would corrupt the catalog query.
+    # Use the original normalized product term instead.
+    if qty_override:
+        candidate_raw = target.get("original") or target.get("normalized") or combined
+        candidate_normalized = target.get("normalized") or combined
+    else:
+        candidate_raw = combined
+        candidate_normalized = combined
+
     candidate = {
-        "raw":          combined,
-        "normalized":   combined,
+        "raw":          candidate_raw,
+        "normalized":   candidate_normalized,
         "qty":          qty_override if qty_override else target.get("qty", 1),
         "qty_explicit": True if qty_override else target.get("qty_explicit", False),
         "unit_hint":    None if qty_override else target.get("unit_hint"),

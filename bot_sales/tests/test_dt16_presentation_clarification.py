@@ -317,3 +317,51 @@ class TestClarificationWithNumberResolves:
         # Without a parseable qty, re-resolution uses qty=1 and unit_hint is preserved
         # → guard fires again → still blocked_by_missing_info
         assert item["status"] == "blocked_by_missing_info"
+
+
+# ---------------------------------------------------------------------------
+# f) DT-16b: candidate text must NOT include the bare number answer (bug fix)
+# ---------------------------------------------------------------------------
+
+class TestClarificationDoesNotContaminateSearchText:
+
+    def test_clarification_with_number_uses_original_normalized(self):
+        """DT-16b: candidate.normalized must be the original product term, not
+        'tornillos durlock 100' (which pollutes the catalog query)."""
+        blocked = _blocked_item(unit_hint="caja", normalized="tornillos durlock")
+
+        captured: list = []
+        original_resolve = fq.resolve_quote_item
+
+        def spy_resolve(candidate, logic, knowledge=None):
+            captured.append(dict(candidate))
+            return original_resolve(candidate, logic, knowledge=knowledge)
+
+        import unittest.mock as mock
+        with mock.patch.object(fq, "resolve_quote_item", side_effect=spy_resolve):
+            updated_cart = fq.apply_clarification(
+                "100", [blocked], _make_logic(), knowledge=_KNOWLEDGE
+            )
+
+        assert len(captured) >= 1, "resolve_quote_item was never called"
+        candidate = captured[0]
+        assert candidate["normalized"] == "tornillos durlock", (
+            f"Expected 'tornillos durlock', got '{candidate['normalized']}'"
+        )
+        assert "100" not in candidate["normalized"]
+        assert candidate["qty"] == 100
+
+    def test_clarification_with_number_does_not_pollute_search(self):
+        """DT-16b: buscar_stock must be called with 'tornillos durlock', not
+        'tornillos durlock 100'."""
+        blocked = _blocked_item(unit_hint="caja", normalized="tornillos durlock")
+        logic = _make_logic()
+
+        fq.apply_clarification("100", [blocked], logic, knowledge=_KNOWLEDGE)
+
+        assert logic.buscar_stock.called, "buscar_stock was never called"
+        all_terms = [call.args[0] for call in logic.buscar_stock.call_args_list]
+        for term in all_terms:
+            assert "100" not in term, (
+                f"Search term '{term}' contains the qty answer '100' — catalog query polluted"
+            )
