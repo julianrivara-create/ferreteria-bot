@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Restart the ferreteria training dashboard.
-# Kills any running instance and relaunches it in the background.
+# Finds the process listening on port 5001 (most reliable) and replaces it.
 
 set -e
 
@@ -9,16 +9,22 @@ cd "$REPO_ROOT"
 
 LOG_FILE="${FERRETERIA_LOG:-/tmp/ferreteria_server.log}"
 
-echo "[restart-dashboard] killing previous instances..."
-pkill -f "python.*app.py" 2>/dev/null || true
-pkill -f "flask" 2>/dev/null || true
-sleep 1
+EXISTING_PID=$(lsof -ti :5001 2>/dev/null || true)
+if [ -n "$EXISTING_PID" ]; then
+    echo "[restart-dashboard] killing PID=$EXISTING_PID on port 5001..."
+    kill "$EXISTING_PID" 2>/dev/null || true
+    sleep 1
+    if kill -0 "$EXISTING_PID" 2>/dev/null; then
+        kill -9 "$EXISTING_PID" 2>/dev/null || true
+        sleep 1
+    fi
+fi
 
 echo "[restart-dashboard] starting new instance..."
 set -a
 source .env
 set +a
-PYTHONPATH="$REPO_ROOT" nohup python3 app/app.py > "$LOG_FILE" 2>&1 &
+PYTHONPATH="$REPO_ROOT" nohup python3 -c "from app.main import create_app; app = create_app(); app.run(host='0.0.0.0', port=5001)" > "$LOG_FILE" 2>&1 &
 NEW_PID=$!
 echo "[restart-dashboard] launched PID=$NEW_PID, logs at $LOG_FILE"
 
