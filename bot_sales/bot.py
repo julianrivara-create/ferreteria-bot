@@ -1981,7 +1981,17 @@ class SalesBot:
                     updated = fq.apply_additive(
                         cmd_str, current_cart, self.logic, knowledge=knowledge
                     )
-                    if updated is not None:
+                    # Require real progress: new lines OR qty change on existing lines.
+                    # apply_additive may return the original list unchanged (e.g. if
+                    # the product was already in the cart AND dedup had been active);
+                    # in that case success stays False so the fallback LLM path runs.
+                    if updated is not None and (
+                        len(updated) != len(current_cart)
+                        or any(
+                            a.get("qty") != b.get("qty")
+                            for a, b in zip(updated, current_cart)
+                        )
+                    ):
                         current_cart = updated
                         success = True
 

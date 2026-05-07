@@ -2051,6 +2051,18 @@ def _is_increment_request(stripped: str) -> Tuple[Optional[int], Optional[str]]:
     return qty, item_hint
 
 
+def _increment_existing_line(line: QuoteItem, qty_to_add: int) -> QuoteItem:
+    """Return a copy of *line* with qty incremented by *qty_to_add* and subtotal recomputed."""
+    updated = dict(line)
+    new_qty = (updated.get("qty") or 1) + qty_to_add
+    updated["qty"] = new_qty
+    updated["qty_explicit"] = True
+    unit_price = updated.get("unit_price")
+    if unit_price is not None and not updated.get("pack_note"):
+        updated["subtotal"] = round(unit_price * new_qty, 2)
+    return updated  # type: ignore[return-value]
+
+
 def apply_additive(
     message: str, open_items: List[QuoteItem], logic: Any, knowledge: Optional[Dict[str, Any]] = None
 ) -> List[QuoteItem]:
@@ -2093,17 +2105,28 @@ def apply_additive(
                 for it in open_items
             ]
 
-    # Not an increment — parse as new items and append
+    # Not an increment — parse as new items and append (or increment if same product)
     new_parsed = parse_quote_items(stripped)
     new_resolved = [resolve_quote_item(p, logic, knowledge=knowledge) for p in new_parsed]
     existing_ids = {it.get("line_id") for it in open_items if it.get("line_id")}
     existing_norms = {it.get("normalized", "").lower() for it in open_items}
-    to_add = [
-        it for it in new_resolved
-        if it.get("normalized", "").lower() not in existing_norms
-        and it.get("line_id") not in existing_ids
-    ]
-    return list(open_items) + to_add
+
+    result = list(open_items)
+    to_add: List[QuoteItem] = []
+    for new_item in new_resolved:
+        new_norm = new_item.get("normalized", "").lower()
+        if new_norm in existing_norms:
+            # Same product already in cart: increment qty instead of silent dedup.
+            qty_to_add = new_item.get("qty") or 1
+            result = [
+                _increment_existing_line(it, qty_to_add)
+                if it.get("normalized", "").lower() == new_norm
+                else it
+                for it in result
+            ]
+        elif new_item.get("line_id") not in existing_ids:
+            to_add.append(new_item)
+    return result + to_add
 
 
 def generate_updated_quote_response(
