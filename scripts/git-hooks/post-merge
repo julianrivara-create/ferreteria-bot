@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Post-merge hook: restart the dashboard server after a successful merge.
+# Install with: ./scripts/install-hooks.sh
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+echo "[post-merge] dashboard restart triggered..."
+"$REPO_ROOT/scripts/restart-dashboard.sh" || {
+    echo "[post-merge] restart failed; restart manually if needed" >&2
+    exit 0  # don't fail the merge itself
+}
