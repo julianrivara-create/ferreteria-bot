@@ -33,6 +33,7 @@ sentry-sdk>=1.40.0
 mercadopago>=2.2.1
 
 # Runtime utilities
+rapidfuzz>=3.0
 requests>=2.31.0
 httpx>=0.25.2
 cachetools>=5.3.0
