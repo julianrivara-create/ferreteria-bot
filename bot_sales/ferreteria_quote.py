@@ -681,6 +681,13 @@ _WORD_NUMBERS: Dict[str, int] = {
     "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
 }
 
+# DT-16: presentation/container words that indicate qty ambiguity.
+# metros/m/kg/par excluded — those are valid measure units where qty IS the amount.
+_PRESENTATION_BLOCK_WORDS: frozenset = frozenset({
+    "caja", "cajas", "rollo", "rollos",
+    "lata", "latas", "bolsa", "bolsas",
+})
+
 _QTY_RE = re.compile(
     r"^(?P<qty>\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+"
     r"(?P<unit>lata|latas|rollo|rollos|caja|cajas|metros?|m(?!\w)|bolsa|bolsas|kg|kilo|kilos|par|pares|u(?!\w))?\s*"
@@ -845,6 +852,32 @@ def resolve_quote_item(parsed: Dict[str, Any], logic: Any, knowledge: Optional[D
             "selected_via_substitute": False,
         }
         _log_unresolved(item, reason=f"blocked_term term={normalized}")
+        return item
+
+    # DT-16: presentation word detected without explicit individual unit count.
+    if unit_hint and unit_hint.lower() in _PRESENTATION_BLOCK_WORDS:
+        item = {
+            "line_id":      line_id,
+            "original":     raw,
+            "normalized":   normalized,
+            "qty":          qty,
+            "qty_explicit": qty_explicit,
+            "unit_hint":    unit_hint,
+            "status":       "blocked_by_missing_info",
+            "products":     [],
+            "unit_price":   None,
+            "subtotal":     None,
+            "pack_note":    None,
+            "clarification": "¿Cuántas unidades necesitás?",
+            "notes":        "Presentación detectada sin cantidad de unidades explícita.",
+            "complementary": [],
+            "family":       family,
+            "missing_dimensions": [],
+            "issue_type":   "qty_presentation",
+            "dimensions":   dims,
+            "selected_via_substitute": False,
+        }
+        _log_unresolved(item, reason=f"qty_presentation unit_hint={unit_hint}")
         return item
 
     autopick_blocked, missing_dimensions, missing_reason = is_autopick_blocked(family, dims, knowledge=knowledge)
@@ -1982,12 +2015,20 @@ def apply_clarification(
         combined = norm_clar
     else:
         combined = f"{target_norm} {norm_clar}".strip()
+    # DT-16: for qty_presentation blocks, extract the number from the client's answer
+    # and clear unit_hint so the guard doesn't re-trigger on re-resolution.
+    qty_override = None
+    if target.get("issue_type") == "qty_presentation":
+        qty_from_clarif = _extract_qty_from_phrase(clarification_text)
+        if qty_from_clarif:
+            qty_override = qty_from_clarif
+
     candidate = {
         "raw":          combined,
         "normalized":   combined,
-        "qty":          target.get("qty", 1),
-        "qty_explicit": target.get("qty_explicit", False),
-        "unit_hint":    target.get("unit_hint"),
+        "qty":          qty_override if qty_override else target.get("qty", 1),
+        "qty_explicit": True if qty_override else target.get("qty_explicit", False),
+        "unit_hint":    None if qty_override else target.get("unit_hint"),
         "line_id":      target_id,          # preserve identity
     }
     new_item = resolve_quote_item(candidate, logic, knowledge=knowledge)

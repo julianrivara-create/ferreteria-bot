@@ -45,7 +45,13 @@ class TestDT12DrywallSynonym(unittest.TestCase):
 
 class TestDT12ResolveNotBlocked(unittest.TestCase):
     """resolve_quote_item must NOT return blocked_by_missing_info for 'tornillos para drywall'
-    when knowledge includes the drywall→durlock regional_term."""
+    when knowledge includes the drywall→durlock regional_term.
+
+    NOTE (DT-16): inputs with a presentation word like 'caja' are now intentionally
+    blocked by the DT-16 guard (issue_type='qty_presentation'), independently of
+    whether DT-12's drywall normalization fires.  These tests use explicit qty and
+    no presentation word so they isolate only the DT-12 protection.
+    """
 
     def _make_logic(self):
         logic = MagicMock()
@@ -56,12 +62,14 @@ class TestDT12ResolveNotBlocked(unittest.TestCase):
         return logic
 
     def test_tornillos_drywall_not_blocked(self):
+        # DT-16: uses explicit qty and no presentation word to avoid the
+        # qty_presentation guard and isolate the DT-12 drywall normalization fix.
         parsed = {
-            "raw": "1 caja de tornillos para drywall",
+            "raw": "5 tornillos para drywall",
             "normalized": "tornillos para drywall",
-            "qty": 1,
+            "qty": 5,
             "qty_explicit": True,
-            "unit_hint": "caja",
+            "unit_hint": None,
             "line_id": "dt12test01",
         }
         item = fq.resolve_quote_item(parsed, self._make_logic(), knowledge=_KNOWLEDGE)
@@ -72,12 +80,13 @@ class TestDT12ResolveNotBlocked(unittest.TestCase):
 
     def test_tornillos_drywall_without_fix_is_blocked(self):
         """Confirm baseline: without the knowledge fix, 'drywall' triggers the block."""
+        # DT-16: unit_hint=None so only the BLOCKED_TERMS guard fires (DT-12 baseline).
         parsed = {
-            "raw": "1 caja de tornillos para drywall",
+            "raw": "5 tornillos para drywall",
             "normalized": "tornillos para drywall",
-            "qty": 1,
+            "qty": 5,
             "qty_explicit": True,
-            "unit_hint": "caja",
+            "unit_hint": None,
             "line_id": "dt12test02",
         }
         item = fq.resolve_quote_item(parsed, self._make_logic(), knowledge=None)
