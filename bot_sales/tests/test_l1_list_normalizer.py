@@ -129,6 +129,42 @@ class TestNormalizeListToItems:
         messages = call_args[0][0]
         assert any(text in m.get("content", "") for m in messages)
 
+    def test_prompt_instructs_material_preservation(self):
+        """Prompt must explicitly tell LLM to keep 'para [material/uso]' specs."""
+        text = "- 3 mechas de 6mm para hormigon\n- 2 mechas de 8mm para metal"
+        mock_client = self._make_chatgpt("3 mechas de 6mm para hormigon, 2 mechas de 8mm para metal")
+        SalesBot._normalize_list_to_items(text, mock_client)
+        call_args = mock_client.send_message.call_args
+        prompt_content = call_args[0][0][0].get("content", "")
+        assert "para [material/uso]" in prompt_content, "Prompt debe instruir preservar 'para [material/uso]'"
+        assert "NO descartes" in prompt_content, "Prompt debe incluir instrucción explícita de no descartar specs"
+
+    def test_material_specs_preserved_in_output(self):
+        """When LLM returns material specs, they must pass through untouched."""
+        text = (
+            "comprar:\n"
+            "- 3 mechas de 6mm para hormigon\n"
+            "- 2 mechas de 8mm para metal\n"
+            "- una caja de tornillos para drywall"
+        )
+        llm_response = "3 mechas de 6mm para hormigon, 2 mechas de 8mm para metal, 1 caja de tornillos para drywall"
+        mock_client = self._make_chatgpt(llm_response)
+        result = SalesBot._normalize_list_to_items(text, mock_client)
+        assert "para hormigon" in result, "Material 'para hormigon' debe preservarse"
+        assert "para metal" in result, "Material 'para metal' debe preservarse"
+        assert "para drywall" in result, "Uso 'para drywall' debe preservarse"
+
+    def test_prompt_contains_few_shot_examples(self):
+        """Prompt must include few-shot examples showing material preservation."""
+        text = "- mecha 6mm para hormigon\n- tornillos para drywall"
+        mock_client = self._make_chatgpt("1 mecha 6mm para hormigon, 1 tornillos para drywall")
+        SalesBot._normalize_list_to_items(text, mock_client)
+        call_args = mock_client.send_message.call_args
+        prompt_content = call_args[0][0][0].get("content", "")
+        assert "para hormigon" in prompt_content, "Prompt debe tener ejemplo con 'para hormigon'"
+        assert "para drywall" in prompt_content, "Prompt debe tener ejemplo con 'para drywall'"
+        assert "cinta teflón blanca grado profesional" in prompt_content, "Prompt debe tener ejemplo de specs técnicas"
+
 
 # ── Slow E2E: integration via get_runtime_bot ────────────────────────────────
 
