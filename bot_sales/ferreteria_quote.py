@@ -2111,12 +2111,35 @@ def apply_additive(
     existing_ids = {it.get("line_id") for it in open_items if it.get("line_id")}
     existing_norms = {it.get("normalized", "").lower() for it in open_items}
 
+    def _primary_sku(item: QuoteItem) -> Optional[str]:
+        prods = item.get("products") or []
+        return prods[0].get("sku") if prods else None
+
+    def _primary_model(item: QuoteItem) -> str:
+        prods = item.get("products") or []
+        if not prods:
+            return ""
+        p = prods[0]
+        return (p.get("model") or p.get("name") or "").lower().strip()
+
+    def _same_catalog_product(a: QuoteItem, b: QuoteItem) -> bool:
+        """True iff both items resolve to the same catalog entry (same SKU AND same model)."""
+        sku_a, sku_b = _primary_sku(a), _primary_sku(b)
+        if not sku_a or not sku_b or sku_a != sku_b:
+            return False
+        model_a, model_b = _primary_model(a), _primary_model(b)
+        # Require model match when present — guards against test fixtures that reuse
+        # a sentinel SKU (e.g. "SKU-TEST") for different products.
+        if model_a and model_b and model_a != model_b:
+            return False
+        return True
+
     result = list(open_items)
     to_add: List[QuoteItem] = []
     for new_item in new_resolved:
         new_norm = new_item.get("normalized", "").lower()
         if new_norm in existing_norms:
-            # Same product already in cart: increment qty instead of silent dedup.
+            # Same normalized phrase already in cart: increment qty.
             qty_to_add = new_item.get("qty") or 1
             result = [
                 _increment_existing_line(it, qty_to_add)
@@ -2124,8 +2147,20 @@ def apply_additive(
                 else it
                 for it in result
             ]
-        elif new_item.get("line_id") not in existing_ids:
-            to_add.append(new_item)
+        else:
+            # SKU-based fallback: same catalog product even when the query phrase
+            # differs (e.g. "caja de tornillos drywal" vs "tornillos para drywal").
+            matched = next((it for it in result if _same_catalog_product(it, new_item)), None)
+            if matched is not None:
+                qty_to_add = new_item.get("qty") or 1
+                result = [
+                    _increment_existing_line(it, qty_to_add)
+                    if _same_catalog_product(it, new_item)
+                    else it
+                    for it in result
+                ]
+            elif new_item.get("line_id") not in existing_ids:
+                to_add.append(new_item)
     return result + to_add
 
 
