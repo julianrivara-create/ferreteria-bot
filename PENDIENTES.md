@@ -1,35 +1,64 @@
 # PENDIENTES — follow-up items
 
-## Cerrado hoy (2026-05-06)
+## Cerrado hoy (2026-05-07)
 
-### B23-FU ✅ (commit e79de10, 2026-05-05)
-S08 WARN→PASS. Ver commit para detalle.
+### Tooling ✅
+restart-dashboard.sh + post-merge hook que auto-reinicia el server tras cada merge.
+Hook usa `lsof -ti :5001` para matar el proceso real (no pkill por pattern).
+Server arranca con `from app.main import create_app; app.run(...)`.
+Archivos: scripts/restart-dashboard.sh, scripts/git-hooks/post-merge, scripts/install-hooks.sh.
 
-### Bloque U ✅ (merge da5ea28)
-UX: eliminado markdown bold, emojis, hardcoded phrases, header cleanup.
+### DT-01 ✅
+_normalize_list_to_items preserva specs de material/uso ("para hormigon",
+"para metal", "para drywall") en cada item normalizado.
+Archivo: bot_sales/bot.py.
 
-### Bloque F4 + D5 ✅ (merge d62314a)
-apply_clarification fixes + fix crítico sandbox: `_load_active_quote_from_store`
-clobberaba el state en modo sandbox. Guard: `if not self.quote_service or self.sandbox_mode: return`.
+### DT-12 ✅
+"drywall: durlock" agregado a regional_terms en
+data/tenants/ferreteria/knowledge/language_patterns.yaml.
 
-### Bloque F1 ✅ (merge 8098c10)
-Compound clarif + additive en single turn ("la opcion a. te pido también un martillo").
-Guard en section 3.5 post-apply_followup. Usa detect_option_selection para option letters,
-apply_clarification para dimension clarifs.
+### DT-13 ✅
+Fuzzy matching en lookup de regional_terms con JaroWinkler.
+Threshold 0.90 best / 0.85 ambiguity, min 4 chars.
+Cubre typos como "drywal" → "drywall" → "durlock", "mehca" → "mecha".
+Archivo: bot_sales/ferreteria_language.py. Lib: rapidfuzz.
 
-### Bloque L1 ✅ (merge post-F1)
-Normalizer de listas con bullets/guiones antes del parser multi-item.
-`_is_structured_list` + `_normalize_list_to_items` con fallback seguro.
+### M0 ✅
+Gmail OAuth scaffolding: app/mail/ con gmail_client.py, mail_reader.py,
+types.py, __main__.py. CLI: python -m app.mail login|list-unread|show|logout.
+Doc: docs/MAIL_SETUP.md (instrucciones para Nacho).
+Pendiente: credentials.json del cuñado para arrancar M1.
 
-### Bloque L2 ✅ (merge post-L1)
-TurnInterpreter extendido con campo `items[]` para listados de productos.
-Gate: solo en product_search sin carrito activo. L1 sigue como fallback.
-Smoke test final: lista de obra 7/7 items procesados correctamente.
+### DT-15 ✅
+Eliminado mensaje fantasma "Atención: se vende por x N" que regex inferia
+del nombre del producto. El "25" del "Tornillo 3.5 x 25 mm" se reportaba
+como presentación falsa. Eliminado: _PACK_RE, _detect_pack(), _pack_note().
+Bonus: arregla bug que suprimía subtotal cuando había pack "detectado".
 
-### Bloque D1 ✅ (merge post-L2)
-Dashboard training: white-space pre-wrap en burbujas + evento paste en textarea.
-Archivos: app/ui/templates/ferreteria_training/base.html:286,
-          app/ui/templates/ferreteria_training/sandbox.html:324
+### DT-17 ✅
+apply_additive incrementa qty cuando el producto ya está en el carrito,
+en vez de dedup silencioso. También fix complementario en
+_process_compound_modify para validar progreso real (success=True solo
+si el carrito cambió).
+Archivos: bot_sales/ferreteria_quote.py, bot_sales/bot.py.
+
+### DT-17b ✅
+Consolidación de líneas usa SKU/model del catálogo en lugar de frase
+normalizada del usuario. Antes: "una caja de tornillos" + "5 tornillos"
+creaba 2 líneas porque el normalized differia. Ahora: 1 línea con qty=6.
+Archivo: bot_sales/ferreteria_quote.py.
+
+### DT-16 ✅
+Clarification de qty cuando hay palabra de presentación sin cantidad
+explícita. _PRESENTATION_BLOCK_WORDS: caja, cajas, rollo, rollos, lata,
+latas, bolsa, bolsas. Mensaje: "¿Cuántas unidades necesitás?".
+Archivo: bot_sales/ferreteria_quote.py (resolve_quote_item + apply_clarification).
+
+### DT-16b ✅
+Fix follow-up: apply_clarification con qty_override no contamina texto
+de búsqueda. Antes: "tornillos durlock" + "100" se mandaba al catálogo
+como "tornillos durlock 100". Ahora: usa target.normalized original
+cuando hay qty_override.
 
 ---
 
@@ -37,98 +66,108 @@ Archivos: app/ui/templates/ferreteria_training/base.html:286,
 
 ### 🔴 Alta prioridad
 
-**DT-01 — L2 pierde contexto de material en normalización**
-Cuando el cliente dice "3 mechas 6mm para hormigon", L2 normaliza a
-"3 mechas 6mm" soltando el "para hormigon". El bot pregunta el material
-de vuelta. Fix: mejorar el prompt de _normalize_list_to_items para
-preservar especificaciones de material/uso.
+**DT-14 — Catálogo no tiene campo de presentación**
+El CSV solo tiene SKU, categoría, nombre, precio, moneda, stock. Sin
+"unidades por caja". Hasta resolverlo el bot tiene que preguntar qty
+para "caja"/"rollo"/"lata"/"bolsa". Solución: extender schema +
+auditoría con Nacho. Pendiente: respuesta de Nacho sobre si tiene
+info digital de presentaciones.
 
-**DT-02 — Preguntas no transaccionales rompen el state machine**
-"cuál es la diferencia entre la A y la B?" → bot responde con
-"¿Eso es para X o para Y?" mezclando queries previas.
-El bot debería detectar que es una pregunta de info y responder
-en base a los productos ya ofrecidos.
+**DT-18 — TI failure → fallback al SalesFlowManager legacy**
+Cuando el LLM del TI falla (timeout, API down) o devuelve intent=unknown,
+el bot cae al SalesFlowManager que responde "¿Me podés repetir qué
+necesitás?" sin contexto. En mail autónomo es disaster. Fix sugerido:
+retry con backoff, o fallback explícito que diga "tuve un problema
+técnico, dame un momento".
+
+**DT-02 — Preguntas no transaccionales rompen el state machine** (de ayer)
+"cuál es la diferencia entre la A y la B?" → bot mezcla queries previas.
+Requiere diseño antes de fix.
 
 ### 🟡 Media prioridad
 
-**DT-03 — apply_additive auto-pickea primer match**
-Cuando el cliente dice "te pido también un martillo" sin specs,
-el bot autopickea el primero del catálogo en vez de ofrecer A/B/C.
-Inconsistente con el comportamiento de T1 (que sí ofrece opciones).
-Fix: paridad entre apply_additive y el resolver inicial.
+**DT-20 — Bypass del TI para respuestas cortas en awaiting_clarification**
+Cuando hay un item en awaiting_clarification, las respuestas chicas
+(números, "A"/"B"/"C") tardan 4-5s en pasar por el TI. Optimización:
+detectar respuesta corta + estado clarification → llamar
+apply_clarification directo. Ahorra tokens y latencia.
 
-**DT-04 — Catálogo gap: mechas y otros productos básicos**
-"mecha 6mm", "mecha 8mm para metal", "cinta de carrocero" no se
-encuentran. Verificar si son gaps del catálogo real o del matcher.
-Involucrar al cuñado para auditar el catálogo con los productos
-más pedidos en la ferretería.
+**DT-16c — Parser no extrae qty del rest cuando hay número**
+"una caja de 50 tornillos" → bot pregunta "¿cuántas unidades?" en vez
+de tomar 50 directo. Mejora del parser para extraer qty del rest cuando
+hay número, antes del guard de presentación.
 
-**DT-05 — Bug _QTY_RE con "un X" donde X empieza con "m"**
-"un martillo" parsea como qty="un" unit="m" rest="artillo".
-Workaround activo en F1 (prepend "también"). Bug raíz en el regex
-_QTY_RE. Afecta: un metro, un mango, un molde, etc.
+**DT-03 — apply_additive auto-pickea primer match** (de ayer)
+Re-validar tras DT-17 si sigue siendo válido o ya está cubierto.
 
-**DT-06 — Negación y filtros no soportados**
-"no quiero Bahco", "menos de $10000", "mostrame los nacionales"
-se ignoran completamente. El bot muestra todo el catálogo igual.
-Feature missing, no bug. Requiere diseño de cómo el matcher
-aplica filtros negativos/de precio/de origen.
+**DT-04 — Catálogo gap: mechas y otros productos básicos** (de ayer)
+"mecha 6mm", "mecha 8mm para metal", "cinta de carrocero" no se encuentran.
+Atar al laburo con Nacho cuando audite catálogo (también linked a DT-14).
+
+**DT-11 — Preguntas operativas ignoradas silenciosamente** (de ayer)
+"hacen envío?" se ignora. Pendiente.
 
 ### 🟢 Baja prioridad
 
-**DT-07 — "Con el A" masculino no matchea D3**
-Regex D3 cubre "con la A/B/C" (femenino) pero no "con el A" (masculino).
-Trivial de extender.
+**DT-19 — SIGSEGV en suite full**
+pysqlite_cursor_iternext crashea con Python 3.14 + ThreadPoolExecutor.
+Pre-existente. Tests específicos pasan limpio. Investigar para CI futuro.
 
-**DT-08 — Render qty=1 redundante**
-"1 × X — $Y/u → $Y" muestra unit price = total cuando qty=1.
-Cosmético: omitir "/u → $Y" cuando qty=1.
-
-**DT-09 — Re-validar bugs diagnosticados antes de D5**
-Algunos bugs reportados via dashboard antes del fix D5 pueden ser
-artefactos del sandbox (state se reseteaba). Re-testear con el
-path de producción.
-
-**DT-10 — Diferencia path Python directo vs dashboard**
-En algunos casos el agente veía resultado distinto via get_runtime_bot
-vs el dashboard real. Investigar si hay post-processing diferente
-entre los dos paths.
-
-**DT-11 — Preguntas operativas ignoradas silenciosamente**
-Cuando el cliente mezcla una pregunta de logística con un pedido
-("necesito esto... también saben si hacen envío?"), el bot procesa
-los productos e ignora la pregunta sin acuse de recibo.
-El cliente queda sin respuesta sobre algo que preguntó.
-Fix: detectar preguntas operativas (envío, retiro, pago, horario,
-stock) y responder con texto fijo + derivar al equipo, antes o
-después de mostrar el presupuesto.
+**DT-05** — Bug _QTY_RE con "un X" donde X empieza con "m" (de ayer)
+**DT-06** — Negación y filtros no soportados (de ayer)
+**DT-07** — "Con el A" masculino no matchea D3 (de ayer)
+**DT-08** — Render qty=1 redundante (de ayer)
+**DT-09** — Re-validar bugs pre-D5 — algunos pueden estar cubiertos por
+los fixes de hoy (DT-12, 13, 15, 16, 17). Auditoría pendiente.
+**DT-10** — Diferencia path Python directo vs dashboard. Lo seguimos
+manejando con merge + smoke en dashboard.
 
 ---
 
-## Dashboard — próximos bloques
+## Mail — bloques planificados
 
-**D2 — AJAX + panel debug toggle + sesiones con nombre (3-4h)**
-- AJAX para enviar mensajes sin reload de página
-- Panel debug con toggle (Julian): muestra intent TI, quote_state,
-  items parseados, path, tokens, costo por mensaje
-- Sesiones recientes con preview del primer mensaje + timestamp
+**M0** ✅ scaffolding mergeado hoy.
 
-**D3 — (no tocar por ahora)**
-Formulario de revisión con taxonomía pedido por el cuñado.
-No modificar hasta nueva instrucción.
+**M1 — Parsing del mail entrante al pipeline del bot**
+Bloqueado por credentials.json de Nacho. Cuando llegue:
+- Conectar mail_reader al pipeline existente (TI + parser + resolver)
+- Estructura del mail crudo → contexto del bot
+- Polling vs push: investigar Gmail push notifications
+- ~3-4h estimado
+
+**M2 — Composer HTML profesional + sender + modo aprobación**
+- HTML inline-styled (Gmail-friendly), template con header/cotización/footer
+- Modo aprobación: bandeja de borradores pendientes para revisar antes de mandar
+- Se manda con gmail.send (actualizar scopes en M0)
+- ~4-5h estimado
+
+**M-anexos — Lectura de PDF/Word adjuntos**
+Algunos pedidos llegan como adjuntos. Extracción con pdfplumber +
+python-docx. Pasar texto al pipeline existente. ~3h estimado.
+
+**M3 — Threading básico**
+Detectar replies del cliente (in_reply_to / references), agrupar por thread.
+~2-3h estimado.
 
 ---
 
-## Plan mañana
+## Dashboard — bloques pendientes
 
-1. **DT-01** (L2 pierde material) — fix en prompt de _normalize_list_to_items.
-   Quick win, 30-60 min.
+**D2 — AJAX + panel debug toggle + sesiones con nombre** (de ayer)
+- AJAX para enviar mensajes sin reload
+- Panel debug toggle: intent TI, quote_state, items parseados, tokens, costo
+- Sesiones recientes con preview + timestamp
 
-2. **DT-04** (catálogo gap) — auditoría con el cuñado.
-   Sin esto los tests de mechas siempre van a fallar.
+**D3 — Formulario de revisión** (de ayer)
+No tocar hasta nueva instrucción de Nacho.
 
-3. **DT-02** (preguntas no transaccionales) — requiere diseño.
-   Definir: ¿el bot responde con info de los productos ya ofrecidos,
-   o deriva a humano, o ignora y repregunta?
+---
 
-4. **D2** (dashboard AJAX + debug) — arrancar si hay tiempo.
+## Plan próxima sesión
+
+1. **Si llegó credentials.json de Nacho** → arrancar M1.
+2. **Si llegó info de catálogo de Nacho** → arrancar DT-14 (extender schema).
+3. **Si nada de Nacho** → DT-18 (TI failure handling) o DT-20 (bypass
+   para respuestas cortas). Ambos importantes para mail autónomo.
+4. Eventualmente DT-02 (preguntas no transaccionales) cuando charlemos diseño.
+5. D2 (dashboard AJAX + debug) si queda tiempo.
