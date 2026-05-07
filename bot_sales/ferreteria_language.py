@@ -5,6 +5,10 @@ from typing import Any, Dict
 
 from bot_sales.knowledge.defaults import DEFAULT_LANGUAGE_PATTERNS
 
+_FUZZY_BEST_THRESHOLD = 0.90
+_FUZZY_AMBIGUITY_THRESHOLD = 0.85
+_FUZZY_MIN_TOKEN_LEN = 4
+
 
 _ACCENT_MAP = str.maketrans({
     "á": "a",
@@ -97,11 +101,56 @@ def _replace_terms(text: str, mapping: Dict[str, str]) -> str:
     return updated
 
 
+def _fuzzy_replace_regional_terms(text: str, mapping: Dict[str, str]) -> str:
+    """Token-level fuzzy fallback for regional_terms typos (e.g. "drywal" → "durlock").
+
+    Only applies when no exact match was found. Uses JaroWinkler which handles
+    single-character transpositions better than Levenshtein-based ratios.
+    Tokens shorter than _FUZZY_MIN_TOKEN_LEN are skipped to prevent spurious
+    matches on short strings (e.g. "can" → "cano" would otherwise score 0.94).
+    """
+    if not mapping:
+        return text
+    try:
+        from rapidfuzz.distance import JaroWinkler
+    except ImportError:
+        return text
+
+    norm_map = {
+        normalize_basic(k): normalize_basic(v)
+        for k, v in mapping.items()
+        if k and v
+    }
+    if not norm_map:
+        return text
+
+    keys = list(norm_map.keys())
+    tokens = text.split()
+    result = []
+    for token in tokens:
+        if len(token) < _FUZZY_MIN_TOKEN_LEN:
+            result.append(token)
+            continue
+        scores = sorted(
+            [(key, JaroWinkler.normalized_similarity(token, key)) for key in keys],
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        best_key, best_score = scores[0]
+        second_score = scores[1][1] if len(scores) > 1 else 0.0
+        if best_score >= _FUZZY_BEST_THRESHOLD and second_score < _FUZZY_AMBIGUITY_THRESHOLD:
+            result.append(norm_map[best_key])
+        else:
+            result.append(token)
+    return " ".join(result)
+
+
 def normalize_live_language(text: str, knowledge: Dict[str, Any] | None = None) -> str:
     normalized = normalize_basic(text)
     patterns = get_language_patterns(knowledge)
     for mapping_key in ("misspellings", "regional_terms", "abbreviations", "brand_generics"):
         normalized = _replace_terms(normalized, patterns.get(mapping_key, {}))
+    normalized = _fuzzy_replace_regional_terms(normalized, patterns.get("regional_terms", {}))
     for pattern in patterns.get("shorthand_dimension_patterns", []):
         regex = str(pattern.get("pattern", "")).strip()
         replacement = str(pattern.get("replacement", "")).strip()
