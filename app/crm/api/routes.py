@@ -14,7 +14,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.crm.api.auth import crm_auth_required, parse_pagination_args, permission_required, rate_limited
+from app.crm.api.auth import crm_auth_required, parse_pagination_args, permission_required, public_register_required, rate_limited
 from app.crm.domain.enums import AutomationTrigger, DealStatus, MessageDirection, TaskStatus, UserRole
 from app.crm.domain.permissions import Permission, has_permission
 from app.crm.domain.schemas import (
@@ -545,6 +545,7 @@ def crm_login():
 
 
 @crm_api.route("/auth/register-owner", methods=["POST"])
+@public_register_required
 @rate_limited(limit=5, window_seconds=60)
 def crm_register_owner():
     payload = request.get_json(silent=True) or {}

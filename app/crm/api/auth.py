@@ -149,6 +149,19 @@ def permission_required(permission: str):
     return decorator
 
 
+def public_register_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if os.getenv("ENABLE_PUBLIC_REGISTER", "false").lower() != "true":
+            return jsonify({
+                "error": "public_register_disabled",
+                "message": "El registro público está deshabilitado. Contactá al administrador.",
+            }), 403
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 def rate_limited(limit: int, window_seconds: int):
     def decorator(func):
         @wraps(func)
