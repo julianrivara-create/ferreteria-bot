@@ -34,3 +34,12 @@ carniceria_bot/
 
 # Session summaries (notas locales del humano)
 SESSION_SUMMARY_*.md
+
+# Binarios y artifacts (audit master 2026-05-09)
+*.mp4
+state/
+
+# PDFs excepto documentos de cliente
+*.pdf
+!docs/CLIENT_PITCH.pdf
+
