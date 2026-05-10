@@ -302,19 +302,45 @@ class Database:
         """Load catalog from CSV file, optionally preserving existing SKUs."""
         catalog_path = Path(self.catalog_csv)
         if not catalog_path.exists():
+            is_production = os.getenv("ENVIRONMENT", "").lower() == "production"
+            fallback_enabled = os.getenv(
+                "CATALOG_PATH_FALLBACK_ENABLED",
+                "false" if is_production else "true",
+            ).lower() == "true"
+
+            if not fallback_enabled:
+                logging.error(
+                    "CRITICAL: catalog path %s does not exist and fallback is "
+                    "disabled (ENVIRONMENT=%s, CATALOG_PATH_FALLBACK_ENABLED=%s). "
+                    "Refusing to serve a stale or empty catalog. Fix the deployment "
+                    "or set CATALOG_PATH_FALLBACK_ENABLED=true to allow legacy fallback.",
+                    self.catalog_csv,
+                    os.getenv("ENVIRONMENT", "<unset>"),
+                    os.getenv("CATALOG_PATH_FALLBACK_ENABLED", "<unset>"),
+                )
+                raise FileNotFoundError(
+                    f"Catalog path not found: {self.catalog_csv}. "
+                    "Fallback is disabled in production."
+                )
+
             fallback_candidates = [
                 Path(__file__).resolve().parent.parent.parent / "config" / "catalog.csv",
                 Path(__file__).resolve().parent.parent.parent / "data" / "tenants" / "default" / "catalog.csv",
             ]
             for candidate in fallback_candidates:
                 if candidate.exists():
-                    logging.warning("Catalog CSV not found at %s, using fallback %s", self.catalog_csv, candidate)
+                    logging.error(
+                        "FALLBACK: primary catalog %s not found, loading legacy %s "
+                        "(likely without prices). This is OK in dev but should NEVER happen in production.",
+                        self.catalog_csv,
+                        candidate,
+                    )
                     catalog_path = candidate
                     break
 
         if not catalog_path.exists():
-            logging.warning(f"Catalog CSV not found: {self.catalog_csv}")
-            logging.warning("No fallback data loaded. Please provide a catalog.csv file.")
+            logging.error("Catalog CSV not found: %s", self.catalog_csv)
+            logging.error("No fallback data loaded. Please provide a catalog.csv file.")
             return
 
         with open(catalog_path, 'r', encoding='utf-8') as f:
