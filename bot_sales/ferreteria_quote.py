@@ -1976,6 +1976,25 @@ def _match_to_line(
     return best_line
 
 
+def _combine_clarification_text(norm_clar: str, target_norm: str) -> str:
+    """Build the search text used to re-resolve a pending line after a clarification.
+
+    Returns norm_clar verbatim when it already contains the target's product
+    reference (either as a prefix or via any shared token); otherwise the
+    target term is prepended so the catalog query keeps the original product
+    context.
+    """
+    if norm_clar.startswith(target_norm):
+        return norm_clar
+    target_tokens = target_norm.split()
+    if not target_tokens:
+        return norm_clar.strip()
+    clar_tokens = set(norm_clar.split())
+    if any(tok in clar_tokens for tok in target_tokens):
+        return norm_clar
+    return f"{target_norm} {norm_clar}".strip()
+
+
 def apply_clarification(
     clarification_text: str,
     open_items: List[QuoteItem],
@@ -2009,12 +2028,7 @@ def apply_clarification(
 
     target_id = target.get("line_id")
     target_norm = _normalize(target.get("normalized", ""))
-    if norm_clar.startswith(target_norm):
-        combined = norm_clar
-    elif target_norm and target_norm in norm_clar.split():
-        combined = norm_clar
-    else:
-        combined = f"{target_norm} {norm_clar}".strip()
+    combined = _combine_clarification_text(norm_clar, target_norm)
     # DT-16: for qty_presentation blocks, extract the number from the client's answer
     # and clear unit_hint so the guard doesn't re-trigger on re-resolution.
     qty_override = None
