@@ -326,10 +326,11 @@ class BusinessLogic:
             }
         """
         # Get hold info before confirming (to know what was sold)
-        hold_info = self.db.cursor.execute(
-            "SELECT sku, name, contact FROM holds WHERE hold_id = ?",
-            (hold_id,)
-        ).fetchone()
+        with self.db._cursor_lock:
+            hold_info = self.db.cursor.execute(
+                "SELECT sku, name, contact FROM holds WHERE hold_id = ?",
+                (hold_id,)
+            ).fetchone()
         
         if not hold_info:
             return {"status": "error", "message": "Reserva expirada o no encontrada."}
@@ -548,10 +549,11 @@ class BusinessLogic:
             Success/Error dict
         """
         # 1. Get original sale data
-        sale = self.db.cursor.execute(
-            "SELECT name, contact, email, zone, payment_method FROM sales WHERE sale_id = ?",
-            (original_sale_id,)
-        ).fetchone()
+        with self.db._cursor_lock:
+            sale = self.db.cursor.execute(
+                "SELECT name, contact, email, zone, payment_method FROM sales WHERE sale_id = ?",
+                (original_sale_id,)
+            ).fetchone()
         
         if not sale:
             return {"status": "error", "message": "No encontré la venta original para copiar los datos."}
