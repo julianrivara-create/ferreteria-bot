@@ -62,6 +62,35 @@ _ADDITIVE_INLINE_RE = re.compile(
 # the additive marker (e.g. "la opcion A, " → "la opcion A").
 _CLARIF_TRAIL_CHARS = " .,;y"
 
+_TI_CONFIDENCE_FLOOR = 0.55
+# TurnInterpreter confidences below this floor are treated as unreliable; the
+# deterministic fq.looks_like_reset regex always runs as a safety net because
+# its reset_phrases set is narrow enough that a regex hit alone is meaningful
+# regardless of what TurnInterpreter classified.
+
+
+def _reset_signaled(
+    text: str,
+    knowledge: Optional[Dict[str, Any]],
+    interpretation: Optional[Dict[str, Any]],
+) -> bool:
+    """Return True when the current turn should clear the active quote.
+
+    Consolidates the two reset paths that used to coexist in this file:
+    TurnInterpreter.reset_signal (LLM-driven) and fq.looks_like_reset
+    (regex). The LLM signal is honored when confidence is reliable
+    (>= _TI_CONFIDENCE_FLOOR); the regex is also consulted unconditionally
+    because its reset_phrases list is narrow ("nuevo presupuesto", "reset",
+    etc.) and a positive hit on it should always trigger reset, including
+    when the LLM is unavailable (offline tests, transient failures).
+    """
+    interp = interpretation or {}
+    confidence = float(interp.get("confidence", 0.0) or 0.0)
+    if interp.get("reset_signal") and confidence >= _TI_CONFIDENCE_FLOOR:
+        return True
+    return fq.looks_like_reset(text, knowledge=knowledge)
+
+
 _ESCALATION_REQUEST_KEYWORDS = (
     "hablar con humano", "hablar con persona", "hablar con alguien",
     "atender humano", "atendeme un humano", "atendeme alguien",
@@ -780,7 +809,7 @@ class SalesBot:
             )
             _is_deterministic = (
                 fq.looks_like_additive(user_message)
-                or fq.looks_like_reset(user_message)
+                or _reset_signaled(user_message, None, interpretation.to_dict())
                 or _is_clarification_via_llm
                 or _is_clarif_response
             )
@@ -895,7 +924,8 @@ class SalesBot:
         # Small-talk, FAQ, escalate, and non-quote intents are handled by their
         # specialist handlers before pre_route runs. Only quote_* and product_search
         # intents (plus unknown) fall through here.
-        intent = sess.get("last_turn_interpretation", {}).get("intent", "unknown")
+        interpretation_dict = sess.get("last_turn_interpretation", {}) or {}
+        intent = interpretation_dict.get("intent", "unknown")
 
         def _done(response: str, route_source: str = "deterministic", **meta: Any) -> str:
             # Persist offered products so TurnInterpreter can resolve "el primero" etc.
@@ -948,7 +978,7 @@ class SalesBot:
             return _done(response, "deterministic")
 
         # ── 1. Explicit reset ────────────────────────────────────────────────
-        if fq.looks_like_reset(text, knowledge=knowledge):
+        if _reset_signaled(text, knowledge, interpretation_dict):
             if self.quote_service:
                 self.quote_service.mark_reset(session_id)
             sess.pop("active_quote", None)
