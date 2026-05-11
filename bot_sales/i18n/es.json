@@ -4,7 +4,7 @@
     "product_found": "Encontré este producto para vos:",
     "no_stock": "Por el momento no tenemos stock de ese modelo. ¿Te interesa ver alternativas?",
     "price_question": "El precio es",
-    "create_reservation": "Te separo el producto por 30 minutos. Necesito algunos datos:",
+    "create_reservation": "Te separo el producto por {minutes} minutos. Necesito algunos datos:",
     "ask_name": "¿Cómo te llamás?",
     "ask_phone": "¿Tu celular para coordinar?",
     "ask_email": "¿Tu email para enviarte la confirmación?",

@@ -4,7 +4,7 @@
     "product_found": "I found this product for you:",
     "no_stock": "We currently don't have that model in stock. Would you like to see alternatives?",
     "price_question": "The price is",
-    "create_reservation": "I'll reserve the product for 30 minutes. I need some information:",
+    "create_reservation": "I'll reserve the product for {minutes} minutes. I need some information:",
     "ask_name": "What's your name?",
     "ask_phone": "Your phone number to coordinate?",
     "ask_email": "Your email to send you the confirmation?",
