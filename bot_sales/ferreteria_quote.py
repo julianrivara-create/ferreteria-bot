@@ -2285,7 +2285,7 @@ def apply_remove(
 # ---------------------------------------------------------------------------
 
 _REPLACE_RE = re.compile(
-    r"^(?:cambia|cambiá|reemplaza|reemplazá|mejor pone|mejor pon|en vez de|best)\s+"
+    r"^(?:cambia|cambiá|reemplaza|reemplazá|mejor pone|mejor pon|en vez de)\s+"
     r"(?:el|la|los|las|un|una)?\s*(?P<from>[\w\s]+?)\s+"
     r"(?:por|por un|por una|en vez de)\s+"
     r"(?:el|la|los|las|un|una)?\s*(?P<to>[\w\s]+)$",
