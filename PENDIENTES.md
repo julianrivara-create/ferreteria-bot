@@ -1,5 +1,135 @@
 # PENDIENTES — follow-up items
 
+## Cerrado hoy (2026-05-11) — Fase 2 audit cleanup
+
+Cerramos los bugs latentes catalogados como B.1–B.11 a partir del
+`reports/audit_total_2026-05-09.md`. Trabajo sobre `main`, un commit
+por bug, con tests adicionales donde correspondió.
+
+### Commits
+
+| Bug | SHA | Resumen |
+|-----|-----|---------|
+| B.3 | `70ff78d` | Remove dead English token "best" from `_REPLACE_RE`. |
+| B.2 | `bd9e502` | Remove unused `tenant_manager` import from `bot_sales/bot.py`. |
+| B.1 | `ec5b568` | Merge duplicate `SalesBot.close()` definitions (L215 + L2805). |
+| B.4 | `fefd434` | Fix dead multi-word heuristic in `apply_clarification` + tests. |
+| B.9 | `baa734f` | Acquire `_cursor_lock` around direct `db.cursor` reads in `business_logic`. |
+| B.10 | `ac78b6b` | Parametrize hold duration in i18n `create_reservation` string + tests. |
+| B.6 | `e76cd67` | Consolidate reset detection behind `_reset_signaled` helper + tests. |
+
+### Resueltos sin commit
+
+- **B.11** — `app/bot/security/sanitizer.py` era un duplicado idéntico
+  de `bot_sales/security/sanitizer.py` pero estaba untracked (resucitado
+  del cleanup F1B `5d0c575`). Se eliminó del filesystem; no hubo commit
+  porque no estaba versionado. `bot_sales/security/sanitizer.py`
+  permanece (usado por `tests/test_sanitizer.py`).
+
+### Falsos positivos del audit (NO se aplicó fix)
+
+- **B.5 — AcceptanceDetector "huérfano"**: en realidad tiene un caller
+  vivo. `bot_sales/ferreteria_quote.py:1209` lo importa lazy desde
+  `looks_like_acceptance(message, chatgpt_client=...)`, que se llama
+  desde `bot.py:932` con `chatgpt_client=self.chatgpt`. Eliminarlo
+  rompería el camino LLM de detección de aceptación. Worktree
+  `../ferreteria-B5` rama `fix/B5-acceptance-detector` queda creado
+  vacío por si más adelante se decide revisar.
+- **B.7 — `ready_for_followup` "nunca producido"**: es un gate
+  human-in-the-loop intencional. El status se setea manualmente desde
+  la UI admin (`app/api/ferreteria_admin_routes.py`,
+  `app/ui/templates/ferreteria_admin/quote_detail.html`) antes del
+  auto-followup. `derive_quote_status()` no lo emite a propósito —
+  cambiar el filtro de `list_eligible_quotes` desactivaría la
+  revisión humana previa.
+
+### Saltado a pedido
+
+- **B.8 — handler de intent `customer_info`**: TurnInterpreter ya
+  clasifica el intent (`turn_interpreter.py:23,214,249`) pero
+  `_try_ferreteria_intent_route` no tiene branch dedicado para
+  persistir `entities.contact/name/company` en `customer_profile`.
+  Queda pendiente como **DT-21 — customer_info handler**.
+
+### Cleanup adicional realizado
+
+- `rm` de los 6 archivos untracked autorizados en `app/bot/`:
+  `analytics.py`, `analytics_engine.py`, `bot_gemini.py`, `bundles.py`,
+  `connectors/cli_gemini.py`, `security/sanitizer.py`. Todos eran
+  resucitados del commit F1B `5d0c575`.
+
+### Pendiente del cleanup (sin tocar)
+
+Quedan ~36 archivos más con el mismo patrón (untracked + permisos
+`-rw-------` + mtimes viejas + eliminados en commits F1*), agrupados
+en `app/bot/`, `bot_sales/`, `app/crm/integrations/`,
+`app/services/`. Listarlos y decidir si borrar en una próxima sesión.
+
+### Worktrees preparados (sin commits)
+
+- `../ferreteria-B5` rama `fix/B5-acceptance-detector` (base
+  `0508891`).
+- `../ferreteria-B9` rama `fix/B9-cursor-lock` (base `ec5b568`).
+
+### Seguridad — pendiente externo
+
+- **Token de GitHub expuesto** en `.git/config` (PAT embebido en la
+  URL del remote `origin`). Rotación a cargo de Julian.
+
+### Estado de tests
+
+Suite oficial (`pytest` con `testpaths = tests, bot_sales/tests`):
+los 48 failures pre-existentes detectados en el baseline anterior a
+la Fase 2 siguen siendo los mismos (causa principal: falta
+`data/products.csv` → fallback al legacy `config/catalog.csv` sin
+precios). Los fixes B.1–B.10 agregaron 15 tests nuevos (B.4, B.6,
+B.10) que pasan limpio.
+
+---
+
+## DTs viejos — estado al 2026-05-11
+
+| DT | Estado |
+|----|--------|
+| DT-01 | ✅ cerrado el 2026-05-07. |
+| DT-02 | Abierto — requiere diseño antes de fix. |
+| DT-03 | Abierto — revalidar tras DT-17. |
+| DT-04 | Abierto — atado a Nacho + DT-14 (catálogo). |
+| DT-05 | Abierto. |
+| DT-06 | Abierto. |
+| DT-07 | Abierto. |
+| DT-08 | Abierto. |
+| DT-09 | Abierto — auditoría tras fixes recientes. |
+| DT-10 | Abierto — workaround vigente. |
+| DT-11 | Abierto. |
+| DT-12 | ✅ cerrado el 2026-05-07. |
+| DT-13 | ✅ cerrado el 2026-05-07. |
+| DT-14 | Abierto 🔴 — esperando info de catálogo de Nacho. |
+| DT-15 | ✅ cerrado el 2026-05-07. |
+| DT-16/16b | ✅ cerrado el 2026-05-07. |
+| DT-17/17b | ✅ cerrado el 2026-05-07. |
+| DT-18 | Abierto 🔴 — TI failure → SalesFlowManager. |
+| DT-19 | Abierto 🟢 — pre-existente, baja prio. |
+| DT-20 | Abierto 🟡 — optimización TI bypass. |
+| DT-21 | Nuevo — customer_info handler (de B.8 saltado). |
+
+---
+
+## Próximos hitos (del audit_total_2026-05-09.md)
+
+1. **Mié-Jue (2026-05-13/14) — sesiones con Nacho**: completar el
+   cuestionario sobre catálogo y profile.yaml (19 campos `[PENDIENTE]`),
+   destrabar DT-14 y DT-04.
+2. **Vie (2026-05-15) — Fase 4 selectiva**:
+   - DT-04 catálogo conectando `language_patterns.yaml` al CSV.
+   - **DT-21 customer_info handler** (B.8 saltado en la Fase 2; queda
+     para esta tanda).
+3. **Semana 2 — Fase 4 resto + deuda arquitectónica**: resto de DTs
+   abiertos, audit cleanup de los ~36 untracked, rotación de
+   `ADMIN_PASSWORD` / `ADMIN_TOKEN` / `SECRET_KEY` pre-deploy.
+
+---
+
 ## Cerrado hoy (2026-05-07)
 
 ### Tooling ✅
