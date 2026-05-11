@@ -17,7 +17,6 @@ from cachetools import TTLCache
 from .core.database import Database
 from .core.chatgpt import ChatGPTClient, get_available_functions
 from .core.business_logic import BusinessLogic
-from .core.tenancy import tenant_manager
 from .knowledge.loader import KnowledgeLoader
 from .persistence.quote_store import QuoteStore
 from .services.quote_service import QuoteService
