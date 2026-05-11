@@ -225,9 +225,7 @@ class SalesBot:
             logging.debug("quote_store_close_error tenant=%s error=%s", self.tenant_id, exc)
         try:
             if getattr(self, "db", None) is not None:
-                conn = getattr(self.db, "conn", None)
-                if conn is not None:
-                    conn.close()
+                self.db.close()
         except Exception as exc:
             logging.debug("db_close_error tenant=%s error=%s", self.tenant_id, exc)
         logging.debug("SalesBot closed tenant=%s", self.tenant_id)
@@ -2800,9 +2798,3 @@ class SalesBot:
         if not self.sandbox_mode:
             self.db.delete_session(session_id, self.tenant_id)
         logging.info("Session %s reset (tenant=%s)", session_id, self.tenant_id)
-
-    def close(self):
-        """Cleanup resources"""
-        if self.quote_store:
-            self.quote_store.close()
-        self.db.close()
