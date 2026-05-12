@@ -58,12 +58,26 @@ por bug, con tests adicionales donde correspondió.
   `connectors/cli_gemini.py`, `security/sanitizer.py`. Todos eran
   resucitados del commit F1B `5d0c575`.
 
-### Pendiente del cleanup (sin tocar)
+### Cleanup completo (2026-05-11, tarde)
 
-Quedan ~36 archivos más con el mismo patrón (untracked + permisos
-`-rw-------` + mtimes viejas + eliminados en commits F1*), agrupados
-en `app/bot/`, `bot_sales/`, `app/crm/integrations/`,
-`app/services/`. Listarlos y decidir si borrar en una próxima sesión.
+Eliminados 41 archivos untracked adicionales con el mismo patrón
+(permisos `-rw-------` + mtimes viejas + presentes en `git log
+--diff-filter=D` de commits `F1*`). Distribuidos por commit que
+los eliminó originalmente:
+
+- `5d0c575` (F1B `app/bot/ legacy`): 6 archivos.
+- `fc5c6f6` (F1A `Slack duplicate stack + integrations orphans`):
+  18 archivos.
+- `bd66fa6` (F1E `miscellaneous orphans`): 3 archivos.
+- `7c527d8` (F1C `bot_sales/core/ orphans + obsolete tests`): 11
+  archivos.
+- `440b099` (F1D `intelligence + security orphan modules`): 3
+  archivos.
+
+Total Fase 2 + post-Fase 2: **47 archivos resucitados borrados**
+(6 dentro del cierre B.1–B.11 + 41 en este pasaje). `git status`
+queda limpio. No hubo commit por el `rm` (eran untracked, no
+había nada que versionar).
 
 ### Worktrees preparados (sin commits)
 
@@ -71,19 +85,42 @@ en `app/bot/`, `bot_sales/`, `app/crm/integrations/`,
   `0508891`).
 - `../ferreteria-B9` rama `fix/B9-cursor-lock` (base `ec5b568`).
 
-### Seguridad — pendiente externo
+### Seguridad
 
-- **Token de GitHub expuesto** en `.git/config` (PAT embebido en la
-  URL del remote `origin`). Rotación a cargo de Julian.
+- **Token de GitHub rotado** el 2026-05-11. PAT viejo
+  (`ghp_lSFRYZQ3fcww…`) revocado en `github.com/settings/tokens`.
+  Remote `origin` reseteado a URL sin token embebido
+  (`git remote set-url origin https://github.com/julianrivara-create/ferreteria-bot.git`).
+  El nuevo token se guarda en macOS Keychain vía
+  `git config --global credential.helper osxkeychain`.
 
 ### Estado de tests
 
-Suite oficial (`pytest` con `testpaths = tests, bot_sales/tests`):
-los 48 failures pre-existentes detectados en el baseline anterior a
-la Fase 2 siguen siendo los mismos (causa principal: falta
-`data/products.csv` → fallback al legacy `config/catalog.csv` sin
-precios). Los fixes B.1–B.10 agregaron 15 tests nuevos (B.4, B.6,
-B.10) que pasan limpio.
+Suite oficial (`pytest` con `testpaths = tests, bot_sales/tests`).
+
+| | Pre-Fase 2 (`bny0xgoid`) | Post-Fase 2 + cleanup (`bpbyaejot`) | Δ |
+|---|-----:|-----:|-----:|
+| passed | 684 | 701 | **+17** |
+| failed | 48 | 47 | **−1** |
+| skipped | 26 | 26 | 0 |
+| errors | 2 | 2 | 0 |
+| tiempo | 19:49 | 18:46 | −63s |
+
+- **+17 passed** = 16 tests nuevos de Fase 2 (B.4: 6, B.10: 3,
+  B.6: 7) + 1 test que pasó de failing a passing.
+- **0 regresiones**: ningún test que antes pasaba ahora falla.
+- **Improvement**:
+  `tests/test_ferreteria_setup.py::test_struct_12_accepted_quote_not_mutated_by_short_input`
+  ahora pasa. La hipótesis es el fix B.6 (`_reset_signaled`):
+  entradas cortas como `"ok"` después de una acceptance ya no
+  caen al regex `looks_like_reset` por el camino determinístico
+  legacy. Los 41 archivos borrados eran todos `.py`, ningún
+  archivo de datos — la hipótesis "el bot agarraba data por
+  fallback" queda descartada.
+
+Los 47 failures restantes siguen siendo pre-existentes (causa
+principal: falta `data/products.csv` → fallback al legacy
+`config/catalog.csv` sin precios).
 
 ---
 
