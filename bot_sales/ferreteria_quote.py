@@ -1396,7 +1396,11 @@ def generate_quote_response(
             if stale:
                 any_stale = True
             if subtotal is not None and not pack_note:
-                price_part = f"{_format_price(unit_price)}/u → *{_format_price(subtotal)}*{stale_marker}"
+                # DT-08: qty=1 collapses unit_price and subtotal — drop the "/u → total" half.
+                if qty == 1:
+                    price_part = f"*{_format_price(subtotal)}*{stale_marker}"
+                else:
+                    price_part = f"{_format_price(unit_price)}/u → *{_format_price(subtotal)}*{stale_marker}"
                 grand_total += subtotal
             elif unit_price is not None:
                 price_part = f"*{_format_price(unit_price)}*{stale_marker}"
