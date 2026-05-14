@@ -1808,10 +1808,12 @@ def detect_option_selection(text: str) -> Optional[int]:
         return ord(m_letter.group(1)) - ord('a')
 
     # Option letters — multi-word prefixes: "la opcion A", "me quedo con la B",
-    # "con la C", "quiero la A", "tomo la A", "dame la A", "voy con la A", "elijo la A"
+    # "con la C", "con el A", "quiero la A", "tomo la A", "dame la A",
+    # "voy con la A", "elijo la A". Accepts both feminine and masculine article
+    # for "con"/"me quedo con"/"voy con" forms (DT-07).
     m_phrase = re.search(
-        r"(?:la\s+opci[oó]n|con\s+la|me\s+quedo\s+con\s+la|"
-        r"quiero\s+la|tomo\s+la|dame\s+la|voy\s+con\s+la|elijo\s+la)"
+        r"(?:la\s+opci[oó]n|con\s+(?:la|el)|me\s+quedo\s+con\s+(?:la|el)|"
+        r"quiero\s+la|tomo\s+la|dame\s+la|voy\s+con\s+(?:la|el)|elijo\s+la)"
         r"\s+([a-e])\b",
         norm,
         re.IGNORECASE,

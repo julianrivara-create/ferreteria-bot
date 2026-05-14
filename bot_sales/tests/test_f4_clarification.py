@@ -40,6 +40,26 @@ class TestF4DetectOptionSelection:
     def test_con_la_B_returns_index_1(self):
         assert fq.detect_option_selection("con la B") == 1
 
+    # ── DT-07: masculine article variants ─────────────────────────────────
+
+    def test_con_el_A_masculine_returns_index_0(self):
+        assert fq.detect_option_selection("con el A") == 0
+
+    def test_con_la_A_feminine_returns_index_0(self):
+        assert fq.detect_option_selection("con la A") == 0
+
+    def test_con_el_a_masculine_lowercase_returns_index_0(self):
+        assert fq.detect_option_selection("con el a") == 0
+
+    def test_con_la_a_feminine_lowercase_returns_index_0(self):
+        assert fq.detect_option_selection("con la a") == 0
+
+    def test_me_quedo_con_el_B_masculine_returns_index_1(self):
+        assert fq.detect_option_selection("me quedo con el B") == 1
+
+    def test_voy_con_el_C_masculine_returns_index_2(self):
+        assert fq.detect_option_selection("voy con el C") == 2
+
     def test_quiero_la_B_returns_index_1(self):
         assert fq.detect_option_selection("quiero la B") == 1
 
