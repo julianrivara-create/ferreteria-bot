@@ -1363,19 +1363,8 @@ class SalesBot:
                             )
 
                         if _f1_improved:
-                            # _QTY_RE has a bare "m" unit token that misparsed "un martillo"
-                            # as unit='m' + rest='artillo'. When the stripped additive text
-                            # starts with "un/una", prepend "también" so _ADDITIVE_RE.sub
-                            # leaves it intact and parse_quote_items sees "tambien un X".
-                            _f1_add_stripped = fq._ADDITIVE_RE.sub(
-                                "", _f1_additive_part.strip()
-                            ).strip()
-                            if re.match(r"^(?:un|una)\s+", _f1_add_stripped, re.IGNORECASE):
-                                _f1_additive_call = "también " + _f1_add_stripped
-                            else:
-                                _f1_additive_call = _f1_additive_part
                             _f1_updated = fq.apply_additive(
-                                _f1_additive_call,
+                                _f1_additive_part,
                                 _f1_clarif_updated,
                                 self.logic,
                                 knowledge=knowledge,
