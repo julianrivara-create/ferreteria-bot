@@ -1,5 +1,42 @@
 # PENDIENTES — follow-up items
 
+## Cerrado hoy (2026-05-14) — DTs de baja prioridad
+
+Sesión `/goal` de 3 DTs acotados, un commit por DT sobre `main`, con
+tests adicionales por fix. Push limpio (`f082be4..6c3db46`).
+
+### DT-07 ✅ (commit `377c5a1`)
+`detect_option_selection` acepta artículo masculino. Regex extendido
+de `con\s+la` a `con\s+(?:la|el)` en "con", "me quedo con", "voy
+con". Resto de frases (`quiero la`, `tomo la`, `dame la`, `elijo la`,
+`la opción`) intactas — la asimetría es intencional ("el opción" no
+existe en castellano). Suite F4: **57/57**. +6 tests cubriendo
+ambos géneros.
+
+### DT-08 ✅ (commit `3e38605`)
+Render qty=1 sin "/u → total". Cuando `qty == 1` ahora muestra solo
+`1 × X — $Y`. Para `qty > 1` se mantiene el formato completo
+`qty × X — $Y/u → *$total*`. +3 tests (qty=1, qty=2, qty=5).
+
+### DT-05 ✅ (commit `6c3db46`)
+El regex `_QTY_RE` ya estaba fixeado desde 2026-05-06 — la
+alternation usa `m(?!\w)` y `u(?!\w)`, así que "un martillo" parsea
+correcto como `(1, True, None, 'martillo')`. Esta sesión retiró el
+workaround obsoleto en `bot.py:1366-1376` que prependía `"también"`
+al texto aditivo para evitar que `_ADDITIVE_RE.sub` se comiera el
+`"un"` líder. F1 sigue verde sin el workaround: **44/44** entre
+`test_f1_compound_routing.py` + `test_dt17b_section4_additive.py` +
+`test_dt05_qty_re_single_letter_units.py`. +6 tests cubriendo
+`un martillo/metro/mango/molde` + `5 m cable` + `2 m de cable`.
+
+### Deudas nuevas detectadas
+
+Durante el fix de DT-05 aparecieron 2 rarezas pre-existentes en el
+parser de cantidades. Quedan registradas como **DT-22** y **DT-23**
+en Baja prioridad (ver más abajo).
+
+---
+
 ## Cerrado hoy (2026-05-11) — Fase 2 audit cleanup
 
 Cerramos los bugs latentes catalogados como B.1–B.11 a partir del
@@ -280,14 +317,23 @@ Atar al laburo con Nacho cuando audite catálogo (también linked a DT-14).
 pysqlite_cursor_iternext crashea con Python 3.14 + ThreadPoolExecutor.
 Pre-existente. Tests específicos pasan limpio. Investigar para CI futuro.
 
-**DT-05** — Bug _QTY_RE con "un X" donde X empieza con "m" (de ayer)
 **DT-06** — Negación y filtros no soportados (de ayer)
-**DT-07** — "Con el A" masculino no matchea D3 (de ayer)
-**DT-08** — Render qty=1 redundante (de ayer)
 **DT-09** — Re-validar bugs pre-D5 — algunos pueden estar cubiertos por
 los fixes de hoy (DT-12, 13, 15, 16, 17). Auditoría pendiente.
 **DT-10** — Diferencia path Python directo vs dashboard. Lo seguimos
 manejando con merge + smoke en dashboard.
+
+**DT-22 — `_QTY_RE` requiere `\s+` entre qty y unidad**
+`3m de cable` (sin espacio entre qty y unit) no parsea — el regex
+pide separador. Comportamiento pre-existente, no regresión. Detectado
+durante el fix de DT-05. Trivial de extender (`\s+` → `\s*`) si vale
+la pena.
+
+**DT-23 — `dos metros de soga` parsea con la "s" en unit**
+`dos metros de soga` sale con `unit='metros'` (con la `s`) porque el
+`?` en `metros?` es greedy. `rest='soga'` queda bien, no afecta
+funcionalmente. Cosmético, baja prioridad. Detectado durante el fix
+de DT-05.
 
 ---
 
