@@ -39,6 +39,24 @@ en Baja prioridad (ver más abajo).
 
 ## Cerrado hoy (2026-05-16) — DT-03 (revalidación)
 
+### DT-20 ✅ — bypass del TI para option-picks cortos en awaiting_clarification
+`_try_ferreteria_intent_route` ahora cortocircuitea la llamada al LLM
+del `TurnInterpreter` cuando el estado es `awaiting_clarification` y el
+mensaje matchea un option-pick inequívoco (letra A-E, ordinal "la
+primera/segunda/tercera", frase genérica "cualquiera/me da igual",
+dígito solo "1"/"2"/"3", o variantes "con el/la X"). En ese caso se
+sintetiza una `TurnInterpretation` con `intent="quote_modify",
+confidence=1.0, referenced_offer_index=<idx>,
+quote_reference.references_existing_quote=True` y se devuelve `None`
+inmediatamente — pre_route's Phase 4 continuation
+(`apply_followup_to_open_quote`) resuelve el pick determinísticamente.
+Ahorro estimado: ~3–4 s por turno + el token-cost del LLM hop. Mensajes
+largos / ambiguos / sin pick claro siguen pasando por el TI normal.
+Tocado un solo método (`_try_ferreteria_intent_route`) más un helper
+nuevo `_bypass_index_for_clarification`. +30 tests en
+`test_dt20_ti_bypass_clarification.py` (15 helper + 4 bypass + 2 long +
+2 fuera-de-estado/sin-quote + parametrizaciones).
+
 ### DT-16c ✅ — qty explícita después de palabra de presentación
 `_extract_qty_and_item` ahora detecta el patrón `<presentación> de <N>
 <item>` y re-extrae N como qty real, dropeando el `unit_hint` de
@@ -209,7 +227,7 @@ principal: falta `data/products.csv` → fallback al legacy
 | DT-17/17b | ✅ cerrado el 2026-05-07. |
 | DT-18 | Abierto 🔴 — TI failure → SalesFlowManager. |
 | DT-19 | Abierto 🟢 — pre-existente, baja prio. |
-| DT-20 | Abierto 🟡 — optimización TI bypass. |
+| DT-20 | ✅ cerrado el 2026-05-16. |
 | DT-21 | Nuevo — customer_info handler (de B.8 saltado). |
 
 ---
@@ -314,12 +332,6 @@ técnico, dame un momento".
 Requiere diseño antes de fix.
 
 ### 🟡 Media prioridad
-
-**DT-20 — Bypass del TI para respuestas cortas en awaiting_clarification**
-Cuando hay un item en awaiting_clarification, las respuestas chicas
-(números, "A"/"B"/"C") tardan 4-5s en pasar por el TI. Optimización:
-detectar respuesta corta + estado clarification → llamar
-apply_clarification directo. Ahorra tokens y latencia.
 
 **DT-04 — Catálogo gap: mechas y otros productos básicos** (de ayer)
 "mecha 6mm", "mecha 8mm para metal", "cinta de carrocero" no se encuentran.

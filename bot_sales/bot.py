@@ -680,6 +680,32 @@ class SalesBot:
 
         last_offered = sess.get("last_offered_products") or []
 
+        # DT-20: skip the TI LLM hop for unambiguous short option-picks while
+        # state is awaiting_clarification. Letters (A/B/C), ordinals
+        # ("la primera"), generic-selection phrases ("cualquiera"), and bare
+        # digits ("1", "2") map directly to an offer index — pre_route's
+        # Phase 4 continuation resolves them via apply_followup_to_open_quote
+        # without needing an LLM interpretation. Saves ~3–4s/turn on picks.
+        if (
+            current_state == "awaiting_clarification"
+            and sess.get("active_quote")
+        ):
+            _bypass_idx = self._bypass_index_for_clarification(user_message)
+            if _bypass_idx is not None:
+                synth = TurnInterpretation(
+                    intent="quote_modify",
+                    confidence=1.0,
+                    referenced_offer_index=_bypass_idx,
+                )
+                synth.quote_reference.references_existing_quote = True
+                sess["last_turn_interpretation"] = synth.to_dict()
+                logging.info(
+                    "turn_interpreter_bypass session=%s idx=%d reason=short_clarification_pick",
+                    session_id,
+                    _bypass_idx,
+                )
+                return None
+
         try:
             interpretation = self.turn_interpreter.interpret(
                 user_message,
@@ -1967,6 +1993,30 @@ class SalesBot:
     def _looks_like_escalation_request(user_message: str) -> bool:
         norm = (user_message or "").strip().lower()
         return any(kw in norm for kw in _ESCALATION_REQUEST_KEYWORDS)
+
+    _BYPASS_DIGIT_RE = re.compile(r"^\s*([1-9])\s*$")
+
+    @classmethod
+    def _bypass_index_for_clarification(cls, text: str) -> Optional[int]:
+        """DT-20: Return a 0-based offer index when *text* is an unambiguous
+        short option-pick (letter, ordinal, generic-selection phrase, bare
+        digit). Returns None for anything else — the caller must still run
+        the full TurnInterpreter for those.
+
+        The result is wired into ``TurnInterpretation.referenced_offer_index``
+        so Phase 4 continuation's option-selection branch picks the right
+        product without needing the LLM.
+        """
+        stripped = (text or "").strip()
+        if not stripped:
+            return None
+        idx = fq.detect_option_selection(stripped)
+        if idx is not None:
+            return idx
+        m_digit = cls._BYPASS_DIGIT_RE.match(stripped)
+        if m_digit:
+            return int(m_digit.group(1)) - 1
+        return None
 
     @staticmethod
     def _all_sub_commands_look_like_modify(sub_commands: List) -> bool:
