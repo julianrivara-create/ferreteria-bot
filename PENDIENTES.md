@@ -39,6 +39,16 @@ en Baja prioridad (ver más abajo).
 
 ## Cerrado hoy (2026-05-16) — DT-03 (revalidación)
 
+### DT-16c ✅ — qty explícita después de palabra de presentación
+`_extract_qty_and_item` ahora detecta el patrón `<presentación> de <N>
+<item>` y re-extrae N como qty real, dropeando el `unit_hint` de
+presentación. "una caja de 50 tornillos" → `qty=50, unit_hint=None,
+rest="tornillos"` y no dispara la clarificación DT-16. "un rollo de 100
+metros de cable" → `qty=100, unit_hint="metros", rest="cable"`. "una
+caja de tornillos" (sin número) sigue pidiendo qty (DT-16 intacto).
++8 tests en `test_dt16c_qty_in_rest.py`. Una sola función tocada
+(`_extract_qty_and_item`).
+
 ### DT-03 ✅ — Outcome A (cubierto por DT-17 + render parity)
 Revalidación post DT-17 (commit `7e29d92`, 2026-05-07): `apply_additive`
 resuelve los items nuevos vía el mismo `resolve_quote_item` que usa T1
@@ -195,6 +205,7 @@ principal: falta `data/products.csv` → fallback al legacy
 | DT-14 | Abierto 🔴 — esperando info de catálogo de Nacho. |
 | DT-15 | ✅ cerrado el 2026-05-07. |
 | DT-16/16b | ✅ cerrado el 2026-05-07. |
+| DT-16c | ✅ cerrado el 2026-05-16. |
 | DT-17/17b | ✅ cerrado el 2026-05-07. |
 | DT-18 | Abierto 🔴 — TI failure → SalesFlowManager. |
 | DT-19 | Abierto 🟢 — pre-existente, baja prio. |
@@ -309,11 +320,6 @@ Cuando hay un item en awaiting_clarification, las respuestas chicas
 (números, "A"/"B"/"C") tardan 4-5s en pasar por el TI. Optimización:
 detectar respuesta corta + estado clarification → llamar
 apply_clarification directo. Ahorra tokens y latencia.
-
-**DT-16c — Parser no extrae qty del rest cuando hay número**
-"una caja de 50 tornillos" → bot pregunta "¿cuántas unidades?" en vez
-de tomar 50 directo. Mejora del parser para extraer qty del rest cuando
-hay número, antes del guard de presentación.
 
 **DT-04 — Catálogo gap: mechas y otros productos básicos** (de ayer)
 "mecha 6mm", "mecha 8mm para metal", "cinta de carrocero" no se encuentran.

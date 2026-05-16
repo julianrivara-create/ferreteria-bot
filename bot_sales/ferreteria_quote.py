@@ -706,6 +706,20 @@ def _extract_qty_and_item(raw: str) -> Tuple[int, bool, Optional[str], str]:
     item_text = m.group("rest").strip()
     if not item_text:
         return 1, False, None, raw.strip()
+
+    # DT-16c: when the outer unit is a presentation word AND the rest starts
+    # with an explicit numeric count ("una caja de 50 tornillos", "un rollo
+    # de 100 metros de cable"), the rest's number is the real qty. Re-extract
+    # so resolve_quote_item doesn't trip the DT-16 presentation guard.
+    if unit and unit.lower() in _PRESENTATION_BLOCK_WORDS:
+        inner = _QTY_RE.match(item_text)
+        if inner and inner.group("qty").lower() not in {"un", "una"}:
+            inner_qty_str = inner.group("qty").lower()
+            inner_qty = _WORD_NUMBERS.get(inner_qty_str) or int(inner_qty_str)
+            inner_rest = inner.group("rest").strip()
+            if inner_rest:
+                return inner_qty, True, inner.group("unit") or None, inner_rest
+
     return qty, True, unit, item_text
 
 
