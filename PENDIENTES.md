@@ -37,6 +37,20 @@ en Baja prioridad (ver más abajo).
 
 ---
 
+## Cerrado hoy (2026-05-16) — DT-03 (revalidación)
+
+### DT-03 ✅ — Outcome A (cubierto por DT-17 + render parity)
+Revalidación post DT-17 (commit `7e29d92`, 2026-05-07): `apply_additive`
+resuelve los items nuevos vía el mismo `resolve_quote_item` que usa T1
+(`product_search`). Cuando el resolver devuelve `status="ambiguous"` con
+varios `products`, `apply_additive` agrega la línea con todas las
+opciones intactas y `generate_updated_quote_response` renderiza el
+bloque A/B/C por la rama `ambiguous_data` del renderer compartido —
+exactamente igual que T1. No hay auto-pick silencioso en el camino
+aditivo. +3 tests en `test_dt03_additive_ambiguous_parity.py`.
+
+---
+
 ## Cerrado hoy (2026-05-11) — Fase 2 audit cleanup
 
 Cerramos los bugs latentes catalogados como B.1–B.11 a partir del
@@ -167,7 +181,7 @@ principal: falta `data/products.csv` → fallback al legacy
 |----|--------|
 | DT-01 | ✅ cerrado el 2026-05-07. |
 | DT-02 | Abierto — requiere diseño antes de fix. |
-| DT-03 | Abierto — revalidar tras DT-17. |
+| DT-03 | ✅ cerrado el 2026-05-16 (cubierto por DT-17 + render parity). |
 | DT-04 | Abierto — atado a Nacho + DT-14 (catálogo). |
 | DT-05 | Abierto. |
 | DT-06 | Abierto. |
@@ -300,9 +314,6 @@ apply_clarification directo. Ahorra tokens y latencia.
 "una caja de 50 tornillos" → bot pregunta "¿cuántas unidades?" en vez
 de tomar 50 directo. Mejora del parser para extraer qty del rest cuando
 hay número, antes del guard de presentación.
-
-**DT-03 — apply_additive auto-pickea primer match** (de ayer)
-Re-validar tras DT-17 si sigue siendo válido o ya está cubierto.
 
 **DT-04 — Catálogo gap: mechas y otros productos básicos** (de ayer)
 "mecha 6mm", "mecha 8mm para metal", "cinta de carrocero" no se encuentran.
